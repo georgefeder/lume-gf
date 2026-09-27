@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Revokes the throwaway "Apple Development: Created via API" certificates that Xcode makes on every CI run.
+"""App Store Connect key check, and clean-up of throwaway "Apple Development: Created via API" certificates.
 
-`xcodebuild archive` with automatic signing needs a development certificate. A fresh GitHub runner has none, so Xcode
-creates one through the App Store Connect API on every run; its private key dies with the runner. Left alone they pile
-up until the account's limit, and the next run can fail with "already has an Apple Development signing certificate
-for this machine, but its private key is not installed". The build runs this before and after archiving (the build
-jobs never overlap). TestFlight builds are signed with Apple's cloud-managed distribution certificate, which this never
-touches; development certificates made by Xcode on a Mac are named after the person and are never touched either.
+--check (used by the build before and after the upload, and by the "Lume GF key check" workflow) asks App Store
+Connect whether it accepts the key and how many certificates the team has; the same count before and after the upload
+shows that the build created none. It revokes nothing.
+
+Without --check it revokes development certificates named "Created via API". The build does not use this any more (it
+archives unsigned, 27 Sep 2026); it is kept for the case that a build ever signs its archive with Xcode's development
+signing again: on a fresh GitHub runner Xcode then creates such a certificate through the API on every run, its private
+key dies with the runner, and the next run can fail with "already has an Apple Development signing certificate for this
+machine". It never touches distribution certificates or development certificates made by Xcode on a Mac (those carry
+the person's name).
 
 Usage: ASC_KEY_PATH=<.p8> ASC_KEY_ID=<key id> ASC_ISSUER_ID=<issuer id> python3 asc_dev_certs.py [--check]
 --check only asks App Store Connect whether it accepts the key (revokes nothing) and prints short fingerprints of the
