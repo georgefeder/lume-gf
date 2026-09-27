@@ -22,15 +22,16 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      # One platform after the other: each job clears the throwaway signing certificate that Xcode makes on the runner
-      # (ci/asc_dev_certs.py), which must never hit a job that is still signing.
+      # one platform after the other, so the two uploads never create the same App Store profile at the same moment
       max-parallel: 1
       matrix:
         include:
           - platform: iOS
             destination: generic/platform=iOS
+            sdk: iphoneos
           - platform: tvOS
             destination: generic/platform=tvOS
+            sdk: appletvos
     steps:
       - name: Our changes
         uses: actions/checkout@v5
@@ -38,7 +39,11 @@ jobs:
           path: gf
 
       - name: Our script tests
-        run: python3 -m unittest discover -s gf/ci -p 'test_*.py' && sh gf/ci/test_patch_scripts.sh
+        run: |
+          python3 -m unittest discover -s gf/ci -p 'test_*.py'
+          sh gf/ci/test_patch_scripts.sh
+          sh gf/ci/test_sign_local.sh
+          sh gf/ci/test_check_export.sh
 
       - name: Lume ${{ inputs.tag }}
         uses: actions/checkout@v5
@@ -101,36 +106,61 @@ jobs:
             [ -n "$TRAKT_CLIENT_SECRET" ]   && echo "TRAKT_CLIENT_SECRET=$TRAKT_CLIENT_SECRET"
           } > .env || true
 
-      - name: App Store Connect key
-        env:
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-        run: |
-          umask 077
-          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
-          grep -q "BEGIN PRIVATE KEY" "$RUNNER_TEMP/asc.p8" || { echo "ASC_KEY_P8 does not look like a .p8 key"; exit 1; }
-
-      # Leftovers from a runner that died before its clean-up would make the archive fail
-      - name: Clear throwaway development certificates
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" python3 gf/ci/asc_dev_certs.py
-
-      - name: Archive (Sideload configuration, signed with Georgs' team)
+      # Unsigned, exactly like Lume's own release builds: a signed archive would need a development certificate made on
+      # the runner and, for tvOS, a registered Apple TV, and Xcode refuses ad hoc signing for iOS/tvOS. The next step puts
+      # the entitlements back; the upload re-signs everything with Apple's cloud-managed distribution certificate.
+      # The App Store Connect key is not on the runner yet while Lume's build scripts run.
+      - name: Archive (Sideload configuration, unsigned)
         working-directory: Lume
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           xcodebuild archive \
             -project Lume.xcodeproj -scheme Lume -configuration Sideload \
             -destination '${{ matrix.destination }}' \
             -archivePath "$RUNNER_TEMP/LumeGF.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+
+      - name: Put the entitlements back (local signature)
+        working-directory: Lume
+        run: |
+          ent() {  # the entitlements file a target uses on this platform, as Xcode resolves it
+            xcodebuild -showBuildSettings -project Lume.xcodeproj -target "$1" -configuration Sideload \
+              -sdk ${{ matrix.sdk }} 2>/dev/null | sed -nE 's/^ *CODE_SIGN_ENTITLEMENTS = //p' | head -1
+          }
+          if [ "${{ matrix.sdk }}" = iphoneos ]; then
+            sh ../gf/ci/sign-local.sh "$RUNNER_TEMP/LumeGF.xcarchive" "$(ent Lume)" "LumeWidgets=$(ent LumeWidgets)"
+          else
+            sh ../gf/ci/sign-local.sh "$RUNNER_TEMP/LumeGF.xcarchive" "$(ent Lume)"
+          fi
+
+      - name: App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          umask 077
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+          grep -q "BEGIN PRIVATE KEY" "$RUNNER_TEMP/asc.p8" || { echo "ASC_KEY_P8 does not look like a .p8 key"; exit 1; }
+          ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" python3 gf/ci/asc_dev_certs.py --check
+
+      - name: Sign for the App Store and check the result
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          sed -e "s/__TEAM_ID__/$TEAM_ID/" -e "s#<string>upload</string>#<string>export</string>#" \
+            gf/ci/ExportOptions-testflight.plist > "$RUNNER_TEMP/ExportOptions-check.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/LumeGF.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-check.plist" \
+            -exportPath "$RUNNER_TEMP/check" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          sh gf/ci/check-export.sh "$RUNNER_TEMP/check" "$TEAM_ID" ${{ matrix.platform }}
 
       - name: Upload to TestFlight
         env:
@@ -148,14 +178,13 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
-      # The certificate Xcode made for this runner is useless once the runner is gone; the next job clears it anyway
-      - name: Revoke this runner's development certificate
+      # the same count as before the upload means no certificate was created in Georgs' account
+      - name: Certificates after the upload
         if: always()
-        continue-on-error: true
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: '[ -s "$RUNNER_TEMP/asc.p8" ] && ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" python3 gf/ci/asc_dev_certs.py'
+        run: if [ -s "$RUNNER_TEMP/asc.p8" ]; then ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" python3 gf/ci/asc_dev_certs.py --check; fi
 
       - name: Remove the key
         if: always()
