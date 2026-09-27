@@ -9,18 +9,26 @@ bad() { echo "verify-patch: $*"; fail=1; }
 grep -q "com.bilipp.lume" "$PBX" && bad "upstream bundle id still in $PBX"
 grep -q "PRODUCT_BUNDLE_IDENTIFIER = lv.georgefeder.lume;" "$PBX" || bad "app bundle id lv.georgefeder.lume missing"
 grep -q "PRODUCT_BUNDLE_IDENTIFIER = lv.georgefeder.lume.LumeWidgets;" "$PBX" || bad "widget bundle id missing"
+grep -q "DEVELOPMENT_TEAM = $TEAM;" "$PBX" || bad "no target is set to team $TEAM"
 grep "DEVELOPMENT_TEAM = " "$PBX" | grep -vq "DEVELOPMENT_TEAM = $TEAM;" && bad "a target still has another team"
+grep -q "name = Sideload;" "$PBX" || bad "no configuration named Sideload any more"
 grep -q 'SWIFT_ACTIVE_COMPILATION_CONDITIONS = "SIDE_LOAD' "$PBX" || bad "Sideload configuration lost its SIDE_LOAD flag"
-for E in Lume/Lume.entitlements Lume/Lume-iOS.entitlements; do
-  [ -f "$E" ] || { bad "$E missing (Lume moved its entitlements)"; continue; }
-  grep -q "icloud" "$E" && bad "iCloud entitlement still in $E"
+# every entitlements file the project names (all targets and platforms)
+ENTS=$(sed -nE 's/.*CODE_SIGN_ENTITLEMENTS(\[[^]]*\])?"? = "?([^";]+)"?;.*/\2/p' "$PBX" | sort -u)
+[ -n "$ENTS" ] || bad "no entitlements files named in $PBX"
+ours=0
+while IFS= read -r E; do
+  [ -n "$E" ] || continue
+  [ -f "$E" ] || { bad "$E missing (named in the project)"; continue; }
+  grep -qiE "icloud|ubiquity" "$E" && bad "iCloud entitlement still in $E"
   grep -q "aps-environment" "$E" && bad "push entitlement still in $E"
-done
-for F in Lume/Lume-iOS.entitlements LumeWidgets/LumeWidgets.entitlements LumeWidgets/PlaybackActivityAttributes.swift; do
-  [ -f "$F" ] || { bad "$F missing"; continue; }
-  grep -q "group.com.bilipp.lume" "$F" && bad "upstream app group still in $F"
-done
-grep -q "group.lv.georgefeder.lume" Lume/Lume-iOS.entitlements || bad "our app group missing in Lume-iOS.entitlements"
+  grep -q "group.lv.georgefeder.lume" "$E" && ours=1
+done <<EOF
+$ENTS
+EOF
+[ "$ours" -eq 1 ] || bad "our app group group.lv.georgefeder.lume is in no entitlements file"
+LEFT=$(grep -rlF --exclude-dir=.git "group.com.bilipp.lume" . | sed 's#^\./##' | tr '\n' ' ')
+[ -z "$LEFT" ] || bad "upstream app group still in: $LEFT"
 [ "$($PB -c 'Print :CFBundleDisplayName' Lume/Info.plist 2>/dev/null)" = "Lume GF" ] || bad "display name is not 'Lume GF'"
 $PB -c "Print :UIBackgroundModes" Lume/Info.plist 2>/dev/null | grep -q "remote-notification" && bad "remote-notification background mode still set"
 [ "$fail" -eq 0 ] && echo "verify-patch: Lume GF identity OK"

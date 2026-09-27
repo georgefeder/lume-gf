@@ -38,7 +38,7 @@ jobs:
           path: gf
 
       - name: Our script tests
-        run: python3 -m unittest discover -s gf/ci -p 'test_*.py'
+        run: python3 -m unittest discover -s gf/ci -p 'test_*.py' && sh gf/ci/test_patch_scripts.sh
 
       - name: Lume ${{ inputs.tag }}
         uses: actions/checkout@v5

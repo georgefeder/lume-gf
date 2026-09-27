@@ -11,16 +11,18 @@ UP_GROUP="group.com.bilipp.lume"; GF_GROUP="group.lv.georgefeder.lume"
 # 1. bundle ids (app and widget extension) and team, all configurations
 sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = ${UP_ID}/PRODUCT_BUNDLE_IDENTIFIER = ${GF_ID}/g" "$PBX"
 sed -i '' "s/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = ${TEAM};/g" "$PBX"
-# 2. no push, no iCloud
-for E in Lume/Lume.entitlements Lume/Lume-iOS.entitlements; do
+# 2. no push, no iCloud, in every entitlements file the project names (all targets and platforms)
+sed -nE 's/.*CODE_SIGN_ENTITLEMENTS(\[[^]]*\])?"? = "?([^";]+)"?;.*/\2/p' "$PBX" | sort -u | while IFS= read -r E; do
+  [ -f "$E" ] || continue
   for K in aps-environment com.apple.developer.aps-environment \
-           com.apple.developer.icloud-container-identifiers com.apple.developer.icloud-services; do
+           com.apple.developer.icloud-container-identifiers com.apple.developer.icloud-services \
+           com.apple.developer.icloud-container-environment com.apple.developer.ubiquity-container-identifiers \
+           com.apple.developer.ubiquity-kvstore-identifier; do
     $PB -c "Delete :$K" "$E" 2>/dev/null || true
   done
 done
-# 3. our app group (entitlements and the one Swift file that names it)
-sed -i '' "s/${UP_GROUP}/${GF_GROUP}/g" Lume/Lume-iOS.entitlements LumeWidgets/LumeWidgets.entitlements \
-  LumeWidgets/PlaybackActivityAttributes.swift
+# 3. our app group, in every file that names Lume's (entitlements, Swift)
+grep -rlF --exclude-dir=.git "$UP_GROUP" . | while IFS= read -r F; do sed -i '' "s/${UP_GROUP}/${GF_GROUP}/g" "$F"; done
 # 4. no remote-notification background mode (no push entitlement any more)
 i=0
 while V=$($PB -c "Print :UIBackgroundModes:$i" Lume/Info.plist 2>/dev/null); do
