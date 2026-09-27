@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Revokes the throwaway "Apple Development: Created via API" certificates that Xcode makes on every CI run.
+
+`xcodebuild archive` with automatic signing needs a development certificate. A fresh GitHub runner has none, so Xcode
+creates one through the App Store Connect API on every run; its private key dies with the runner. Left alone they pile
+up until the account's limit, and the next run can fail with "already has an Apple Development signing certificate
+for this machine, but its private key is not installed". The build runs this before and after archiving (the build
+jobs never overlap). TestFlight builds are signed with Apple's cloud-managed distribution certificate, which this never
+touches; development certificates made by Xcode on a Mac are named after the person and are never touched either.
+
+Usage: ASC_KEY_PATH=<.p8> ASC_KEY_ID=<key id> ASC_ISSUER_ID=<issuer id> python3 asc_dev_certs.py
+Needs only python3 and openssl. Never prints the key or the token.
+"""
+import base64, json, os, subprocess, sys, time, urllib.error, urllib.request
+
+API = "https://api.appstoreconnect.apple.com/v1"
+DEV_TYPES = ("DEVELOPMENT", "IOS_DEVELOPMENT", "MAC_APP_DEVELOPMENT")
+MARK = "Created via API"
+
+
+def b64url(b):
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def der_to_raw(der):
+    """ECDSA signature DER SEQUENCE {INTEGER r, INTEGER s} -> 64 bytes r||s, the form ES256 tokens carry.
+    A P-256 signature is under 128 bytes, so the SEQUENCE length is a single byte."""
+    i, out = 2, b""
+    for _ in range(2):
+        n = der[i + 1]
+        out += der[i + 2:i + 2 + n].lstrip(b"\x00").rjust(32, b"\x00")
+        i += 2 + n
+    return out
+
+
+def jwt(key_path, key_id, issuer, now=None):
+    """App Store Connect API token (ES256, valid 10 minutes)."""
+    now = int(time.time() if now is None else now)
+    head = b64url(json.dumps({"alg": "ES256", "kid": key_id, "typ": "JWT"}).encode())
+    body = b64url(json.dumps({"iss": issuer, "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"}).encode())
+    der = subprocess.run(["openssl", "dgst", "-sha256", "-sign", key_path], input=f"{head}.{body}".encode(),
+                         capture_output=True, check=True).stdout
+    return f"{head}.{body}.{b64url(der_to_raw(der))}"
+
+
+def throwaway(certs):
+    """Ids of the development certificates Xcode created through the API (named "Created via API")."""
+    return [c["id"] for c in certs
+            if c["attributes"].get("certificateType") in DEV_TYPES
+            and MARK in f'{c["attributes"].get("name") or ""} {c["attributes"].get("displayName") or ""}']
+
+
+def http(method, url, token):
+    req = urllib.request.Request(url, method=method, headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        body = r.read()
+    return json.loads(body) if body else None
+
+
+def revoke_throwaway(token, api=http):
+    certs, url = [], f"{API}/certificates?limit=200"
+    while url:
+        page = api("GET", url, token)
+        certs += page["data"]
+        url = page.get("links", {}).get("next")
+    ids = throwaway(certs)
+    for cid in ids:
+        api("DELETE", f"{API}/certificates/{cid}", token)
+    return ids
+
+
+def main():
+    try:
+        token = jwt(os.environ["ASC_KEY_PATH"], os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"])
+        ids = revoke_throwaway(token)
+    except KeyError as e:
+        print(f"asc-dev-certs: {e.args[0]} is not set", file=sys.stderr); return 1
+    except subprocess.CalledProcessError:
+        print("asc-dev-certs: openssl could not sign with the key file", file=sys.stderr); return 1
+    except urllib.error.HTTPError as e:
+        print(f"asc-dev-certs: App Store Connect answered HTTP {e.code}: {e.read()[:300].decode(errors='replace')}",
+              file=sys.stderr); return 1
+    except urllib.error.URLError as e:
+        print(f"asc-dev-certs: App Store Connect not reachable ({e.reason})", file=sys.stderr); return 1
+    print(f"asc-dev-certs: revoked {len(ids)} throwaway development certificate(s) {' '.join(ids)}".rstrip())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

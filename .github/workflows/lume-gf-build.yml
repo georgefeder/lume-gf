@@ -1,0 +1,158 @@
+name: Lume GF build
+run-name: Lume GF ${{ inputs.tag }} (${{ github.sha }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Lume release tag to build (e.g. v2.1.0)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lume-gf-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.platform }} to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      # One platform after the other: each job clears the throwaway signing certificate that Xcode makes on the runner
+      # (ci/asc_dev_certs.py), which must never hit a job that is still signing.
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: iOS
+            destination: generic/platform=iOS
+          - platform: tvOS
+            destination: generic/platform=tvOS
+    steps:
+      - name: Our changes
+        uses: actions/checkout@v5
+        with:
+          path: gf
+
+      - name: Our script tests
+        run: python3 -m unittest discover -s gf/ci -p 'test_*.py'
+
+      - name: Lume ${{ inputs.tag }}
+        uses: actions/checkout@v5
+        with:
+          repository: bilipp/Lume
+          ref: ${{ inputs.tag }}
+          path: Lume
+
+      - name: Engine version paired with this release
+        id: engine
+        run: echo "ref=$(sh gf/ci/engine-ref.sh Lume)" >> "$GITHUB_OUTPUT"
+
+      # Lume references the engine as a local package at ../LumeEngine
+      - name: LumeEngine ${{ steps.engine.outputs.ref }}
+        uses: actions/checkout@v5
+        with:
+          repository: bilipp/LumeEngine
+          ref: ${{ steps.engine.outputs.ref }}
+          path: LumeEngine
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # Xcode 26 no longer bundles the Metal toolchain; KSPlayer's shaders need it (same as Lume's own workflow)
+      - name: Download Metal Toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
+      - name: Our changes onto Lume
+        run: sh gf/ci/apply-patches.sh gf Lume
+
+      - name: Lume GF identity
+        working-directory: Lume
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: sh ../gf/ci/gf-patch.sh "$TEAM_ID" && sh ../gf/ci/verify-patch.sh "$TEAM_ID"
+
+      # Optional keys; each feature degrades gracefully without its key (Lume's Scripts/inject-env.sh)
+      - name: Optional API keys (.env)
+        working-directory: Lume
+        env:
+          TMDB_ACCESS_TOKEN: ${{ secrets.TMDB_ACCESS_TOKEN }}
+          MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
+          INTRO_DB_API_KEY: ${{ secrets.INTRO_DB_API_KEY }}
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+          TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
+        run: |
+          {
+            [ -n "$TMDB_ACCESS_TOKEN" ]     && echo "TMDB_ACCESS_TOKEN=$TMDB_ACCESS_TOKEN"
+            [ -n "$MDBLIST_API_KEY" ]       && echo "MDBLIST_API_KEY=$MDBLIST_API_KEY"
+            [ -n "$INTRO_DB_API_KEY" ]      && echo "INTRO_DB_API_KEY=$INTRO_DB_API_KEY"
+            [ -n "$OPENSUBTITLES_API_KEY" ] && echo "OPENSUBTITLES_API_KEY=$OPENSUBTITLES_API_KEY"
+            [ -n "$TRAKT_CLIENT_ID" ]       && echo "TRAKT_CLIENT_ID=$TRAKT_CLIENT_ID"
+            [ -n "$TRAKT_CLIENT_SECRET" ]   && echo "TRAKT_CLIENT_SECRET=$TRAKT_CLIENT_SECRET"
+          } > .env || true
+
+      - name: App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          umask 077
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+          grep -q "BEGIN PRIVATE KEY" "$RUNNER_TEMP/asc.p8" || { echo "ASC_KEY_P8 does not look like a .p8 key"; exit 1; }
+
+      # Leftovers from a runner that died before its clean-up would make the archive fail
+      - name: Clear throwaway development certificates
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" python3 gf/ci/asc_dev_certs.py
+
+      - name: Archive (Sideload configuration, signed with Georgs' team)
+        working-directory: Lume
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcodebuild archive \
+            -project Lume.xcodeproj -scheme Lume -configuration Sideload \
+            -destination '${{ matrix.destination }}' \
+            -archivePath "$RUNNER_TEMP/LumeGF.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+
+      - name: Upload to TestFlight
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          sed "s/__TEAM_ID__/$TEAM_ID/" gf/ci/ExportOptions-testflight.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/LumeGF.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      # The certificate Xcode made for this runner is useless once the runner is gone; the next job clears it anyway
+      - name: Revoke this runner's development certificate
+        if: always()
+        continue-on-error: true
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: '[ -s "$RUNNER_TEMP/asc.p8" ] && ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" python3 gf/ci/asc_dev_certs.py'
+
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/asc.p8"
