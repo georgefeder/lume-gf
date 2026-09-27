@@ -49,7 +49,11 @@ jobs:
 
       - name: Engine version paired with this release
         id: engine
-        run: echo "ref=$(sh gf/ci/engine-ref.sh Lume)" >> "$GITHUB_OUTPUT"
+        # two lines on purpose: inside `echo "...$(...)"` a failing engine-ref.sh would be ignored and the next step
+        # would check out LumeEngine's default branch instead of stopping
+        run: |
+          ref=$(sh gf/ci/engine-ref.sh Lume)
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       # Lume references the engine as a local package at ../LumeEngine
       - name: LumeEngine ${{ steps.engine.outputs.ref }}

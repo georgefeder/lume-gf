@@ -8,14 +8,39 @@ for this machine, but its private key is not installed". The build runs this bef
 jobs never overlap). TestFlight builds are signed with Apple's cloud-managed distribution certificate, which this never
 touches; development certificates made by Xcode on a Mac are named after the person and are never touched either.
 
-Usage: ASC_KEY_PATH=<.p8> ASC_KEY_ID=<key id> ASC_ISSUER_ID=<issuer id> python3 asc_dev_certs.py
-Needs only python3 and openssl. Never prints the key or the token.
+Usage: ASC_KEY_PATH=<.p8> ASC_KEY_ID=<key id> ASC_ISSUER_ID=<issuer id> python3 asc_dev_certs.py [--check]
+--check only asks App Store Connect whether it accepts the key (revokes nothing) and prints short fingerprints of the
+two ids, to compare with the values on the key's page without showing them.
+Needs only python3 and openssl. Never prints the key, the token or the ids.
 """
-import base64, json, os, subprocess, sys, time, urllib.error, urllib.request
+import base64, hashlib, json, os, re, subprocess, sys, time, urllib.error, urllib.request
 
 API = "https://api.appstoreconnect.apple.com/v1"
 DEV_TYPES = ("DEVELOPMENT", "IOS_DEVELOPMENT", "MAC_APP_DEVELOPMENT")
 MARK = "Created via API"
+KEY_ID = re.compile(r"[A-Z0-9]{10}")
+ISSUER = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
+
+def id_problems(key_id, issuer):
+    """What is visibly wrong with the two ids (empty, spaces, swapped, wrong shape); never repeats the values."""
+    out = []
+    for name, v, own, other, want, other_name in (
+            ("ASC_KEY_ID", key_id, KEY_ID, ISSUER, "be 10 capital letters/digits", "an Issuer ID"),
+            ("ASC_ISSUER_ID", issuer, ISSUER, KEY_ID, "look like 12345678-90ab-cdef-1234-567890abcdef", "a Key ID")):
+        if not v:
+            out.append(f"{name} is empty")
+        elif v != v.strip():
+            out.append(f"{name} has spaces or a line break around it")
+        elif other.fullmatch(v):
+            out.append(f"{name} looks like {other_name} - the two are probably swapped")
+        elif not own.fullmatch(v):
+            out.append(f"{name} should {want} (it has {len(v)} characters)")
+    return out
+
+
+def fingerprint(value):
+    return hashlib.sha256(value.encode()).hexdigest()[:8]
 
 
 def b64url(b):
@@ -69,9 +94,26 @@ def revoke_throwaway(token, api=http):
     return ids
 
 
-def main():
+def check(token, api=http):
+    """Read-only: one certificates page; returns how many certificates the key can see."""
+    page = api("GET", f"{API}/certificates?limit=1", token)
+    return page.get("meta", {}).get("paging", {}).get("total", len(page["data"]))
+
+
+def main(argv):
+    key_id, issuer = os.environ.get("ASC_KEY_ID", ""), os.environ.get("ASC_ISSUER_ID", "")
+    if "--check" in argv:
+        print(f"asc-dev-certs: fingerprints ASC_KEY_ID {fingerprint(key_id)}, ASC_ISSUER_ID {fingerprint(issuer)}")
+    problems = id_problems(key_id, issuer)
+    for p in problems:
+        print(f"asc-dev-certs: {p}", file=sys.stderr)
+    if problems:
+        return 1
     try:
-        token = jwt(os.environ["ASC_KEY_PATH"], os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"])
+        token = jwt(os.environ["ASC_KEY_PATH"], key_id, issuer)
+        if "--check" in argv:
+            print(f"asc-dev-certs: App Store Connect accepts the key ({check(token)} certificates visible)")
+            return 0
         ids = revoke_throwaway(token)
     except KeyError as e:
         print(f"asc-dev-certs: {e.args[0]} is not set", file=sys.stderr); return 1
@@ -79,12 +121,19 @@ def main():
         print("asc-dev-certs: openssl could not sign with the key file", file=sys.stderr); return 1
     except urllib.error.HTTPError as e:
         print(f"asc-dev-certs: App Store Connect answered HTTP {e.code}: {e.read()[:300].decode(errors='replace')}",
-              file=sys.stderr); return 1
+              file=sys.stderr)
+        if e.code == 401:
+            print("asc-dev-certs: the key was refused - ASC_KEY_ID and ASC_ISSUER_ID must be the values on the key's "
+                  "page (App Store Connect > Users and Access > Integrations) and ASC_KEY_P8 that key's file",
+                  file=sys.stderr)
+        return 1
     except urllib.error.URLError as e:
         print(f"asc-dev-certs: App Store Connect not reachable ({e.reason})", file=sys.stderr); return 1
+    except Exception as e:  # timeouts, unexpected answers: one line instead of a traceback
+        print(f"asc-dev-certs: failed ({type(e).__name__})", file=sys.stderr); return 1
     print(f"asc-dev-certs: revoked {len(ids)} throwaway development certificate(s) {' '.join(ids)}".rstrip())
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

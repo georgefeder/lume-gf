@@ -1,0 +1,29 @@
+name: Lume GF key check
+# Asks App Store Connect whether it accepts the API key stored in this repository's secrets (about 30 seconds).
+# Reads only, revokes nothing; prints short fingerprints of the key id and issuer id, never the values.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Does App Store Connect accept the key?
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          umask 077
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+          grep -q "BEGIN PRIVATE KEY" "$RUNNER_TEMP/asc.p8" || { echo "ASC_KEY_P8 does not look like a .p8 key"; exit 1; }
+          status=0
+          ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" python3 ci/asc_dev_certs.py --check || status=$?
+          rm -f "$RUNNER_TEMP/asc.p8"
+          exit $status

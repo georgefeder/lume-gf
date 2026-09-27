@@ -1,6 +1,6 @@
 # Tests for asc_dev_certs.py. Run: python3 -m unittest discover -s ci -p 'test_*.py'
 # Uses a throwaway P-256 key generated here (same PKCS#8 format as Apple's .p8 files); no network.
-import base64, json, os, subprocess, tempfile, unittest
+import base64, hashlib, json, os, subprocess, tempfile, unittest
 import asc_dev_certs as adc
 
 
@@ -112,6 +112,43 @@ class RevokeTest(unittest.TestCase):
         api = FakeApi([{"data": [], "links": {}}])
         self.assertEqual(adc.revoke_throwaway("TOKEN", api), [])
         self.assertEqual(len(api.calls), 1)
+
+
+class IdCheckTest(unittest.TestCase):
+    KEY, ISS = "ABCDE12345", "12345678-90ab-cdef-1234-567890abcdef"
+
+    def test_well_formed_ids_have_no_problems(self):
+        self.assertEqual(adc.id_problems(self.KEY, self.ISS), [])
+
+    def test_empty_values(self):
+        self.assertEqual(adc.id_problems("", ""), ["ASC_KEY_ID is empty", "ASC_ISSUER_ID is empty"])
+
+    def test_spaces_or_line_breaks_around_a_value(self):
+        self.assertEqual(adc.id_problems(self.KEY + "\n", " " + self.ISS),
+                         ["ASC_KEY_ID has spaces or a line break around it",
+                          "ASC_ISSUER_ID has spaces or a line break around it"])
+
+    def test_swapped_values(self):
+        self.assertEqual(adc.id_problems(self.ISS, self.KEY),
+                         ["ASC_KEY_ID looks like an Issuer ID - the two are probably swapped",
+                          "ASC_ISSUER_ID looks like a Key ID - the two are probably swapped"])
+
+    def test_wrong_shape(self):
+        self.assertEqual(adc.id_problems("abc", "nope"),
+                         ["ASC_KEY_ID should be 10 capital letters/digits (it has 3 characters)",
+                          "ASC_ISSUER_ID should look like 12345678-90ab-cdef-1234-567890abcdef (it has 4 characters)"])
+
+    def test_fingerprint_is_the_start_of_the_sha256(self):
+        self.assertEqual(adc.fingerprint(self.KEY), hashlib.sha256(self.KEY.encode()).hexdigest()[:8])
+
+
+class CheckModeTest(unittest.TestCase):
+    def test_check_only_reads_one_page_and_returns_the_total(self):
+        api = FakeApi([{"data": [cert("a", "DEVELOPMENT", "Apple Development: Created via API")],
+                        "meta": {"paging": {"total": 5, "limit": 1}}, "links": {}}])
+        self.assertEqual(adc.check("TOKEN", api), 5)
+        self.assertEqual([c[:2] for c in api.calls],
+                         [("GET", "https://api.appstoreconnect.apple.com/v1/certificates?limit=1")])
 
 
 if __name__ == "__main__":
