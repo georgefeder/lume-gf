@@ -1,0 +1,56 @@
+name: Lume GF check
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ci/**"
+      - "patches/**"
+      - ".github/workflows/lume-gf-build.yml"
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build when Lume or our changes are new, or the last good build is 60 days old
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          TAG=$(gh api repos/bilipp/Lume/releases/latest --jq .tag_name)
+          WANT="Lume GF $TAG ($SHA)"
+          LAST=$(gh run list -R "$REPO" --workflow lume-gf-build.yml --status success --limit 50 \
+                   --json displayTitle,createdAt \
+                   --jq "[.[] | select(.displayTitle == \"$WANT\")][0].createdAt // empty")
+          if [ -n "$LAST" ] && [ $(( $(date +%s) - $(date -d "$LAST" +%s) )) -lt $((60 * 86400)) ]; then
+            echo "Up to date: $WANT built $LAST"
+            exit 0
+          fi
+          RUNNING=$(gh run list -R "$REPO" --workflow lume-gf-build.yml --status in_progress --json displayTitle \
+                      --jq "[.[] | select(.displayTitle == \"$WANT\")] | length")
+          if [ "$RUNNING" != "0" ]; then echo "Already building: $WANT"; exit 0; fi
+          echo "Starting build: $WANT"
+          gh workflow run lume-gf-build.yml -R "$REPO" --ref main -f tag="$TAG"
+
+      # GitHub pauses scheduled workflows in a public repository after 60 days without activity. A tiny commit on the
+      # 1st of each month keeps this check alive (pushes made with the built-in token start no workflows; the new commit
+      # means one fresh build the next day, which also keeps TestFlight current).
+      - name: Monthly keep-alive
+        if: ${{ github.event_name == 'schedule' }}
+        uses: actions/checkout@v5
+      - name: Monthly keep-alive commit
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          [ "$(date -u +%d)" = "01" ] || exit 0
+          date -u +%F > .keepalive
+          git config user.name "lume-gf bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .keepalive && git commit -m "chore: monthly keep-alive" && git push
