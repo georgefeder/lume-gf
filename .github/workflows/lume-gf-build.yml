@@ -44,6 +44,7 @@ jobs:
           sh gf/ci/test_patch_scripts.sh
           sh gf/ci/test_sign_local.sh
           sh gf/ci/test_check_export.sh
+          sh gf/ci/test_keepalive.sh
 
       - name: Lume ${{ inputs.tag }}
         uses: actions/checkout@v5

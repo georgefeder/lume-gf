@@ -2,7 +2,8 @@ name: Lume GF check
 
 on:
   schedule:
-    - cron: "0 4 * * *"
+    # every 6 hours, at :17 (GitHub starts on-the-hour schedules later when it is busy)
+    - cron: "17 */6 * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -40,17 +41,18 @@ jobs:
           echo "Starting build: $WANT"
           gh workflow run lume-gf-build.yml -R "$REPO" --ref main -f tag="$TAG"
 
-      # GitHub pauses scheduled workflows in a public repository after 60 days without activity. A tiny commit on the
-      # 1st of each month keeps this check alive (pushes made with the built-in token start no workflows; the new commit
-      # means one fresh build the next day, which also keeps TestFlight current).
-      - name: Monthly keep-alive
+      # GitHub pauses scheduled workflows in a public repository after 60 days without activity. When the newest commit is
+      # more than 20 days old, a tiny commit keeps this check alive (pushes made with the built-in token start no
+      # workflows; the new commit means one fresh build at the next check, which also keeps TestFlight current).
+      - name: Keep-alive
         if: ${{ github.event_name == 'schedule' }}
         uses: actions/checkout@v5
-      - name: Monthly keep-alive commit
+      - name: Keep-alive commit
         if: ${{ github.event_name == 'schedule' }}
         run: |
-          [ "$(date -u +%d)" = "01" ] || exit 0
+          AGE=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+          [ "$AGE" -gt $((20 * 86400)) ] || exit 0
           date -u +%F > .keepalive
           git config user.name "lume-gf bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .keepalive && git commit -m "chore: monthly keep-alive" && git push
+          git add .keepalive && git commit -q -m "chore: keep-alive (no commit for 20 days)" && git push -q
