@@ -30,7 +30,7 @@ jobs:
         with:
           xcode-version: latest-stable
       - name: Script tests
-        run: sh ci/test_add_sources.sh && sh ci/test_apply_patches.sh && sh ci/test_workflows.sh
+        run: sh ci/test_add_sources.sh && sh ci/test_apply_patches.sh && sh ci/test_workflows.sh && sh ci/test_apply_dep_patches.sh
       - name: swift test
         working-directory: guide
         run: swift test
@@ -74,6 +74,11 @@ jobs:
       - name: Our changes onto Lume
         if: ${{ !inputs.baseline }}
         run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
+      - name: Our patches to Lume's packages
+        if: ${{ !inputs.baseline }}
+        run: |
+          echo "GF_SPM=$RUNNER_TEMP/spm" >> "$GITHUB_ENV"
+          sh gf/ci/apply-dep-patches.sh gf Lume "$RUNNER_TEMP/spm"
       - name: App tests
         run: sh gf/ci/run-app-tests.sh Lume
       - name: tvOS compiles
@@ -81,4 +86,5 @@ jobs:
         working-directory: Lume
         run: |
           xcodebuild build -project Lume.xcodeproj -scheme Lume -configuration Debug \
-            -destination 'generic/platform=tvOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet
+            -destination 'generic/platform=tvOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet \
+            -clonedSourcePackagesDirPath "$GF_SPM" -disableAutomaticPackageResolution

@@ -38,6 +38,7 @@ jobs:
           sh gf/ci/test_add_sources.sh
           sh gf/ci/test_apply_patches.sh
           sh gf/ci/test_workflows.sh
+          sh gf/ci/test_apply_dep_patches.sh
 
       - name: Lume ${{ inputs.tag }}
         uses: actions/checkout@v5
@@ -77,6 +78,12 @@ jobs:
 
       - name: Our changes onto Lume
         run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
+
+      # Our patches to Lume's Swift packages (deps/): resolved into our own folder; every later xcodebuild uses it
+      - name: Our patches to Lume's packages
+        run: |
+          echo "GF_SPM=$RUNNER_TEMP/spm" >> "$GITHUB_ENV"
+          sh gf/ci/apply-dep-patches.sh gf Lume "$RUNNER_TEMP/spm"
 
       - name: App tests (iOS Simulator)
         run: sh gf/ci/run-app-tests.sh Lume
@@ -139,6 +146,12 @@ jobs:
       - name: Our changes onto Lume
         run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
 
+      # Our patches to Lume's Swift packages (deps/): resolved into our own folder; every later xcodebuild uses it
+      - name: Our patches to Lume's packages
+        run: |
+          echo "GF_SPM=$RUNNER_TEMP/spm" >> "$GITHUB_ENV"
+          sh gf/ci/apply-dep-patches.sh gf Lume "$RUNNER_TEMP/spm"
+
       - name: Lume GF identity
         working-directory: Lume
         env:
@@ -177,7 +190,8 @@ jobs:
             -destination '${{ matrix.destination }}' \
             -archivePath "$RUNNER_TEMP/LumeGF.xcarchive" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }}
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            -clonedSourcePackagesDirPath "$GF_SPM" -disableAutomaticPackageResolution
 
       - name: Put the entitlements back (local signature)
         working-directory: Lume
