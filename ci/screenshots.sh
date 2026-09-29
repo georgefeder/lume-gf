@@ -7,6 +7,7 @@ set -eu
 LUME="${1:?usage: screenshots.sh LUME_DIR OUT_DIR}"; OUT="${2:?usage: screenshots.sh LUME_DIR OUT_DIR}"
 CI=$(cd "$(dirname "$0")" && pwd); LUME=$(cd "$LUME" && pwd); mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_SHOT_WAIT:-15}"
+LOGS=$(mktemp -d); DIED=0
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
 
@@ -27,10 +28,17 @@ start() {  # $1 = simulator id, $2 = app; prints the bundle id
 shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch arguments
   SIM="$1"; BID="$2"; NAME="$3"; shift 3
   xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
-  SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch "$SIM" "$BID" "$@" >/dev/null
+  SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
+    "$SIM" "$BID" "$@" >/dev/null
   sleep "$WAIT"
   xcrun simctl io "$SIM" screenshot "$OUT/$NAME.png" >/dev/null
-  echo "screenshots: $NAME.png"
+  # a picture of the home screen is no picture of Lume: say so, with the app's last words
+  if xcrun simctl spawn "$SIM" launchctl list 2>/dev/null | grep -q "UIKitApplication:$BID"; then
+    echo "screenshots: $NAME.png"
+  else
+    echo "screenshots: $NAME: the app was not running"; DIED=1
+    tail -n 25 "$LOGS/$NAME.err" "$LOGS/$NAME.out" 2>/dev/null | sed 's/^/   /'
+  fi
 }
 
 new_tv() {  # an Apple TV simulator on the newest tvOS runtime; prints its id
@@ -61,4 +69,5 @@ shoot "$TV" "$BID" tv-guide-channel -GFDemo guide
 shoot "$TV" "$BID" tv-guide-programme -GFDemo guide -GFDemoMoves right
 shoot "$TV" "$BID" tv-guide-bottom -GFDemo guide -GFDemoMoves down,down,down,down,down,down,down,down,down,down,down,right
 shoot "$TV" "$BID" tv-list -GFDemo list
+[ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true
 echo "screenshots: done"

@@ -3,7 +3,7 @@
 set -u
 CI=$(cd "$(dirname "$0")" && pwd); T=$(mktemp -d); trap 'rm -rf "$T"' EXIT; fails=0
 ok() { echo "ok   $1"; }; no() { echo "FAIL $1"; fails=$((fails + 1)); }
-mkdir -p "$T/bin" "$T/Lume/Lume.xcodeproj"; LOG="$T/log"; : > "$LOG"; export LOG
+mkdir -p "$T/bin" "$T/Lume/Lume.xcodeproj"; LOG="$T/log"; : > "$LOG"; DEAD="$T/dead"; export LOG DEAD
 cat > "$T/bin/xcodebuild" <<'EOF'
 #!/bin/sh
 echo "xcodebuild $*" >> "$LOG"
@@ -24,6 +24,7 @@ if [ "$1 $2 $3" = "simctl list devices" ]; then
   echo '"com.apple.CoreSimulator.SimRuntime.tvOS-26-0":[{"name":"Apple TV 4K (3rd generation)","udid":"TV-1"}]}}'
 fi
 [ "$1 $2" = "simctl io" ] && touch "$5"
+if [ "$1 $2" = "simctl spawn" ]; then [ -e "$DEAD" ] || echo "123 0 UIKitApplication:lv.test.lume[1234]"; fi
 exit 0
 EOF
 printf '#!/bin/sh\necho lv.test.lume\n' > "$T/bin/plutil"
@@ -35,8 +36,8 @@ grep -qF -- "-clonedSourcePackagesDirPath $T/spm -disableAutomaticPackageResolut
   && ok "builds with our patched packages" || no "patched packages not used"
 grep -qF "simctl ui IPHONE-1 appearance dark" "$LOG" && grep -qF "simctl ui IPHONE-1 appearance light" "$LOG" \
   && ok "iPhone in dark and light mode" || no "appearances"
-grep -qF "simctl launch IPHONE-1 lv.test.lume -GFDemo list" "$LOG" && ok "starts the demo list" || no "list launch"
-grep -qF "simctl launch TV-1 lv.test.lume -GFDemo guide -GFDemoMoves right" "$LOG" \
+grep -qE "simctl launch .*IPHONE-1 lv.test.lume -GFDemo list" "$LOG" && ok "starts the demo list" || no "list launch"
+grep -qE "simctl launch .*TV-1 lv.test.lume -GFDemo guide -GFDemoMoves right" "$LOG" \
   && ok "moves the Apple TV focus" || no "tv moves"
 grep -qF "launch TZ=Europe/London" "$LOG" && ok "the app runs on UK time" || no "time zone"
 n=0
@@ -46,5 +47,11 @@ for f in iphone-guide-dark iphone-list-dark iphone-guide-light iphone-list-light
 done
 [ "$n" -eq 10 ] && ok "ten screenshots" || no "screenshots ($n)"
 grep -qE "exportArchive| archive " "$LOG" && no "must never archive or upload" || ok "never archives or uploads"
+printf '%s' "$out" | grep -q "not running" && no "a running app must not be reported gone ($out)" || ok "a running app is photographed"
+grep -qF -- "--stdout=" "$LOG" && ok "the app's own output is kept" || no "app output not kept"
+touch "$DEAD"; : > "$LOG"
+out=$(HOME="$T/home" PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_DERIVED_DATA="$T/dd" sh "$CI/screenshots.sh" "$T/Lume" "$T/out2" 2>&1)
+printf '%s' "$out" | grep -q "iphone-guide-dark: the app was not running" && ok "an app that died is reported" \
+  || no "a dead app goes unreported ($out)"
 [ "$fails" -eq 0 ] && echo "test_screenshots: all passed" || echo "test_screenshots: $fails failed"
 exit "$fails"
