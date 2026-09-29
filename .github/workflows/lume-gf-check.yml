@@ -11,6 +11,8 @@ on:
       - "ci/**"
       - "patches/**"
       - ".github/workflows/lume-gf-build.yml"
+      - "guide/**"
+      - "app/**"
 
 permissions:
   actions: write

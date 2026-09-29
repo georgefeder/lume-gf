@@ -45,6 +45,8 @@ jobs:
           sh gf/ci/test_sign_local.sh
           sh gf/ci/test_check_export.sh
           sh gf/ci/test_keepalive.sh
+          sh gf/ci/test_add_sources.sh
+          sh gf/ci/test_apply_patches.sh
 
       - name: Lume ${{ inputs.tag }}
         uses: actions/checkout@v5
@@ -74,12 +76,16 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Guide logic tests (swift test)
+        working-directory: gf/guide
+        run: swift test
+
       # Xcode 26 no longer bundles the Metal toolchain; KSPlayer's shaders need it (same as Lume's own workflow)
       - name: Download Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
 
       - name: Our changes onto Lume
-        run: sh gf/ci/apply-patches.sh gf Lume
+        run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
 
       - name: Lume GF identity
         working-directory: Lume
@@ -111,6 +117,10 @@ jobs:
       # the runner and, for tvOS, a registered Apple TV, and Xcode refuses ad hoc signing for iOS/tvOS. The next step puts
       # the entitlements back; the upload re-signs everything with Apple's cloud-managed distribution certificate.
       # The App Store Connect key is not on the runner yet while Lume's build scripts run.
+      - name: App tests (iOS Simulator)
+        if: matrix.platform == 'iOS'
+        run: sh gf/ci/run-app-tests.sh Lume
+
       - name: Archive (Sideload configuration, unsigned)
         working-directory: Lume
         run: |
