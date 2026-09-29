@@ -40,6 +40,14 @@ nonisolated final class GFTestStreamServer: @unchecked Sendable {
         queue.sync { log }
     }
 
+    /// "opened /a.ts +0.00 s, closed /a.ts +1.23 s, ..." for failure messages.
+    var eventsDescription: String {
+        let events = events
+        guard let first = events.first?.time else { return "no connections" }
+        return events.map { "\($0.kind) \($0.path) +\(String(format: "%.2f", $0.time.timeIntervalSince(first))) s" }
+            .joined(separator: ", ")
+    }
+
     var peakConnections: Int {
         queue.sync { peak }
     }

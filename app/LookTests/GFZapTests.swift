@@ -13,17 +13,17 @@ struct GFZapTests {
         defer { server.stop() }
         let probe = GFZapProbe(url: server.url("/a.ts"))
         defer { probe.stop() }
-        #expect(await server.wait(for: .opened, path: "/a.ts", timeout: 15))
+        #expect(await server.wait(for: .opened, path: "/a.ts", timeout: 15), "\(server.eventsDescription)")
         // the first channel is being read (FFmpeg is still analysing it)
         try await Task.sleep(for: .seconds(1))
         probe.switchTo(server.url("/b.ts"))
-        #expect(await server.wait(for: .opened, path: "/b.ts", timeout: 15))
+        #expect(await server.wait(for: .opened, path: "/b.ts", timeout: 15), "\(server.eventsDescription)")
         let events = server.events
         let oldClosed = try #require(events.first { $0.kind == .closed && $0.path == "/a.ts" },
-                                     "the next channel opened while the old one was still connected")
+                                     "the next channel opened while the old one was still connected: \(server.eventsDescription)")
         let nextOpened = try #require(events.first { $0.kind == .opened && $0.path == "/b.ts" })
-        #expect(oldClosed.time <= nextOpened.time)
-        #expect(server.peakConnections == 1)
+        #expect(oldClosed.time <= nextOpened.time, "\(server.eventsDescription)")
+        #expect(server.peakConnections == 1, "\(server.eventsDescription)")
     }
 
     @Test func `the test stream's tables carry a valid checksum`() {
