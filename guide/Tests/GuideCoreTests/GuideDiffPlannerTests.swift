@@ -73,10 +73,21 @@ struct GuideDiffPlannerTests {
         #expect(p.deletions(fileCompleted: false).isEmpty)
     }
 
-    @Test func `programmes older than 12 hours are dropped and not inserted`() {
+    @Test func `old programmes the file still carries are stored (catch-up)`() {
+        var p = GuideDiffPlanner(stored: [:], claimableChannels: ["a"], now: now)
+        #expect(p.plan([item("a", -48), item("a", 0)]).inserts == [item("a", -48).id, item("a", 0).id])
+    }
+
+    @Test func `an old programme the file still carries is not deleted`() {
         var p = GuideDiffPlanner(stored: stored([item("a", -14)]), claimableChannels: ["a"], now: now)
-        #expect(p.plan([item("a", -13.5), item("a", 0)]).inserts == [item("a", 0).id])
-        #expect(p.deletions(fileCompleted: true) == [item("a", -14).id])
+        _ = p.plan([item("a", -14), item("a", 0)])
+        #expect(p.deletions(fileCompleted: true).isEmpty)
+    }
+
+    @Test func `old programmes the file dropped are cleared`() {
+        var p = GuideDiffPlanner(stored: stored([item("a", -14), item("b", -20)]), claimableChannels: ["a"], now: now)
+        _ = p.plan([item("a", 0)])
+        #expect(p.deletions(fileCompleted: true) == [item("a", -14).id, item("b", -20).id].sorted())
     }
 
     @Test func `channels this source may not claim are ignored`() {

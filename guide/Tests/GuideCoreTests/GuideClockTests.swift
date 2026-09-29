@@ -33,6 +33,11 @@ struct GuideClockTests {
         #expect(next(check: check, attempt: failed, build: build) == failed.addingTimeInterval(15 * minute))
     }
 
+    @Test func `a failure before any good check is retried after 15 minutes`() {
+        let failed = build
+        #expect(next(check: nil, attempt: failed, build: nil) == failed.addingTimeInterval(15 * minute))
+    }
+
     @Test func `without a build time the app checks an hour after the last check`() {
         let check = build
         #expect(next(check: check, build: nil) == check.addingTimeInterval(hour))
@@ -92,6 +97,13 @@ struct GuideClockTests {
         s.recordUnchanged(at: build.addingTimeInterval(30 * minute))
         #expect(GuideStatusSummary.line(for: [s], time: time)
             == "Guide updated 00:13 · server built 00:11 · checked 00:41")
+    }
+
+    @Test func `status line picks the source that was updated last`() {
+        var updated = GuideSourceState(), skipped = GuideSourceState()
+        updated.recordImported(etag: nil, lastModified: nil, serverBuild: build, channelIDs: [], at: build.addingTimeInterval(90))
+        skipped.recordUnchanged(at: build.addingTimeInterval(20 * minute)) // a source that never downloads (all channels covered)
+        #expect(GuideStatusSummary.line(for: [updated, skipped], time: time) == "Guide updated 00:13 · server built 00:11")
     }
 
     @Test func `status line shows the last failure`() {

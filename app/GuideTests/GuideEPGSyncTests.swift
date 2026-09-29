@@ -20,6 +20,24 @@ struct GuideEPGSyncTests {
         #expect(titles == ["Kept"])
     }
 
+    @Test func `two sources on the same channels both record a check`() async throws {
+        let container = try makeTestContainer()
+        let context = ModelContext(container)
+        let hourStart = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 / 3600).rounded(.down) * 3600)
+        context.insert(LiveStream(id: "l-1", streamId: 1, name: "One", epgChannelId: "c1"))
+        let file = try writeGuideFile(hourly("c1", from: hourStart, count: 2))
+        let first = EPGSource(name: "First", url: file.absoluteString)
+        context.insert(first)
+        try context.save()
+        let second = EPGSource(name: "Second", url: file.absoluteString) // added later: its channels are all claimed
+        context.insert(second)
+        try context.save()
+        _ = await EPGSyncManager(modelContainer: container).syncAllSources()
+        let states = [first.id, second.id].map { GuideSourceStateStore.shared.state(for: $0) }
+        #expect(states.allSatisfy { $0.lastCheck != nil })
+        #expect(GuideClock.nextCheck(states: states, followServer: true, interval: 86400) > Date())
+    }
+
     @Test func `a new guide file is applied on top of the stored one`() async throws {
         let container = try makeTestContainer()
         let context = ModelContext(container)

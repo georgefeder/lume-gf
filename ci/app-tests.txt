@@ -1,9 +1,0 @@
-GuideParseCheckedTests
-GuideListingApplierTests
-XMLTVParserTests
-EPGSourceTests
-EPGSourceReconcilerTests
-SyncFrequencyTests
-GuideFetcherTests
-GuideRefresherTests
-GuideEPGSyncTests
