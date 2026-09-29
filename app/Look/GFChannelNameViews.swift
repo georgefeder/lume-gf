@@ -89,10 +89,13 @@ struct GFChannelName: View {
     /// Shown after the badges (placement `.below`).
     var badgeSymbol: GFBadgeSymbol?
     /// A narrow column (the iPhone guide): the title steps its text size down, at most twice, until every word fits
-    /// on a line, before a word would break.
+    /// on a line, before a word would break; and shrinks a little more rather than end in "…".
     var fitsWords = false
     @AppStorage(GFChannelNames.settingKey) private var enabled = true
     @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// How far a narrow name may shrink to fit its lines.
+    static let shrinkLimit: CGFloat = 0.85
 
     /// The caller's text size and up to two steps smaller.
     static func fittingTypeSizes(from size: DynamicTypeSize) -> [DynamicTypeSize] {
@@ -141,7 +144,8 @@ struct GFChannelName: View {
             ViewThatFits(in: .horizontal) {
                 wholeWords(text).dynamicTypeSize(sizes[0])
                 wholeWords(text).dynamicTypeSize(sizes[min(1, sizes.count - 1)])
-                Text(verbatim: text).lineLimit(titleLineLimit).dynamicTypeSize(sizes[sizes.count - 1])
+                Text(verbatim: text).lineLimit(titleLineLimit).minimumScaleFactor(Self.shrinkLimit)
+                    .dynamicTypeSize(sizes[sizes.count - 1])
             }
         } else {
             Text(verbatim: text).lineLimit(titleLineLimit)
@@ -160,6 +164,7 @@ struct GFChannelName: View {
             .hidden()
             Text(verbatim: text)
                 .lineLimit(titleLineLimit)
+                .minimumScaleFactor(Self.shrinkLimit)
                 .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
     }

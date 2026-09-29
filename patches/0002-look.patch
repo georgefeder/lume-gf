@@ -192,7 +192,7 @@ index 7c51648..681b83d 100644
  }
  
 diff --git a/Lume/Views/LiveTV/EPG/EPGGrid.swift b/Lume/Views/LiveTV/EPG/EPGGrid.swift
-index 9177710..948d165 100644
+index 9177710..17aa8ee 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGrid.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGrid.swift
 @@ -29,6 +29,10 @@ struct EPGGrid: View, Equatable {
@@ -219,8 +219,8 @@ index 9177710..948d165 100644
      /// channels. Pinning the rows to at least the viewport height (top-aligned)
      /// keeps them level on every platform.
      @State private var viewportHeight: CGFloat = 0
-+    /// Lume GF: the room the scroll view itself leaves under its content (the safe area under the tab bar or the
-+    /// Apple TV's overscan); the bottom room adds only the rest.
++    /// Lume GF: the room the scroll view keeps below its content — as far as it runs on past the screen's edge (the
++    /// safe area under the tab bar or the Apple TV's overscan); short content fills only the part above it.
 +    @State private var scrollInsetBottom: CGFloat = 0
  
      var body: some View {
@@ -231,37 +231,57 @@ index 9177710..948d165 100644
              .equatable()
 -            .frame(minHeight: viewportHeight, alignment: .topLeading)
 +            .padding(.leading, contentPad)
-+            .padding(.bottom, GFGuideGlass.bottomPadding(bottomRoom: bottomRoom, scrollInset: scrollInsetBottom))
++            .padding(.bottom, bottomRoom)
 +            .frame(minHeight: max(0, viewportHeight - scrollInsetBottom), alignment: .topLeading)
          }
          .background {
              GeometryReader { geo in
-@@ -74,10 +85,14 @@ struct EPGGrid: View, Equatable {
+@@ -74,10 +85,21 @@ struct EPGGrid: View, Equatable {
              }
          }
          .scrollPosition($position)
-+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentInsets.bottom } action: { _, new in
-+            scrollInsetBottom = new
-+        }
-         .onScrollGeometryChange(for: CGRect.self) { CGRect(origin: $0.contentOffset, size: $0.containerSize) } action: { _, new in
-             let clamped = CGPoint(x: max(0, new.origin.x), y: max(0, new.origin.y))
+-        .onScrollGeometryChange(for: CGRect.self) { CGRect(origin: $0.contentOffset, size: $0.containerSize) } action: { _, new in
+-            let clamped = CGPoint(x: max(0, new.origin.x), y: max(0, new.origin.y))
++        // Lume GF: offset, size and the room kept below the content in one reading (GFGuideGlass.ScrollFrame)
++        .onScrollGeometryChange(for: GFGuideGlass.ScrollFrame.self) {
++            GFGuideGlass.ScrollFrame(offset: $0.contentOffset, size: $0.containerSize,
++                                     insetBottom: $0.contentInsets.bottom)
++        } action: { _, new in
++            scrollInsetBottom = new.insetBottom
++            let clamped = CGPoint(x: max(0, new.offset.x), y: max(0, new.offset.y))
              sync.offset = clamped
 -            sync.viewport = new.size
-+            // Lume GF: the part the viewer reads — right of the glass sidebar, above the bottom fade
-+            sync.viewport = GFGuideGlass.visibleSize(measured: new.size, pad: contentPad, bottomFade: bottomRoom)
++            // Lume GF: the part the viewer reads — right of the glass sidebar, above the bottom fade, on the screen
++            sync.viewport = GFGuideGlass.visibleSize(measured: new.size, scrollInset: new.insetBottom, pad: contentPad,
++                                                     bottomFade: bottomRoom)
++            #if GF_DEMO
++                print("GFDemo grid: size \(new.size), inset below \(new.insetBottom), offset \(clamped),",
++                      "readable \(sync.viewport)")
++            #endif
              #if !os(tvOS)
                  // Touch scrolling has no known target — the panes mirror the
                  // measured offset per frame. tvOS mirrors per programmatic
-@@ -85,7 +100,7 @@ struct EPGGrid: View, Equatable {
+@@ -85,8 +107,8 @@ struct EPGGrid: View, Equatable {
                  sync.mirror = clamped
              #endif
              let window = EPGRealizeWindow.around(
 -                offset: clamped.x,
+-                viewport: new.width,
 +                offset: GFGuideGlass.realizeOrigin(offsetX: clamped.x, pad: contentPad),
-                 viewport: new.width,
++                viewport: new.size.width,
                  blockLength: 30 * metrics.pointsPerMinute
              )
-@@ -109,7 +124,7 @@ struct EPGGrid: View, Equatable {
+             if sync.window != window {
+@@ -94,7 +116,7 @@ struct EPGGrid: View, Equatable {
+             }
+             let rowWindow = EPGRealizeWindow.around(
+                 offset: clamped.y,
+-                viewport: new.height,
++                viewport: new.size.height,
+                 blockLength: 2 * (metrics.rowHeight + metrics.rowSpacing)
+             )
+             if sync.rowWindow != rowWindow {
+@@ -109,7 +131,7 @@ struct EPGGrid: View, Equatable {
              // right cells; the estimated viewports are corrected by the first
              // geometry event.
              sync.window = EPGRealizeWindow.around(

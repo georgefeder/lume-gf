@@ -34,8 +34,20 @@ nonisolated enum GFGuideGlass {
         slidesUnder ? 0 : columnWidth
     }
 
-    static func visibleSize(measured: CGSize, pad: CGFloat, bottomFade: CGFloat) -> CGSize {
-        CGSize(width: max(0, measured.width - pad), height: max(0, measured.height - bottomFade))
+    /// What the grid's scroll view reports in one reading: its offset, its size and the room it keeps below its
+    /// content.
+    /// A SwiftUI scroll view runs on into the safe area along the ways it scrolls and insets its content by as much, so
+    /// under the iPhone's tab bar it reaches that far past the screen's edge (`insetBottom`).
+    nonisolated struct ScrollFrame: Equatable, Sendable {
+        var offset: CGPoint
+        var size: CGSize
+        var insetBottom: CGFloat
+    }
+
+    /// The part the viewer reads: right of the sidebar, above the bottom fade, on the screen.
+    static func visibleSize(measured: CGSize, scrollInset: CGFloat, pad: CGFloat, bottomFade: CGFloat) -> CGSize {
+        CGSize(width: max(0, measured.width - pad),
+               height: max(0, measured.height - max(0, scrollInset) - bottomFade))
     }
 
     /// The timeline x at the scroll area's leading edge (under the sidebar), for the realise window.
@@ -51,11 +63,6 @@ nonisolated enum GFGuideGlass {
     /// Through the safe area (the TV's overscan, the iPhone's tab bar) and half a row more.
     static func bottomFade(safeAreaBottom: CGFloat, rowStride: CGFloat) -> CGFloat {
         max(0, safeAreaBottom) + rowStride / 2
-    }
-
-    /// The padding under the last row: the bottom room less what the scroll view already leaves for the safe area.
-    static func bottomPadding(bottomRoom: CGFloat, scrollInset: CGFloat) -> CGFloat {
-        max(0, bottomRoom - max(0, scrollInset))
     }
 
     static func topFade(tv: Bool) -> CGFloat {
