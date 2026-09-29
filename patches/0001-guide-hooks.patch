@@ -34,3 +34,127 @@ index ae21bc4..d931e5b 100644
      func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
          currentText = ""
          if elementName == "programme" {
+diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
+index bfc60be..70b3577 100644
+--- a/Lume/Services/Sync/EPGSyncManager.swift
++++ b/Lume/Services/Sync/EPGSyncManager.swift
+@@ -35,7 +35,7 @@ actor EPGSyncManager {
+     /// Refreshes the guide from every enabled source. Returns `true` when at
+     /// least one source synced successfully.
+     @discardableResult
+-    func syncAllSources() async -> Bool {
++    func syncAllSources(force: Bool = false) async -> Bool {
+         let sources = enabledSources()
+         guard !sources.isEmpty else {
+             Logger.database.info("No enabled EPG sources, skipping EPG sync")
+@@ -49,12 +49,14 @@ actor EPGSyncManager {
+             return false
+         }
+ 
+-        clearListings()
++        // Lume GF: no clearListings(). Each source's new guide is applied as only-what-changed on top of the stored
++        // one (GuideRefresher), so a failed or cut-off download never empties the guide.
++        let refresher = GuideRefresher(container: modelContainer)
+ 
+         var anySucceeded = false
+         var unclaimedChannelIDs = knownChannelIDs
+         for source in sources {
+-            let result = await sync(sourceID: source.id, url: source.url, knownChannelIDs: unclaimedChannelIDs)
++            let result = await sync(sourceID: source.id, url: source.url, knownChannelIDs: unclaimedChannelIDs, refresher: refresher, force: force)
+             unclaimedChannelIDs.subtract(result.claimedChannelIDs)
+             anySucceeded = anySucceeded || result.didSync
+         }
+@@ -70,7 +72,7 @@ actor EPGSyncManager {
+         let claimedChannelIDs: Set<String>
+     }
+ 
+-    private func sync(sourceID: UUID, url: String, knownChannelIDs: Set<String>) async -> SourceResult {
++    private func sync(sourceID: UUID, url: String, knownChannelIDs: Set<String>, refresher: GuideRefresher, force: Bool) async -> SourceResult {
+         let interval = Perf.begin(.epgSourceSync)
+         defer { Perf.end(interval) }
+ 
+@@ -87,14 +89,14 @@ actor EPGSyncManager {
+             return SourceResult(didSync: true, claimedChannelIDs: [])
+         }
+         do {
+-            let isRemote = !(URL(string: url)?.isFileURL ?? false)
+-            let fileURL = try await client.downloadEPG(from: url)
+-            defer { if isRemote { try? FileManager.default.removeItem(at: fileURL) } }
+-
+-            let inserted = insertListings(from: fileURL, knownChannelIDs: knownChannelIDs)
+-            Logger.database.info("EPG source \(sourceID) inserted \(inserted.count) listings for \(inserted.channelIDs.count) channels")
++            let outcome = try await refresher.refresh(sourceID: sourceID, url: url,
++                                                      knownChannelIDs: knownChannelIDs, force: force)
++            Logger.database.info("EPG source \(sourceID) \(outcome.summary, privacy: .public)")
+             markSynced(sourceID)
+-            return SourceResult(didSync: true, claimedChannelIDs: inserted.channelIDs)
++            return SourceResult(didSync: true, claimedChannelIDs: outcome.claimedChannelIDs)
++        } catch is CancellationError {
++            markStatus(sourceID, .idle)
++            return SourceResult(didSync: false, claimedChannelIDs: [])
+         } catch {
+             // Credential-free detail (never a URL) so it can be public in
+             // user-exported diagnostic logs.
+diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
+index edb8b64..4074e40 100644
+--- a/Lume/Services/Sync/EPGSyncService.swift
++++ b/Lume/Services/Sync/EPGSyncService.swift
+@@ -99,7 +99,7 @@ final class EPGSyncService {
+     /// Manual trigger (settings "Sync Now"): refreshes now regardless of the
+     /// schedule or any in-flight content sync.
+     func syncNow() {
+-        kick()
++        kick(force: true)
+     }
+ 
+     /// Background trigger (launch): refreshes only if the guide is stale per
+@@ -129,6 +129,20 @@ final class EPGSyncService {
+ 
+     private var didRefreshForSubtitles = false
+ 
++    /// Lume GF background task entry: runs a due refresh and waits for it. False when it was cut short.
++    func refreshIfDueAndWait() async -> Bool {
++        syncIfDue()
++        guard let task else { return true }
++        await task.value
++        return !task.isCancelled
++    }
++
++    /// Lume GF: Apple's background time ran out. Stop a running refresh; the next trigger continues it.
++    func cancelBackgroundRefresh() {
++        guard let task, isBackgroundRefresh else { return }
++        task.cancel()
++    }
++
+     // MARK: - Content sync reports
+ 
+     /// `MainTabView`'s auto-sync queue went from empty to busy or back.
+@@ -159,7 +173,9 @@ final class EPGSyncService {
+     private func runOwedRefresh() {
+         // `container` first: taking the debt before `configure` would drop it.
+         guard container != nil, task == nil, gate.takeOwedRefresh() else { return }
+-        kick(background: true)
++        // Lume GF: in full — a playlist sync may have added channels whose programmes sit in a guide
++        // file the server reports as unchanged.
++        kick(background: true, force: true)
+     }
+ 
+     private var isDue: Bool {
+@@ -193,7 +209,7 @@ final class EPGSyncService {
+         return found
+     }
+ 
+-    private func kick(background: Bool = false) {
++    private func kick(background: Bool = false, force: Bool = false) {
+         guard let container, task == nil else { return }
+         isSyncing = true
+         isBackgroundRefresh = background
+@@ -204,7 +220,7 @@ final class EPGSyncService {
+         // profile showed EPG ingest pegging a background thread at 100% in
+         // lockstep with a frozen main thread right after a playlist sync.
+         task = Task(priority: .utility) {
+-            let succeeded = await manager.syncAllSources()
++            let succeeded = await manager.syncAllSources(force: force)
+             if succeeded {
+                 EPGSyncSchedule.lastSyncDate = Date()
+                 EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion

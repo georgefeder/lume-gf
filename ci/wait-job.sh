@@ -13,7 +13,7 @@ ID=$(gh run view "$RID" -R "$R" --json jobs --jq ".jobs[] | select(.name==\"$JOB
 gh api --allow-escape-sequences "repos/$R/actions/jobs/$ID/logs" | sed 's/\x1b\[[0-9;]*m//g; s/^[0-9T:.-]*Z //' > "$LOG"
 grep -E "✘|error:|Test run with|TEST (SUCCEEDED|FAILED)|test_[a-z_]+: |^ok |^FAIL |Test case '[^']*' failed|Expectation failed" "$LOG" \
   | grep -v "^ *|" | tail -80
-grep -E "Test case '[^']*' passed" "$LOG" | sed -E "s/.*Test case '([^']*)'.*/\1/" | sort -u \
+grep -E "Test case '.*' passed" "$LOG" | sed -E "s/.*Test case '(.*)' passed.*/\1/" | sort -u \
   | awk -F/ '{c[$1]++} END {for (s in c) printf "passed: %s %d\n", s, c[s]}' | sort
 rm -f "$LOG"
 echo "job: $STATE"
