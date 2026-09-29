@@ -36,10 +36,13 @@ grep -qF -- "-clonedSourcePackagesDirPath $T/spm -disableAutomaticPackageResolut
   && ok "builds with our patched packages" || no "patched packages not used"
 grep -qF "simctl ui IPHONE-1 appearance dark" "$LOG" && grep -qF "simctl ui IPHONE-1 appearance light" "$LOG" \
   && ok "iPhone in dark and light mode" || no "appearances"
-grep -qE "simctl launch .*IPHONE-1 lv.test.lume -GFDemo list" "$LOG" && ok "starts the demo list" || no "list launch"
-grep -qE "simctl launch .*TV-1 lv.test.lume -GFDemo guide -GFDemoMoves right" "$LOG" \
+grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo list" "$LOG" && ok "starts the demo list" || no "list launch"
+grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMoves right" "$LOG" \
   && ok "moves the Apple TV focus" || no "tv moves"
 grep -qF "launch TZ=Europe/London" "$LOG" && ok "the app runs on UK time" || no "time zone"
+# unsigned builds crash on iCloud at launch; Lume keeps iCloud off under -ui-testing (as its own UI tests do)
+[ "$(grep -c "simctl launch " "$LOG")" -eq 10 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
+  && ok "every launch keeps iCloud off" || no "a launch without -ui-testing"
 n=0
 for f in iphone-guide-dark iphone-list-dark iphone-guide-light iphone-list-light iphone-guide-bottom-dark \
          iphone-guide-few-dark tv-guide-channel tv-guide-programme tv-guide-bottom tv-list; do

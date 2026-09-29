@@ -28,8 +28,9 @@ start() {  # $1 = simulator id, $2 = app; prints the bundle id
 shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch arguments
   SIM="$1"; BID="$2"; NAME="$3"; shift 3
   xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
+  # -ui-testing: Lume keeps iCloud off (an unsigned build crashes on it at launch), as Lume's own UI tests do
   SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
-    "$SIM" "$BID" "$@" >/dev/null
+    "$SIM" "$BID" -ui-testing "$@" >/dev/null
   sleep "$WAIT"
   xcrun simctl io "$SIM" screenshot "$OUT/$NAME.png" >/dev/null
   # a picture of the home screen is no picture of Lume: say so, with the app's last words
