@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: ['part2/**']
+    branches: ['part2/**', 'part3/**']
 
 permissions:
   contents: read
