@@ -34,4 +34,29 @@ struct GFChannelNamesTests {
         #expect(GFChannelBadges.hasBadges(GFChannelNames.label(for: live, enabled: true)))
         #expect(!GFChannelBadges.hasBadges(GFChannelNames.label(for: "Channel 4", enabled: true)))
     }
+
+    @Test func `the player shows the clean name, the full one when switched off`() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: GFChannelNames.settingKey)
+        defer { defaults.set(saved, forKey: GFChannelNames.settingKey) }
+        let playlist = Playlist(name: "Test", serverURL: "http://example.com", username: "u", password: "p")
+        let stream = LiveStream(id: "t-live-2", streamId: 2, name: live)
+        defaults.set(true, forKey: GFChannelNames.settingKey)
+        #expect(PlayableMedia.from(stream: stream, playlist: playlist)?.title == "Arsenal v Chelsea")
+        defaults.set(false, forKey: GFChannelNames.settingKey)
+        #expect(PlayableMedia.from(stream: stream, playlist: playlist)?.title == live)
+    }
+
+    @Test func `a catch-up recording keeps the clean channel name`() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: GFChannelNames.settingKey)
+        defer { defaults.set(saved, forKey: GFChannelNames.settingKey) }
+        defaults.set(true, forKey: GFChannelNames.settingKey)
+        let playlist = Playlist(name: "Test", serverURL: "http://example.com", username: "u", password: "p")
+        let stream = LiveStream(id: "t-live-3", streamId: 3, name: "BBC One FHD", tvArchive: 1, tvArchiveDuration: 7)
+        let start = Date.now.addingTimeInterval(-2 * 3600)
+        let media = PlayableMedia.catchup(stream: stream, playlist: playlist, programTitle: "Evening News",
+                                          start: start, end: start.addingTimeInterval(1800))
+        #expect(media?.title == "BBC One")
+    }
 }
