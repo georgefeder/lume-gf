@@ -24,5 +24,14 @@ check "the test run patches Lume's packages and compiles tvOS with them" \
   'y=YAML.load_file(ARGV[0]); s=y["jobs"]["app"]["steps"]; tv=s.find { |x| x["name"].to_s == "tvOS compiles" }; exit(s.any? { |x| x["run"].to_s.include?("apply-dep-patches.sh") } && tv["run"].to_s.include?("-disableAutomaticPackageResolution") ? 0 : 1)' "$WT"
 check "a change to our package patches starts a build" \
   'y=YAML.load_file(ARGV[0]); o=y["on"] || y[true]; exit(Array(o["push"]["paths"]).include?("deps/**") ? 0 : 1)' "$WC"
+check "no build includes the screenshot demo" 'exit(File.read(ARGV[0]).include?("GF_DEMO") ? 1 : 0)'
+check "pushes to part3 branches run the tests" \
+  'y=YAML.load_file(ARGV[0]); o=y["on"] || y[true]; exit(Array(o["push"]["branches"]).include?("part3/**") ? 0 : 1)' "$WT"
+check "a screenshots job keeps its pictures" \
+  'y=YAML.load_file(ARGV[0]); s=y["jobs"]["screenshots"]["steps"]; exit(s.any? { |x| x["run"].to_s.include?("screenshots.sh") } && s.any? { |x| x["uses"].to_s.start_with?("actions/upload-artifact") } ? 0 : 1)' "$WT"
+check "the screenshots are taken with our patched packages" \
+  'y=YAML.load_file(ARGV[0]); exit(y["jobs"]["screenshots"]["steps"].any? { |x| x["run"].to_s.include?("apply-dep-patches.sh") } ? 0 : 1)' "$WT"
+check "the screenshots job never uses a secret" \
+  'y=YAML.load_file(ARGV[0]); exit(y["jobs"]["screenshots"].to_s.include?("secrets.") ? 1 : 0)' "$WT"
 [ "$fails" -eq 0 ] && echo "test_workflows: all passed" || echo "test_workflows: $fails failed"
 exit "$fails"

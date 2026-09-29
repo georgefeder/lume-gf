@@ -39,6 +39,7 @@ jobs:
           sh gf/ci/test_apply_patches.sh
           sh gf/ci/test_workflows.sh
           sh gf/ci/test_apply_dep_patches.sh
+          sh gf/ci/test_screenshots.sh
 
       - name: Lume ${{ inputs.tag }}
         uses: actions/checkout@v5

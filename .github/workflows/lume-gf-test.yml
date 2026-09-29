@@ -30,7 +30,8 @@ jobs:
         with:
           xcode-version: latest-stable
       - name: Script tests
-        run: sh ci/test_add_sources.sh && sh ci/test_apply_patches.sh && sh ci/test_workflows.sh && sh ci/test_apply_dep_patches.sh
+        run: sh ci/test_add_sources.sh && sh ci/test_apply_patches.sh && sh ci/test_workflows.sh && sh ci/test_apply_dep_patches.sh && sh ci/test_screenshots.sh
+          python3 -m unittest discover -s ci -p 'test_*.py'
       - name: swift test
         working-directory: guide
         run: swift test
@@ -88,3 +89,56 @@ jobs:
           xcodebuild build -project Lume.xcodeproj -scheme Lume -configuration Debug \
             -destination 'generic/platform=tvOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet \
             -clonedSourcePackagesDirPath "$GF_SPM" -disableAutomaticPackageResolution
+  screenshots:
+    name: Screenshots (simulators)
+    if: ${{ !inputs.baseline }}
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - name: Our changes
+        uses: actions/checkout@v5
+        with:
+          path: gf
+      - name: Newest Lume release
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "tag=$(gh api repos/bilipp/Lume/releases/latest --jq .tag_name)" >> "$GITHUB_OUTPUT"
+      - name: Lume ${{ steps.tag.outputs.tag }}
+        uses: actions/checkout@v5
+        with:
+          repository: bilipp/Lume
+          ref: ${{ steps.tag.outputs.tag }}
+          path: Lume
+      - name: Engine version paired with this release
+        id: engine
+        run: |
+          ref=$(sh gf/ci/engine-ref.sh Lume)
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: LumeEngine ${{ steps.engine.outputs.ref }}
+        uses: actions/checkout@v5
+        with:
+          repository: bilipp/LumeEngine
+          ref: ${{ steps.engine.outputs.ref }}
+          path: LumeEngine
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Download Metal Toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+      - name: Our changes onto Lume
+        run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
+      - name: Our patches to Lume's packages
+        run: |
+          echo "GF_SPM=$RUNNER_TEMP/spm" >> "$GITHUB_ENV"
+          sh gf/ci/apply-dep-patches.sh gf Lume "$RUNNER_TEMP/spm"
+      - name: Screenshots (demo channels, iPhone and Apple TV)
+        run: sh gf/ci/screenshots.sh Lume "$RUNNER_TEMP/screenshots"
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots/*.png
+          if-no-files-found: warn

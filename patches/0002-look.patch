@@ -1,3 +1,17 @@
+diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
+index 77166ee..b18c199 100644
+--- a/Lume/LumeApp.swift
++++ b/Lume/LumeApp.swift
+@@ -206,7 +206,8 @@ struct LumeApp: App {
+ 
+     var body: some Scene {
+         WindowGroup {
+-            ContentView()
++            // Lume GF: the screenshot build's demo (-D GF_DEMO only); every other build shows ContentView
++            GFDemoSwitch { ContentView() }
+                 .environment(TraktService.shared)
+                 .environment(PremiumManager.shared)
+                 .environment(cloudSync)
 diff --git a/Lume/Services/Player/NowPlayingService.swift b/Lume/Services/Player/NowPlayingService.swift
 index 2d99a3d..1564538 100644
 --- a/Lume/Services/Player/NowPlayingService.swift
@@ -215,7 +229,7 @@ index 9177710..3db6601 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 05a5f0c..2b6c365 100644
+index 05a5f0c..f7c4fe7 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -82,23 +82,33 @@ struct EPGGridScroller: View {
@@ -267,7 +281,35 @@ index 05a5f0c..2b6c365 100644
              // On tvOS the focus strip overlays the channel column — the
              // guide's leftmost band, directly beside the rail. Being adjacent
              // to the rail is what makes entry (right from a category) and exit
-@@ -142,7 +152,7 @@ struct EPGGridScroller: View {
+@@ -119,6 +129,10 @@ struct EPGGridScroller: View {
+                 guard virtualFocus == nil else { return }
+                 Task { @MainActor in
+                     landOnChannel()
++                    #if GF_DEMO
++                        // Lume GF screenshot build: the scripted remote presses (-GFDemoMoves)
++                        await GFDemo.playMoves { moveVirtualFocus($0) }
++                    #endif
+                 }
+             } else if selection == nil {
+                 // Focus left towards the rail or the tab bar. A presented
+@@ -131,6 +145,16 @@ struct EPGGridScroller: View {
+         #else
+         .background(.background)
+         #endif
++        #if GF_DEMO && !os(tvOS)
++        .task {
++            // Lume GF screenshot build: -GFDemoMoves end scrolls the guide to its last row
++            guard GFDemo.moves.contains("end") else { return }
++            try? await Task.sleep(for: .seconds(3))
++            let stride = metrics.rowHeight + metrics.rowSpacing
++            let bottom = max(0, CGFloat(rows.count) * stride - metrics.rowSpacing - sync.viewport.height)
++            requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: bottom), animated: false)
++        }
++        #endif
+         .sheet(item: $selection) { selection in
+             EPGProgramDetailView(
+                 stream: selection.stream,
+@@ -142,7 +166,7 @@ struct EPGGridScroller: View {
          }
      }
  
@@ -276,7 +318,7 @@ index 05a5f0c..2b6c365 100644
          EPGGrid(
              rows: rows,
              timeline: timeline,
-@@ -153,6 +163,8 @@ struct EPGGridScroller: View {
+@@ -153,6 +177,8 @@ struct EPGGridScroller: View {
              nowTarget: nowScrollTarget,
              scrollRequest: scrollRequest,
              virtualFocus: gridVirtualFocus,
@@ -285,7 +327,7 @@ index 05a5f0c..2b6c365 100644
              onPlay: { row, cell in playCell(row, cell) },
              onShowDetails: { row, cell in
                  selection = EPGSelection(id: cell.id, stream: row.stream, cell: cell)
-@@ -237,15 +249,18 @@ struct EPGGridScroller: View {
+@@ -237,15 +263,18 @@ struct EPGGridScroller: View {
              Button {
                  requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: sync.offset.y), animated: true)
              } label: {
@@ -305,7 +347,7 @@ index 05a5f0c..2b6c365 100644
          #endif
      }
  }
-@@ -289,7 +304,7 @@ struct EPGGridScroller: View {
+@@ -289,7 +318,7 @@ struct EPGGridScroller: View {
              // on — a single strip owns the whole grid's focus — so the hub's
              // long press raises them itself.
              .confirmationDialog(
