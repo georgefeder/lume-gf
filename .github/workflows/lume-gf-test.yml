@@ -25,7 +25,7 @@ jobs:
         with:
           xcode-version: latest-stable
       - name: Script tests
-        run: sh ci/test_add_sources.sh
+        run: sh ci/test_add_sources.sh && sh ci/test_apply_patches.sh
       - name: swift test
         working-directory: guide
         run: swift test

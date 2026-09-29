@@ -4,6 +4,8 @@
 # Usage: sh apply-patches.sh <our repo dir> <Lume checkout dir>
 set -eu
 OURS="${1:?usage: apply-patches.sh OURS_DIR LUME_DIR}"; LUME="${2:?usage: apply-patches.sh OURS_DIR LUME_DIR}"
+# git -C reads a relative patch path from inside the Lume checkout, so hand it absolute paths
+OURS=$(cd "$OURS" && pwd)
 n=0
 for P in "$OURS"/patches/*.patch; do
   [ -e "$P" ] || continue
