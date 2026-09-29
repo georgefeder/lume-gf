@@ -53,6 +53,11 @@ nonisolated enum GFGuideGlass {
         max(0, safeAreaBottom) + rowStride / 2
     }
 
+    /// The padding under the last row: the bottom room less what the scroll view already leaves for the safe area.
+    static func bottomPadding(bottomRoom: CGFloat, scrollInset: CGFloat) -> CGFloat {
+        max(0, bottomRoom - max(0, scrollInset))
+    }
+
     static func topFade(tv: Bool) -> CGFloat {
         tv ? 18 : 10
     }

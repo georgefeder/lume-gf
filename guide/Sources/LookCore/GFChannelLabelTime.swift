@@ -67,4 +67,16 @@ nonisolated enum GFChannelLabelTime {
             .weekday(.abbreviated))
         return "\(day) \(time)"
     }
+
+    /// For a badge with little room (the iPhone guide's channel column): today's time, or only the weekday.
+    static func compactBadgeText(start: Date, now: Date, zone: TimeZone = .current, locale: Locale = .current) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        calendar.locale = locale
+        guard !calendar.isDate(start, inSameDayAs: now) else {
+            return badgeText(start: start, now: now, zone: zone, locale: locale)
+        }
+        return start.formatted(Date.FormatStyle(locale: locale, calendar: calendar, timeZone: zone)
+            .weekday(.abbreviated))
+    }
 }

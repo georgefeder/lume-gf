@@ -42,11 +42,13 @@
         #endif
     }
 
-    /// An in-memory store: one category of made-up channels and programmes from three hours ago to nine ahead.
+    /// An in-memory store: one category of made-up channels and programmes from three hours ago to nine ahead, and a
+    /// few empty categories for the Apple TV's category list.
     @MainActor
     final class GFDemoStore {
         let container: ModelContainer
         let scope: LiveChannelScope
+        let categories: [Category]
 
         init(count: Int = GFDemo.channelCount, now: Date = .now) {
             // swiftlint:disable:next force_try
@@ -57,8 +59,12 @@
             let context = container.mainContext
             let playlist = Playlist(name: "Demo", serverURL: "http://example.com", username: "u", password: "p")
             context.insert(playlist)
-            let category = Category(apiId: "1", name: "Sport", parentId: 0, type: .live, playlist: playlist)
-            context.insert(category)
+            let names = ["Sport", "Entertainment", "News", "Films", "Documentaries", "Kids", "Latvia"]
+            let categories = names.enumerated().map {
+                Category(apiId: "\($0.offset + 1)", name: $0.element, parentId: 0, type: .live, playlist: playlist)
+            }
+            categories.forEach { context.insert($0) }
+            let category = categories[0]
             for (index, name) in Self.channelNames(now: now).prefix(count).enumerated() {
                 let channelId = "demo-\(index)"
                 context.insert(LiveStream(
@@ -72,6 +78,7 @@
             }
             try? context.save()
             self.container = container
+            self.categories = categories
             scope = .category(category.id)
         }
 
@@ -115,7 +122,7 @@
             var slot = index
             while start < now.addingTimeInterval(9 * 3600) {
                 let end = start.addingTimeInterval(lengths[slot % lengths.count])
-                let isEvent = label.status != .none && start <= now && now < end
+                let isEvent = label.status == .live && start <= now && now < end
                 result.append(EPGListing(
                     id: "\(channelId)-\(Int(start.timeIntervalSince1970))",
                     channelId: channelId,
@@ -133,10 +140,18 @@
         }
     }
 
-    /// The demo's screen: Lume's own guide or list for the demo category.
+    /// The demo's screen: Lume's own Live TV screen for the demo category — on Apple TV with its category list beside
+    /// the guide or list, as in the app.
     struct GFDemoRoot: View {
-        @State private var store = GFDemoStore()
-        @State private var focusToken = 1
+        @State private var store: GFDemoStore
+        @State private var section: LiveTVSection?
+        @State private var layoutMode = (GFDemo.mode == "list" ? LiveTVLayoutMode.list : .guide).rawValue
+
+        init() {
+            let store = GFDemoStore()
+            _store = State(initialValue: store)
+            _section = State(initialValue: store.categories.first.map { LiveTVSection.category($0) })
+        }
 
         var body: some View {
             content.modelContainer(store.container)
@@ -144,13 +159,19 @@
 
         @ViewBuilder private var content: some View {
             #if os(tvOS)
-                if GFDemo.mode == "list" {
-                    TVChannelsList(scope: store.scope, playlistPrefix: "", sort: .playlist, sourceType: nil,
-                                   onStartMultiView: { _ in }, onPlay: { _ in })
-                } else {
-                    EPGGuideView(scope: store.scope, playlistPrefix: "", sort: .playlist, onPlay: { _ in },
-                                 focusToken: focusToken, onDidClaimFocus: { focusToken = 0 })
-                }
+                TVLiveTVScreen(
+                    sections: store.categories.map { LiveTVSection.category($0) },
+                    selectedSection: $section,
+                    displayedSection: section,
+                    layoutModeRaw: $layoutMode,
+                    contentSort: .playlist,
+                    onPlay: { _ in },
+                    onPlayCatchup: { _, _ in },
+                    onOpenMultiView: {},
+                    onStartMultiView: { _ in },
+                    playlistPrefix: "",
+                    sourceType: nil
+                )
             #elseif os(iOS)
                 TabView {
                     Tab("Live TV", systemImage: "tv") {
