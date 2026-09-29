@@ -29,6 +29,13 @@ struct GFChannelNamesTests {
         #expect(GFChannelNames.label(for: "BBC One FHD", enabled: false) == .unchanged("BBC One FHD"))
     }
 
+    @Test func `a narrow name steps its text size down twice before a word breaks`() {
+        #expect(GFChannelName.fittingTypeSizes(from: .large) == [.large, .medium, .small])
+        #expect(GFChannelName.fittingTypeSizes(from: .accessibility2) == [.accessibility2, .accessibility1, .xxxLarge])
+        #expect(GFChannelName.fittingTypeSizes(from: .small) == [.small, .xSmall])
+        #expect(GFChannelName.fittingTypeSizes(from: .xSmall) == [.xSmall])
+    }
+
     @Test func `badges show only when there is something to say`() {
         #expect(GFChannelBadges.hasBadges(GFChannelNames.label(for: "BBC One FHD", enabled: true)))
         #expect(GFChannelBadges.hasBadges(GFChannelNames.label(for: live, enabled: true)))

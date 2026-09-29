@@ -38,6 +38,12 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.bottomFade(safeAreaBottom: -5, rowStride: 72) == 36)
     }
 
+    @Test func `the grid adds only the bottom room its scroll view does not already leave`() {
+        #expect(GFGuideGlass.bottomPadding(bottomRoom: 131, scrollInset: 95) == 36)
+        #expect(GFGuideGlass.bottomPadding(bottomRoom: 131, scrollInset: 0) == 131)
+        #expect(GFGuideGlass.bottomPadding(bottomRoom: 30, scrollInset: 95) == 0)
+    }
+
     @Test func `Lume's panel corners: 36 on Apple TV, 16 on iPhone`() {
         #expect(GFGuideGlass.sidebarCornerRadius(tv: true) == 36)
         #expect(GFGuideGlass.sidebarCornerRadius(tv: false) == 16)

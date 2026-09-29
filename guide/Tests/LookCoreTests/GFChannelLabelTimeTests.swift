@@ -84,6 +84,18 @@ struct GFChannelLabelTimeTests {
         #expect(start.map { abs($0.timeIntervalSince(utc("2027-03-28T01:30:00Z"))) <= 3600 } == true)
     }
 
+    @Test func `a narrow badge shows today's time`() {
+        let text = GFChannelLabelTime.compactBadgeText(start: utc("2026-09-27T14:55:00Z"), now: utc("2026-09-27T09:00:00Z"),
+                                                       zone: london, locale: gb)
+        #expect(text == "15:55")
+    }
+
+    @Test func `a narrow badge shows only the weekday for another day`() {
+        let text = GFChannelLabelTime.compactBadgeText(start: utc("2026-09-27T14:55:00Z"), now: utc("2026-09-26T09:00:00Z"),
+                                                       zone: london, locale: gb)
+        #expect(text == "Sun")
+    }
+
     @Test func `12-hour locales keep their style`() {
         let text = GFChannelLabelTime.badgeText(start: utc("2026-09-27T14:55:00Z"), now: utc("2026-09-27T09:00:00Z"),
                                                 zone: london, locale: Locale(identifier: "en_US"))
