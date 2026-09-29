@@ -11,6 +11,10 @@ while IFS= read -r LINE; do
   [ -n "$SUITE" ] && SKIP="$SKIP -skip-testing:LumeTests/$SUITE"
 done < "$CI/app-tests-skip.txt"
 cd "$LUME"
+STATUS=0
 # shellcheck disable=SC2086
 xcodebuild test -project Lume.xcodeproj -scheme Lume -configuration Debug -destination "id=$SIM" \
-  CODE_SIGNING_ALLOWED=NO -only-testing:LumeTests $SKIP
+  CODE_SIGNING_ALLOWED=NO -only-testing:LumeTests $SKIP || STATUS=$?
+# a test process that dies leaves its remaining tests "failed (0.000 seconds)"; the crash report says why
+[ "$STATUS" -eq 0 ] || python3 "$CI/crash-summary.py" 3
+exit "$STATUS"

@@ -3,6 +3,11 @@ run-name: Lume GF tests (${{ github.ref_name }} ${{ github.sha }})
 
 on:
   workflow_dispatch:
+    inputs:
+      baseline:
+        description: Test plain Lume without our changes (diagnosis)
+        type: boolean
+        default: false
   push:
     branches: ['part2/**']
 
@@ -10,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: lume-gf-test-${{ github.ref }}
+  group: lume-gf-test-${{ github.ref }}-${{ inputs.baseline && 'baseline' || 'normal' }}
   cancel-in-progress: true
 
 jobs:
@@ -67,10 +72,12 @@ jobs:
       - name: Download Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
       - name: Our changes onto Lume
+        if: ${{ !inputs.baseline }}
         run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
       - name: App tests
         run: sh gf/ci/run-app-tests.sh Lume
       - name: tvOS compiles
+        if: ${{ !inputs.baseline }}
         working-directory: Lume
         run: |
           xcodebuild build -project Lume.xcodeproj -scheme Lume -configuration Debug \
