@@ -3,11 +3,12 @@ import Foundation
 /// Plans an only-what-changed import: which programmes of a new guide file to insert or update and, once the file has
 /// been read completely, which stored ones to delete.
 ///
-/// A programme's id is "<channel>-<start epoch seconds>" (Lume's `EPGListing.id`). The new file is authoritative only
-/// for the span it covers on each channel it guides: a stored programme is deleted when its channel is in the file,
-/// it starts at or after that channel's first programme in the file, and the file no longer has it. Programmes that
-/// ended more than 12 hours ago are dropped (Lume's guide shows 12 hours back). A file that was not read completely
-/// deletes nothing.
+/// A programme's id is "<channel>-<start epoch seconds>" (Lume's `EPGListing.id`). Everything the file carries is
+/// stored, old programmes included (the server's catch-up days feed the Apple TV player's replay list), like Lume's own
+/// import. The new file is authoritative only for the span it covers on each channel it guides: a stored programme is
+/// deleted when its channel is in the file, it starts at or after that channel's first programme in the file, and the
+/// file no longer has it. A stored programme that ended more than 12 hours ago and is no longer in the file is dropped.
+/// A file that was not read completely deletes nothing.
 nonisolated struct GuideDiffPlanner {
     struct Stored: Equatable {
         var channelId: String
@@ -58,7 +59,7 @@ nonisolated struct GuideDiffPlanner {
             if firstStart[item.channelId].map({ item.start < $0 }) ?? true {
                 firstStart[item.channelId] = item.start
             }
-            guard seen.insert(item.id).inserted, item.end >= cutoff else { continue }
+            guard seen.insert(item.id).inserted else { continue }
             if let old = stored[item.id] {
                 if old.fingerprint != item.fingerprint { plan.updates.append(item.id) }
             } else {
@@ -71,11 +72,11 @@ nonisolated struct GuideDiffPlanner {
     func deletions(fileCompleted: Bool) -> [String] {
         guard fileCompleted else { return [] }
         var out: [String] = []
-        for (id, row) in stored {
+        for (id, row) in stored where !seen.contains(id) {
             if row.end < cutoff {
-                out.append(id)
-            } else if let first = firstStart[row.channelId], row.start >= first, !seen.contains(id) {
-                out.append(id)
+                out.append(id) // ended long ago and no longer in the file
+            } else if let first = firstStart[row.channelId], row.start >= first {
+                out.append(id) // inside the span the file covers, but gone from it
             }
         }
         return out.sorted()

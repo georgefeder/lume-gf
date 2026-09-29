@@ -24,10 +24,10 @@ index 6591386..6ccbdcb 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index f1ab1c3..748add5 100644
+index f1ab1c3..77166ee 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -32,6 +32,7 @@ struct LumeApp: App {
+@@ -32,11 +32,15 @@ struct LumeApp: App {
      #endif
  
      init() {
@@ -35,18 +35,24 @@ index f1ab1c3..748add5 100644
          // First, so the launch marker precedes anything the setup below logs.
          DiagnosticSession.start()
          let (catalog, cloud) = Self.makeModelContainers()
-@@ -301,7 +302,10 @@ struct LumeApp: App {
-                     // is queued or running — the deferred refresh runs once
+         catalogContainer = catalog
+         cloudContainer = cloud
++        // Lume GF: set up before anything else can run, so a background launch (no scene yet) finds its guide data.
++        EPGSyncService.shared.configure(container: catalog)
++        GuideScheduler.shared.configure(container: catalog)
+         let coordinator = CloudSyncCoordinator(
+             catalogContainer: catalog,
+             cloudContainer: cloud,
+@@ -302,6 +306,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
-+                    GuideScheduler.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
 +                    // Lume GF: keep the guide in step with the guide server while the app is open.
 +                    GuideScheduler.shared.appLaunched()
                  }
                  .onChange(of: cloudSync.status.lastReconcile) {
                      // A reconcile may have pulled a PIN this device didn't have
-@@ -314,6 +318,7 @@ struct LumeApp: App {
+@@ -314,6 +320,7 @@ struct LumeApp: App {
                      SportsFollowService.shared.reload()
                  }
                  .onChange(of: scenePhase) { _, phase in
@@ -91,10 +97,10 @@ index ae21bc4..d931e5b 100644
          currentText = ""
          if elementName == "programme" {
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
-index bfc60be..70b3577 100644
+index bfc60be..39b0689 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
 +++ b/Lume/Services/Sync/EPGSyncManager.swift
-@@ -35,7 +35,7 @@ actor EPGSyncManager {
+@@ -35,26 +35,29 @@ actor EPGSyncManager {
      /// Refreshes the guide from every enabled source. Returns `true` when at
      /// least one source synced successfully.
      @discardableResult
@@ -103,14 +109,21 @@ index bfc60be..70b3577 100644
          let sources = enabledSources()
          guard !sources.isEmpty else {
              Logger.database.info("No enabled EPG sources, skipping EPG sync")
-@@ -49,12 +49,14 @@ actor EPGSyncManager {
+             return false
+         }
+ 
++        let refresher = GuideRefresher(container: modelContainer) // Lume GF
+         guard let knownChannelIDs = channelIDs() else {
+             // Nothing references a guide yet (no live streams synced) — leave any
+             // existing listings untouched rather than wiping them for nothing.
+             Logger.database.info("No live streams with EPG channel IDs, skipping EPG sync")
++            sources.forEach { refresher.recordSkipped(sourceID: $0.id) } // Lume GF: counts as a check
              return false
          }
  
 -        clearListings()
 +        // Lume GF: no clearListings(). Each source's new guide is applied as only-what-changed on top of the stored
 +        // one (GuideRefresher), so a failed or cut-off download never empties the guide.
-+        let refresher = GuideRefresher(container: modelContainer)
  
          var anySucceeded = false
          var unclaimedChannelIDs = knownChannelIDs
@@ -120,7 +133,7 @@ index bfc60be..70b3577 100644
              unclaimedChannelIDs.subtract(result.claimedChannelIDs)
              anySucceeded = anySucceeded || result.didSync
          }
-@@ -70,7 +72,7 @@ actor EPGSyncManager {
+@@ -70,7 +73,7 @@ actor EPGSyncManager {
          let claimedChannelIDs: Set<String>
      }
  
@@ -129,7 +142,12 @@ index bfc60be..70b3577 100644
          let interval = Perf.begin(.epgSourceSync)
          defer { Perf.end(interval) }
  
-@@ -87,14 +89,14 @@ actor EPGSyncManager {
+@@ -83,18 +86,19 @@ actor EPGSyncManager {
+             // Every channel this source could guide is already covered by an
+             // earlier one; downloading it would only produce overlaps.
+             Logger.database.info("EPG source \(sourceID, privacy: .public) skipped, all channels already guided")
++            refresher.recordSkipped(sourceID: sourceID) // Lume GF: counts as a check
+             markSynced(sourceID)
              return SourceResult(didSync: true, claimedChannelIDs: [])
          }
          do {
@@ -152,7 +170,7 @@ index bfc60be..70b3577 100644
              // Credential-free detail (never a URL) so it can be public in
              // user-exported diagnostic logs.
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index edb8b64..05205be 100644
+index edb8b64..beacfbd 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
 @@ -99,7 +99,7 @@ final class EPGSyncService {
@@ -164,7 +182,17 @@ index edb8b64..05205be 100644
      }
  
      /// Background trigger (launch): refreshes only if the guide is stale per
-@@ -129,6 +129,20 @@ final class EPGSyncService {
+@@ -107,7 +107,8 @@ final class EPGSyncService {
+     /// (see `EPGRefreshGate`). A deferred refresh runs once the sync is done.
+     func syncIfDue() {
+         guard isDue, gate.request() else { return }
+-        kick(background: true)
++        // Lume GF: a guide-schema bump downloads in full (an "unchanged" answer would skip the back-fill).
++        kick(background: true, force: EPGSyncSchedule.schemaVersion < SyncFrequency.epgCurrentSchemaVersion)
+     }
+ 
+     /// The Sports Hub matches fixtures against programme sub-titles; a guide
+@@ -129,6 +130,20 @@ final class EPGSyncService {
  
      private var didRefreshForSubtitles = false
  
@@ -185,7 +213,7 @@ index edb8b64..05205be 100644
      // MARK: - Content sync reports
  
      /// `MainTabView`'s auto-sync queue went from empty to busy or back.
-@@ -159,7 +173,9 @@ final class EPGSyncService {
+@@ -159,7 +174,9 @@ final class EPGSyncService {
      private func runOwedRefresh() {
          // `container` first: taking the debt before `configure` would drop it.
          guard container != nil, task == nil, gate.takeOwedRefresh() else { return }
@@ -196,7 +224,7 @@ index edb8b64..05205be 100644
      }
  
      private var isDue: Bool {
-@@ -167,9 +183,8 @@ final class EPGSyncService {
+@@ -167,9 +184,8 @@ final class EPGSyncService {
          // regardless of the frequency, so existing users back-fill the new
          // columns on their next launch.
          if EPGSyncSchedule.schemaVersion < SyncFrequency.epgCurrentSchemaVersion { return true }
@@ -208,7 +236,7 @@ index edb8b64..05205be 100644
      }
  
      /// Cheap probe for whether any ingested listing carries a `<sub-title>` — the
-@@ -193,7 +208,7 @@ final class EPGSyncService {
+@@ -193,7 +209,7 @@ final class EPGSyncService {
          return found
      }
  
@@ -217,7 +245,7 @@ index edb8b64..05205be 100644
          guard let container, task == nil else { return }
          isSyncing = true
          isBackgroundRefresh = background
-@@ -204,7 +219,7 @@ final class EPGSyncService {
+@@ -204,7 +220,7 @@ final class EPGSyncService {
          // profile showed EPG ingest pegging a background thread at 100% in
          // lockstep with a frozen main thread right after a playlist sync.
          task = Task(priority: .utility) {
@@ -226,7 +254,7 @@ index edb8b64..05205be 100644
              if succeeded {
                  EPGSyncSchedule.lastSyncDate = Date()
                  EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion
-@@ -212,6 +227,7 @@ final class EPGSyncService {
+@@ -212,6 +228,7 @@ final class EPGSyncService {
              isSyncing = false
              task = nil
              Logger.database.info("EPG refresh finished (success: \(succeeded))")

@@ -67,6 +67,12 @@ nonisolated final class GuideRefresher {
         }
     }
 
+    /// A source with nothing to download this time (all its channels are guided by an earlier source, or no channel
+    /// has a guide yet) still counts as checked, so it never keeps the app "due".
+    func recordSkipped(sourceID: UUID) {
+        states.update(sourceID) { $0.recordUnchanged(at: now()) }
+    }
+
     /// Credential-free reason (never a URL), like Lume's own guide logging.
     static func reason(_ error: Error) -> String {
         if let m3u = error as? M3UError { return m3u.logDescription }

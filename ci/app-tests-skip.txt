@@ -5,3 +5,8 @@ CloudSyncParentalEngineTests  # keychain: the unsigned simulator test app has no
 SimklTokenStoreTests          # keychain, as above
 TraktTokenStoreTests          # keychain, as above
 RecommendationEngineTests     # "reuses the cached list within the recalculation interval" fails on plain Lume too
+DTODecodingTests              # reads example JSON files that are not in Lume's public repository
+ContentSyncTests              # "sync movies from example JSON": the same missing example files
+TextEmbedderTests             # on-device text embeddings are not available on the CI simulator
+SportsHubStringsTests         # fails on plain Lume too (baseline run 36525661807)
+SportsSyncStaleRefreshTests   # timing-dependent: failed once on plain Lume (baseline run 36525661807)

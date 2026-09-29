@@ -5,6 +5,9 @@ import SwiftUI
 #if !os(macOS)
     import BackgroundTasks
 #endif
+#if canImport(UIKit)
+    import UIKit
+#endif
 
 /// The "follow the guide server" switch (default on in Lume GF).
 nonisolated enum GuideSettings {
@@ -40,6 +43,8 @@ final class GuideScheduler {
     private var container: ModelContainer?
     private var timer: Task<Void, Never>?
     private var isActive = false
+    /// Set once Lume's launch task has run its own first guide check (Lume's launch order stays as it is).
+    private var launched = false
 
     private init() {}
 
@@ -68,15 +73,21 @@ final class GuideScheduler {
 
     /// The app finished launching (it is in the foreground).
     func appLaunched() {
-        isActive = true
+        launched = true
+        #if canImport(UIKit)
+            isActive = UIApplication.shared.applicationState != .background
+        #else
+            isActive = true
+        #endif
         GuideStatus.shared.reload()
-        armTimer()
+        if isActive { armTimer() }
     }
 
     func scenePhaseChanged(to phase: ScenePhase) {
         switch phase {
         case .active:
             isActive = true
+            guard launched else { return } // the launch task runs the first check
             EPGSyncService.shared.syncIfDue()
             armTimer()
         case .background:
@@ -113,18 +124,19 @@ final class GuideScheduler {
         nonisolated static func registerBackgroundTasks() {
             for id in [refreshTaskID, importTaskID] {
                 BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
+                    // Set at once: Apple may end the time before the main actor gets to the refresh.
+                    task.expirationHandler = {
+                        Task { @MainActor in
+                            EPGSyncService.shared.cancelBackgroundRefresh()
+                            GuideScheduler.shared.submitImportTask()
+                        }
+                    }
                     Task { @MainActor in await GuideScheduler.shared.runBackground(task) }
                 }
             }
         }
 
         private func runBackground(_ task: BGTask) async {
-            task.expirationHandler = {
-                Task { @MainActor in
-                    EPGSyncService.shared.cancelBackgroundRefresh()
-                    GuideScheduler.shared.submitImportTask()
-                }
-            }
             let finished = await EPGSyncService.shared.refreshIfDueAndWait()
             submitBackgroundRefresh()
             task.setTaskCompleted(success: finished)
@@ -132,7 +144,7 @@ final class GuideScheduler {
 
         private func submitBackgroundRefresh() {
             let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskID)
-            request.earliestBeginDate = max(nextCheck(), Date().addingTimeInterval(60))
+            request.earliestBeginDate = GuideClock.backgroundBeginDate(next: nextCheck(), now: Date())
             do {
                 try BGTaskScheduler.shared.submit(request)
             } catch {

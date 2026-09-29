@@ -16,22 +16,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: ${{ matrix.platform }} to TestFlight
+  # Guide logic (swift test) and Lume's whole unit test target with our changes, on the iOS Simulator. Both TestFlight
+  # legs wait for this job: a failing test stops the upload for iPhone/iPad and Apple TV alike.
+  tests:
+    name: Tests before upload
     runs-on: macos-26
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      # one platform after the other, so the two uploads never create the same App Store profile at the same moment
-      max-parallel: 1
-      matrix:
-        include:
-          - platform: iOS
-            destination: generic/platform=iOS
-            sdk: iphoneos
-          - platform: tvOS
-            destination: generic/platform=tvOS
-            sdk: appletvos
+    timeout-minutes: 90
     steps:
       - name: Our changes
         uses: actions/checkout@v5
@@ -47,6 +37,7 @@ jobs:
           sh gf/ci/test_keepalive.sh
           sh gf/ci/test_add_sources.sh
           sh gf/ci/test_apply_patches.sh
+          sh gf/ci/test_workflows.sh
 
       - name: Lume ${{ inputs.tag }}
         uses: actions/checkout@v5
@@ -87,6 +78,67 @@ jobs:
       - name: Our changes onto Lume
         run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
 
+      - name: App tests (iOS Simulator)
+        run: sh gf/ci/run-app-tests.sh Lume
+
+  build:
+    name: ${{ matrix.platform }} to TestFlight
+    needs: tests
+    runs-on: macos-26
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      # one platform after the other, so the two uploads never create the same App Store profile at the same moment
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: iOS
+            destination: generic/platform=iOS
+            sdk: iphoneos
+          - platform: tvOS
+            destination: generic/platform=tvOS
+            sdk: appletvos
+    steps:
+      - name: Our changes
+        uses: actions/checkout@v5
+        with:
+          path: gf
+
+      - name: Lume ${{ inputs.tag }}
+        uses: actions/checkout@v5
+        with:
+          repository: bilipp/Lume
+          ref: ${{ inputs.tag }}
+          path: Lume
+
+      - name: Engine version paired with this release
+        id: engine
+        # two lines on purpose: inside `echo "...$(...)"` a failing engine-ref.sh would be ignored and the next step
+        # would check out LumeEngine's default branch instead of stopping
+        run: |
+          ref=$(sh gf/ci/engine-ref.sh Lume)
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      # Lume references the engine as a local package at ../LumeEngine
+      - name: LumeEngine ${{ steps.engine.outputs.ref }}
+        uses: actions/checkout@v5
+        with:
+          repository: bilipp/LumeEngine
+          ref: ${{ steps.engine.outputs.ref }}
+          path: LumeEngine
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # Xcode 26 no longer bundles the Metal toolchain; KSPlayer's shaders need it (same as Lume's own workflow)
+      - name: Download Metal Toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
+      - name: Our changes onto Lume
+        run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
+
       - name: Lume GF identity
         working-directory: Lume
         env:
@@ -117,10 +169,6 @@ jobs:
       # the runner and, for tvOS, a registered Apple TV, and Xcode refuses ad hoc signing for iOS/tvOS. The next step puts
       # the entitlements back; the upload re-signs everything with Apple's cloud-managed distribution certificate.
       # The App Store Connect key is not on the runner yet while Lume's build scripts run.
-      - name: App tests (iOS Simulator)
-        if: matrix.platform == 'iOS'
-        run: sh gf/ci/run-app-tests.sh Lume
-
       - name: Archive (Sideload configuration, unsigned)
         working-directory: Lume
         run: |

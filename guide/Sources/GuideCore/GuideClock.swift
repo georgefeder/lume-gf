@@ -21,8 +21,16 @@ nonisolated enum GuideClock {
         }
         let latest = attempt.addingTimeInterval(buildInterval + margin)
         let wanted = serverBuild.map { $0.addingTimeInterval(buildInterval + margin) }
-            ?? (lastCheck ?? attempt).addingTimeInterval(buildInterval)
+            ?? lastCheck.map { $0.addingTimeInterval(buildInterval) }
+            ?? earliest // failed before any good check: try again after the floor
         return min(max(wanted, earliest), latest)
+    }
+
+    /// When to ask Apple for the next background refresh: the next due check, but at least a minute and at most one
+    /// interval plus the margin from now. A "nothing due" answer (e.g. before the app is set up) must never push the
+    /// request out of reach, or background refreshes stop until the next time the app is opened.
+    static func backgroundBeginDate(next: Date, now: Date) -> Date {
+        min(max(next, now.addingTimeInterval(60)), now.addingTimeInterval(buildInterval + margin))
     }
 
     /// The earliest next check over the given (enabled) sources; none means nothing to check.
@@ -37,8 +45,11 @@ nonisolated enum GuideClock {
 /// The one-line guide status for the settings, e.g. "Guide updated 00:13 · server built 00:11".
 nonisolated enum GuideStatusSummary {
     static func line(for states: [GuideSourceState], time: (Date) -> String) -> String {
-        guard let s = states.max(by: { ($0.lastAttempt ?? .distantPast) < ($1.lastAttempt ?? .distantPast) }),
-              let update = s.lastUpdate
+        // the source that imported a guide last (a source that never downloads - all its channels covered by
+        // another - must not hide it)
+        guard let s = states.filter({ $0.lastUpdate != nil })
+            .max(by: { ($0.lastUpdate ?? .distantPast) < ($1.lastUpdate ?? .distantPast) }),
+            let update = s.lastUpdate
         else { return "Guide not updated yet" }
         var line = "Guide updated \(time(update))"
         if let build = s.serverBuild { line += " · server built \(time(build))" }
