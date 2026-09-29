@@ -28,6 +28,10 @@ for B in "$APP" "$APP"/PlugIns/*.appex; do
     printf '%s\n' "$E" | grep -q "<string>group.lv.georgefeder.lume</string>" || bad "app group missing in $N"
   fi
 done
+for T in guide.refresh guide.import; do
+  $PB -c "Print :BGTaskSchedulerPermittedIdentifiers" "$APP/Info.plist" 2>/dev/null | grep -q "lv.georgefeder.lume.$T" \
+    || bad "background task lv.georgefeder.lume.$T not declared"
+done
 V=$($PB -c 'Print :CFBundleVersion' "$APP/Info.plist" 2>/dev/null)
 [ "$fail" -eq 0 ] && echo "check-export: OK - $(basename "$APP") lv.georgefeder.lume build $V$( [ "$PLATFORM" = iOS ] && echo ", app group in the app and its extensions")"
 exit "$fail"

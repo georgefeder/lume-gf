@@ -22,6 +22,11 @@ ipa() {  # $1 name, $2 display name, $3 app entitlement flags (comma list), $4 e
   $PB -c "Add :CFBundleIdentifier string lv.georgefeder.lume" -c "Add :CFBundleExecutable string Lume" \
       -c "Add :CFBundlePackageType string APPL" -c "Add :CFBundleDisplayName string $2" \
       -c "Add :CFBundleVersion string 7" "$A/Info.plist" >/dev/null
+  case "$1" in *nobg) ;; *)
+    $PB -c "Add :BGTaskSchedulerPermittedIdentifiers array" \
+        -c "Add :BGTaskSchedulerPermittedIdentifiers:0 string lv.georgefeder.lume.guide.refresh" \
+        -c "Add :BGTaskSchedulerPermittedIdentifiers:1 string lv.georgefeder.lume.guide.import" "$A/Info.plist" >/dev/null ;;
+  esac
   if [ "$4" != none ]; then
     X="$A/PlugIns/LumeWidgets.appex"; mkdir -p "$X"; cp "$T/bin" "$X/LumeWidgets"
     $PB -c "Add :CFBundleIdentifier string lv.georgefeder.lume.LumeWidgets" -c "Add :CFBundleExecutable string LumeWidgets" \
@@ -46,5 +51,6 @@ expect "wrong home-screen name fails" 1 "$(ipa name 'Lume' group group)" iOS "di
 expect "tvOS export without app group passes" 0 "$(ipa tv 'Lume GF' - none)" tvOS "check-export: OK"
 mkdir -p "$T/none/export"
 expect "no .ipa fails" 1 "$T/none/export" iOS "no .ipa"
+expect "missing background task ids fails" 1 "$(ipa nobg 'Lume GF' group group)" iOS "background task"
 [ "$fails" -eq 0 ] && echo "test_check_export: all passed" || echo "test_check_export: $fails failed"
 exit "$fails"
