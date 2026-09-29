@@ -63,6 +63,14 @@ struct GuideClockTests {
         #expect(next(check: nil, attempt: failed, build: nil, follow: false) == failed.addingTimeInterval(15 * minute))
     }
 
+    @Test func `a background request is never pushed out of reach`() {
+        let now = build
+        #expect(GuideClock.backgroundBeginDate(next: .distantFuture, now: now) == now.addingTimeInterval(hour + 3 * minute))
+        #expect(GuideClock.backgroundBeginDate(next: .distantPast, now: now) == now.addingTimeInterval(minute))
+        #expect(GuideClock.backgroundBeginDate(next: now.addingTimeInterval(30 * minute), now: now)
+            == now.addingTimeInterval(30 * minute))
+    }
+
     @Test func `several sources: the earliest one decides, none means never`() {
         var a = GuideSourceState(), b = GuideSourceState()
         a.recordImported(etag: nil, lastModified: nil, serverBuild: build, channelIDs: [], at: build.addingTimeInterval(minute))

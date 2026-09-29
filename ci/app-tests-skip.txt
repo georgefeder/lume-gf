@@ -1,1 +1,7 @@
-# LumeTests suites the build skips, one per line, with the reason after a "#". Empty: the whole target runs.
+# LumeTests suites the build skips, one per line, with the reason after a "#". Each one fails the same way on plain
+# Lume 2.2.0 on GitHub's Mac (baseline run 36524419123, no Lume GF changes), so it says nothing about Lume GF.
+WatchProgressBufferTests      # crashes the whole test process: array index out of range (its line 20)
+CloudSyncParentalEngineTests  # keychain: the unsigned simulator test app has no keychain access
+SimklTokenStoreTests          # keychain, as above
+TraktTokenStoreTests          # keychain, as above
+RecommendationEngineTests     # "reuses the cached list within the recalculation interval" fails on plain Lume too
