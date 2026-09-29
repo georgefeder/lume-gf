@@ -4,3 +4,6 @@ XMLTVParserTests
 EPGSourceTests
 EPGSourceReconcilerTests
 SyncFrequencyTests
+GuideFetcherTests
+GuideRefresherTests
+GuideEPGSyncTests
