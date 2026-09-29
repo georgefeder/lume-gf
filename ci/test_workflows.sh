@@ -33,5 +33,7 @@ check "the screenshots are taken with our patched packages" \
   'y=YAML.load_file(ARGV[0]); exit(y["jobs"]["screenshots"]["steps"].any? { |x| x["run"].to_s.include?("apply-dep-patches.sh") } ? 0 : 1)' "$WT"
 check "the screenshots job never uses a secret" \
   'y=YAML.load_file(ARGV[0]); exit(y["jobs"]["screenshots"].to_s.include?("secrets.") ? 1 : 0)' "$WT"
+check "the test run's script tests run the Python tests as a command of their own" \
+  'y=YAML.load_file(ARGV[0]); r=y["jobs"]["core"]["steps"].find { |x| x["name"].to_s == "Script tests" }["run"].to_s; exit(r.lines.any? { |l| l.strip.start_with?("python3 -m unittest") } ? 0 : 1)' "$WT"
 [ "$fails" -eq 0 ] && echo "test_workflows: all passed" || echo "test_workflows: $fails failed"
 exit "$fails"

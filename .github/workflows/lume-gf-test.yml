@@ -30,7 +30,12 @@ jobs:
         with:
           xcode-version: latest-stable
       - name: Script tests
-        run: sh ci/test_add_sources.sh && sh ci/test_apply_patches.sh && sh ci/test_workflows.sh && sh ci/test_apply_dep_patches.sh && sh ci/test_screenshots.sh
+        run: |
+          sh ci/test_add_sources.sh
+          sh ci/test_apply_patches.sh
+          sh ci/test_workflows.sh
+          sh ci/test_apply_dep_patches.sh
+          sh ci/test_screenshots.sh
           python3 -m unittest discover -s ci -p 'test_*.py'
       - name: swift test
         working-directory: guide
