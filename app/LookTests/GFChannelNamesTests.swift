@@ -1,5 +1,6 @@
 import Foundation
 @testable import Lume
+import SwiftUI
 import Testing
 
 /// Lume GF's clean names in the app: the setting (default on) and the text-only helper. Serialized: tests here change
