@@ -31,7 +31,6 @@ jobs:
         run: swift test
   app:
     name: App tests (iOS Simulator)
-    needs: core
     runs-on: macos-26
     timeout-minutes: 90
     steps:
