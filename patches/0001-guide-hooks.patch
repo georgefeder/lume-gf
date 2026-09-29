@@ -234,3 +234,75 @@ index edb8b64..05205be 100644
              // A refresh cancelled for a content sync may wind down after that
              // sync already finished and found this task still set.
              runOwedRefresh()
+diff --git a/Lume/Views/Settings/EPGSettingsView.swift b/Lume/Views/Settings/EPGSettingsView.swift
+index ac4b914..b7ca9f0 100644
+--- a/Lume/Views/Settings/EPGSettingsView.swift
++++ b/Lume/Views/Settings/EPGSettingsView.swift
+@@ -16,6 +16,8 @@ struct EPGSettingsView: View {
+     @Query(sort: \EPGSource.addedAt) private var sources: [EPGSource]
+     @State private var epgSync = EPGSyncService.shared
+     @AppStorage(SyncFrequency.epgStorageKey) private var freqRaw = SyncFrequency.epgDefaultValue.rawValue
++    /// Lume GF: follow the guide server's hourly build (GuideScheduler); off = the interval below.
++    @AppStorage(GuideSettings.followServerKey) private var followServer = true
+ 
+     @State private var showingAdd = false
+     #if os(tvOS)
+@@ -132,12 +134,15 @@ struct EPGSettingsView: View {
+ 
+         var refreshSection: some View {
+             Section {
++                GuideFollowServerToggle(isOn: $followServer)
++
+                 Picker("Refresh", selection: frequency) {
+                     ForEach(SyncFrequency.allCases) { frequency in
+                         Text(frequency.label).tag(frequency)
+                     }
+                 }
+                 .pickerStyle(.menu)
++                .disabled(followServer)
+ 
+                 Button {
+                     epgSync.syncNow()
+@@ -155,7 +160,10 @@ struct EPGSettingsView: View {
+             } header: {
+                 Text("Automatic Refresh")
+             } footer: {
+-                Text("The TV guide refreshes automatically in the background at this interval.")
++                VStack(alignment: .leading, spacing: 4) {
++                    Text("The TV guide refreshes automatically in the background at this interval.")
++                    GuideStatusLine()
++                }
+             }
+         }
+     }
+@@ -378,14 +386,17 @@ struct EPGSettingsView: View {
+                 TVSettingsSectionLabel("Automatic Refresh")
+ 
+                 VStack(spacing: 2) {
++                    GuideFollowServerTVRow(isOn: $followServer)
++
+                     ForEach(SyncFrequency.allCases) { option in
+                         Button {
+                             frequency.wrappedValue = option
++                            followServer = false
+                         } label: {
+                             HStack(spacing: 16) {
+                                 Text(option.label)
+                                 Spacer(minLength: 0)
+-                                if frequency.wrappedValue == option {
++                                if !followServer, frequency.wrappedValue == option {
+                                     Image(systemName: "checkmark")
+                                         .font(.system(size: 24, weight: .semibold))
+                                 }
+@@ -414,6 +425,11 @@ struct EPGSettingsView: View {
+                     .foregroundStyle(.secondary)
+                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                     .padding(.top, 6)
++
++                GuideStatusLine()
++                    .font(.system(size: 20))
++                    .foregroundStyle(.secondary)
++                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+             }
+         }
+     }

@@ -71,3 +71,8 @@ jobs:
         run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
       - name: App tests
         run: sh gf/ci/run-app-tests.sh Lume
+      - name: tvOS compiles
+        working-directory: Lume
+        run: |
+          xcodebuild build -project Lume.xcodeproj -scheme Lume -configuration Debug \
+            -destination 'generic/platform=tvOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet
