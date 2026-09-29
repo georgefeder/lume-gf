@@ -8,7 +8,7 @@ LUME="${1:?usage: screenshots.sh LUME_DIR OUT_DIR}"; OUT="${2:?usage: screenshot
 CI=$(cd "$(dirname "$0")" && pwd); LUME=$(cd "$LUME" && pwd); mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_SHOT_WAIT:-15}"
 SETTLE="${GF_BOOT_SETTLE:-120}"
-LOGS=$(mktemp -d); DIED=0
+LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0  # the app's own output, kept with the pictures
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
 

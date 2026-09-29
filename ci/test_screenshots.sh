@@ -51,7 +51,8 @@ done
 [ "$n" -eq 10 ] && ok "ten screenshots" || no "screenshots ($n)"
 grep -qE "exportArchive| archive " "$LOG" && no "must never archive or upload" || ok "never archives or uploads"
 printf '%s' "$out" | grep -q "not running" && no "a running app must not be reported gone ($out)" || ok "a running app is photographed"
-grep -qF -- "--stdout=" "$LOG" && ok "the app's own output is kept" || no "app output not kept"
+grep -qF -- "--stdout=$T/out/logs/iphone-guide-dark.out" "$LOG" && ok "the app's own output is kept with the pictures" \
+  || no "app output not kept with the pictures"
 # a freshly booted iPhone shows first-boot notices (the Apple Intelligence banner covered a picture once)
 printf '%s' "$out" | grep -q "screenshots: letting the iPhone settle" && ok "the iPhone settles before its pictures" \
   || no "no settling after boot"
