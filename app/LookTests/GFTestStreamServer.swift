@@ -60,14 +60,21 @@ nonisolated final class GFTestStreamServer: @unchecked Sendable {
         listener.cancel()
     }
 
-    /// Waits until `path` has an event of `kind`.
+    /// Waits until `path` has an event of `kind`. Polls off the main actor (the parallel test run keeps it busy) and
+    /// looks once more after the deadline, so a late wake-up never misses an event that did arrive.
     func wait(for kind: Event.Kind, path: String, timeout: TimeInterval) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if events.contains(where: { $0.kind == kind && $0.path == path }) { return true }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        return false
+        await Task.detached { [self] in
+            let deadline = Date().addingTimeInterval(timeout)
+            while Date() < deadline {
+                if has(kind, path) { return true }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            return has(kind, path)
+        }.value
+    }
+
+    private func has(_ kind: Event.Kind, _ path: String) -> Bool {
+        events.contains { $0.kind == kind && $0.path == path }
     }
 
     private func accept(_ connection: NWConnection) {

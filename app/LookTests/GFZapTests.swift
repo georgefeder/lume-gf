@@ -7,17 +7,17 @@ import Testing
 /// wait for each other.
 @MainActor
 struct GFZapTests {
-    @Test(.timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(2)))
     func `a channel change closes the old stream before the next one opens`() async throws {
         let server = try GFTestStreamServer()
         defer { server.stop() }
         let probe = GFZapProbe(url: server.url("/a.ts"))
         defer { probe.stop() }
-        #expect(await server.wait(for: .opened, path: "/a.ts", timeout: 15), "\(server.eventsDescription)")
+        #expect(await server.wait(for: .opened, path: "/a.ts", timeout: 30), "\(server.eventsDescription)")
         // the first channel is being read (FFmpeg is still analysing it)
         try await Task.sleep(for: .seconds(1))
         probe.switchTo(server.url("/b.ts"))
-        #expect(await server.wait(for: .opened, path: "/b.ts", timeout: 15), "\(server.eventsDescription)")
+        #expect(await server.wait(for: .opened, path: "/b.ts", timeout: 30), "\(server.eventsDescription)")
         let events = server.events
         let oldClosed = try #require(events.first { $0.kind == .closed && $0.path == "/a.ts" },
                                      "the next channel opened while the old one was still connected: \(server.eventsDescription)")
