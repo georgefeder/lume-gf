@@ -23,7 +23,8 @@ nonisolated struct GFChannelLabel: Equatable, Sendable {
         GFChannelLabel(title: raw, secondLine: nil, quality: nil, status: .none)
     }
 
-    static func parse(_ raw: String) -> GFChannelLabel {
+    static func parse(_ raw: String, now: Date = .now,
+                      serverTimeZone: TimeZone = GFChannelLabelTime.serverTimeZone) -> GFChannelLabel {
         parseOrdinary(raw)
     }
 
