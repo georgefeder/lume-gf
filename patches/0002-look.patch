@@ -1,0 +1,36 @@
+diff --git a/Lume/Views/Settings/EPGSettingsView.swift b/Lume/Views/Settings/EPGSettingsView.swift
+index b7ca9f0..c017d62 100644
+--- a/Lume/Views/Settings/EPGSettingsView.swift
++++ b/Lume/Views/Settings/EPGSettingsView.swift
+@@ -69,6 +69,8 @@ struct EPGSettingsView: View {
+             Form {
+                 sourcesSection
+                 refreshSection
++                // Lume GF: Clean Channel Names (docs/superpowers/specs/2026-09-29-lume-gf-3-look-design.md)
++                GFChannelNamesSection()
+             }
+             #if os(macOS)
+             .formStyle(.grouped)
+@@ -276,6 +278,8 @@ struct EPGSettingsView: View {
+                 tvSourcesSection
+                 tvAddSection
+                 tvRefreshSection
++                // Lume GF: Clean Channel Names
++                GFChannelNamesTVSection()
+             }
+             .frame(maxWidth: .infinity, alignment: .leading)
+         }
+diff --git a/Lume/Views/Sports/SportsBadges.swift b/Lume/Views/Sports/SportsBadges.swift
+index 2f235e8..e844f1e 100644
+--- a/Lume/Views/Sports/SportsBadges.swift
++++ b/Lume/Views/Sports/SportsBadges.swift
+@@ -44,7 +44,8 @@ struct EndedBadge: View {
+ 
+ /// The capsule both badges share: tinted text over a faint wash of the same
+ /// tint, with the glyph, padding and kerning all scaled from `fontSize`.
+-private struct StatusCapsule<Content: View>: View {
++// Lume GF: internal (was private) so the channel-name badges use exactly this recipe.
++struct StatusCapsule<Content: View>: View {
+     let fontSize: CGFloat
+     let tint: Color
+     @ViewBuilder var content: () -> Content
