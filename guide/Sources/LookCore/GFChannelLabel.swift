@@ -25,7 +25,8 @@ nonisolated struct GFChannelLabel: Equatable, Sendable {
 
     static func parse(_ raw: String, now: Date = .now,
                       serverTimeZone: TimeZone = GFChannelLabelTime.serverTimeZone) -> GFChannelLabel {
-        parseOrdinary(raw)
+        guard let kind = eventKind(raw) else { return parseOrdinary(raw) }
+        return parseEvent(raw, kind: kind, now: now, serverTimeZone: serverTimeZone) ?? unchanged(raw)
     }
 
     /// "BBC One FHD" → "BBC One" + FHD. Nothing else is touched (a provider prefix like "AR| " stays).
@@ -36,5 +37,52 @@ nonisolated struct GFChannelLabel: Equatable, Sendable {
         let rest = name[..<space].trimmingCharacters(in: .whitespaces)
         guard qualityWords.contains(word), !rest.isEmpty else { return unchanged(raw) }
         return GFChannelLabel(title: rest, secondLine: nil, quality: word, status: .none)
+    }
+
+    private enum EventKind { case live, upcoming, untimed }
+
+    private static let separator = " · "
+
+    /// 🔴 live, ⏰ start known, ▪ no time — each followed by a space (events.py `pretty()`).
+    private static func eventKind(_ raw: String) -> EventKind? {
+        guard let first = raw.first, let scalar = first.unicodeScalars.first, raw.dropFirst().first == " " else {
+            return nil
+        }
+        switch scalar.value {
+        case 0x1F534: return .live
+        case 0x23F0: return .upcoming
+        case 0x25AA: return .untimed
+        default: return nil
+        }
+    }
+
+    /// Title = the first part after the time; quality = the last part that is exactly a quality word; second line =
+    /// the other parts without "Live" (the badge says it). nil when no title is left.
+    private static func parseEvent(_ raw: String, kind: EventKind, now: Date,
+                                   serverTimeZone: TimeZone) -> GFChannelLabel? {
+        // the leading space lets an empty first part split off too ("▪ · HD" has no title)
+        var parts = (" " + raw.dropFirst(2)).components(separatedBy: separator)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        var status = Status.none
+        switch kind {
+        case .live:
+            status = .live
+            if let head = parts.first, head == "LIVE" || head.hasPrefix("LIVE ") { parts.removeFirst() }
+        case .upcoming:
+            // events.py always writes the start first; one that cannot be read leaves out only the time badge
+            guard parts.count > 1 else { return nil }
+            let head = parts.removeFirst()
+            if let start = GFChannelLabelTime.resolve(head, now: now, serverTimeZone: serverTimeZone) {
+                status = .upcoming(start: start)
+            }
+        case .untimed:
+            break
+        }
+        guard let title = parts.first, !title.isEmpty else { return nil }
+        let extras = parts.dropFirst().filter { !$0.isEmpty }
+        let quality = extras.last { qualityWords.contains($0) }
+        let second = extras.filter { !qualityWords.contains($0) && $0.caseInsensitiveCompare("Live") != .orderedSame }
+        return GFChannelLabel(title: title, secondLine: second.isEmpty ? nil : second.joined(separator: separator),
+                              quality: quality, status: status)
     }
 }
