@@ -1,7 +1,4 @@
 import SwiftUI
-#if canImport(UIKit)
-    import UIKit
-#endif
 
 extension EPGChannelCell {
     /// Lume's badge sizes: 17 pt on Apple TV, 11 on iPhone/iPad.
@@ -47,20 +44,15 @@ struct GFGuideEdgeFade: View {
     let edge: Edge
     let height: CGFloat
 
+    /// The guide's own background (SwiftUI's background style, on every platform), faded by a gradient. The mask sits
+    /// on this small strip only, never on the scrolling grid.
     var body: some View {
-        let solid = Self.background
-        LinearGradient(colors: edge == .top ? [solid, solid.opacity(0)] : [solid.opacity(0), solid],
-                       startPoint: .top, endPoint: .bottom)
+        Rectangle()
+            .fill(.background)
+            .mask(LinearGradient(colors: edge == .top ? [.black, .clear] : [.clear, .black],
+                                 startPoint: .top, endPoint: .bottom))
             .frame(height: max(0, height))
             .allowsHitTesting(false)
-    }
-
-    static var background: Color {
-        #if os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-        #else
-            Color(uiColor: .systemBackground)
-        #endif
     }
 }
 
