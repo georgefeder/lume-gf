@@ -29,7 +29,7 @@ exit 0
 EOF
 printf '#!/bin/sh\necho lv.test.lume\n' > "$T/bin/plutil"
 chmod +x "$T/bin/xcodebuild" "$T/bin/xcrun" "$T/bin/plutil"
-out=$(PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_DERIVED_DATA="$T/dd" GF_SPM="$T/spm" \
+out=$(PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_DERIVED_DATA="$T/dd" GF_SPM="$T/spm" \
   sh "$CI/screenshots.sh" "$T/Lume" "$T/out" 2>&1) && ok "runs through" || no "runs through ($out)"
 grep -qF 'OTHER_SWIFT_FLAGS=$(inherited) -D GF_DEMO' "$LOG" && ok "builds the demo" || no "GF_DEMO missing"
 grep -qF -- "-clonedSourcePackagesDirPath $T/spm -disableAutomaticPackageResolution" "$LOG" \
@@ -52,8 +52,12 @@ done
 grep -qE "exportArchive| archive " "$LOG" && no "must never archive or upload" || ok "never archives or uploads"
 printf '%s' "$out" | grep -q "not running" && no "a running app must not be reported gone ($out)" || ok "a running app is photographed"
 grep -qF -- "--stdout=" "$LOG" && ok "the app's own output is kept" || no "app output not kept"
+# a freshly booted iPhone shows first-boot notices (the Apple Intelligence banner covered a picture once)
+printf '%s' "$out" | grep -q "screenshots: letting the iPhone settle" && ok "the iPhone settles before its pictures" \
+  || no "no settling after boot"
 touch "$DEAD"; : > "$LOG"
-out=$(HOME="$T/home" PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_DERIVED_DATA="$T/dd" sh "$CI/screenshots.sh" "$T/Lume" "$T/out2" 2>&1)
+out=$(HOME="$T/home" PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_DERIVED_DATA="$T/dd" \
+  sh "$CI/screenshots.sh" "$T/Lume" "$T/out2" 2>&1)
 printf '%s' "$out" | grep -q "iphone-guide-dark: the app was not running" && ok "an app that died is reported" \
   || no "a dead app goes unreported ($out)"
 [ "$fails" -eq 0 ] && echo "test_screenshots: all passed" || echo "test_screenshots: $fails failed"
