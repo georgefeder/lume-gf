@@ -24,24 +24,28 @@ struct GFGuideGlassTests {
     }
 
     @Test func `the readable part leaves out the sidebar and the bottom fade`() {
-        let size = GFGuideGlass.visibleSize(measured: CGSize(width: 1500, height: 1000), pad: 300, bottomFade: 125)
+        let size = GFGuideGlass.visibleSize(measured: CGSize(width: 1500, height: 1000), scrollInset: 0, pad: 300,
+                                            bottomFade: 125)
         #expect(size == CGSize(width: 1200, height: 875))
     }
 
+    @Test func `the readable part leaves out what the scroll view runs on below the screen`() {
+        // iPhone above a tab bar: the scroll view reaches 99 points past the screen's edge and insets its content by as
+        // much; the guide above the tab bar is 718 high and fades over its last 135
+        let size = GFGuideGlass.visibleSize(measured: CGSize(width: 402, height: 817), scrollInset: 99, pad: 136,
+                                            bottomFade: 135)
+        #expect(size == CGSize(width: 266, height: 583))
+    }
+
     @Test func `a short guide never gets a negative size`() {
-        #expect(GFGuideGlass.visibleSize(measured: CGSize(width: 100, height: 80), pad: 300, bottomFade: 125) == .zero)
+        #expect(GFGuideGlass.visibleSize(measured: CGSize(width: 100, height: 80), scrollInset: 30, pad: 300,
+                                         bottomFade: 125) == .zero)
     }
 
     @Test func `the bottom fade covers the safe area and half a row`() {
         #expect(GFGuideGlass.bottomFade(safeAreaBottom: 60, rowStride: 130) == 125) // Apple TV
         #expect(GFGuideGlass.bottomFade(safeAreaBottom: 83, rowStride: 72) == 119) // iPhone above a tab bar
         #expect(GFGuideGlass.bottomFade(safeAreaBottom: -5, rowStride: 72) == 36)
-    }
-
-    @Test func `the grid adds only the bottom room its scroll view does not already leave`() {
-        #expect(GFGuideGlass.bottomPadding(bottomRoom: 131, scrollInset: 95) == 36)
-        #expect(GFGuideGlass.bottomPadding(bottomRoom: 131, scrollInset: 0) == 131)
-        #expect(GFGuideGlass.bottomPadding(bottomRoom: 30, scrollInset: 95) == 0)
     }
 
     @Test func `Lume's panel corners: 36 on Apple TV, 16 on iPhone`() {
