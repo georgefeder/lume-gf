@@ -1,3 +1,190 @@
+diff --git a/Lume/Services/Player/NowPlayingService.swift b/Lume/Services/Player/NowPlayingService.swift
+index 2d99a3d..1564538 100644
+--- a/Lume/Services/Player/NowPlayingService.swift
++++ b/Lume/Services/Player/NowPlayingService.swift
+@@ -359,10 +359,10 @@ final class NowPlayingService {
+         descriptor.fetchLimit = 1
+         guard let stream = try? context.fetch(descriptor).first else { return nil }
+         guard let channelId = stream.epgChannelId, !channelId.isEmpty else {
+-            return (stream.name, ChannelEPG(current: nil, next: nil))
++            return (GFChannelNames.title(for: stream.name), ChannelEPG(current: nil, next: nil))
+         }
+         let epg = ChannelEPGLoader.load(container: container, channelIds: [channelId], now: .now)
+-        return (stream.name, epg[channelId] ?? ChannelEPG(current: nil, next: nil))
++        return (GFChannelNames.title(for: stream.name), epg[channelId] ?? ChannelEPG(current: nil, next: nil))
+     }
+ 
+     // MARK: - State sampler
+diff --git a/Lume/Services/Player/PlayableMedia.swift b/Lume/Services/Player/PlayableMedia.swift
+index 250234d..1342373 100644
+--- a/Lume/Services/Player/PlayableMedia.swift
++++ b/Lume/Services/Player/PlayableMedia.swift
+@@ -268,7 +268,7 @@ extension PlayableMedia {
+         return PlayableMedia(
+             id: "live-\(stream.id)",
+             url: url,
+-            title: stream.name,
++            title: GFChannelNames.title(for: stream.name),
+             subtitle: nil,
+             posterURL: URL(string: stream.streamIcon ?? ""),
+             kind: .live,
+@@ -311,7 +311,7 @@ extension PlayableMedia {
+         return PlayableMedia(
+             id: "catchup-\(stream.id)-\(Int(start.timeIntervalSince1970))",
+             url: url,
+-            title: stream.name,
++            title: GFChannelNames.title(for: stream.name),
+             subtitle: programTitle,
+             posterURL: URL(string: stream.streamIcon ?? ""),
+             kind: .vod,
+diff --git a/Lume/Views/Components/LiveStreamCardView.swift b/Lume/Views/Components/LiveStreamCardView.swift
+index fa8f4f9..65ef1db 100644
+--- a/Lume/Views/Components/LiveStreamCardView.swift
++++ b/Lume/Views/Components/LiveStreamCardView.swift
+@@ -51,9 +51,10 @@ struct LiveStreamCardView: View {
+             .clipShape(RoundedRectangle(cornerRadius: 8))
+ 
+             VStack(alignment: .leading, spacing: 4) {
+-                Text(stream.name)
++                // Lume GF: clean name with badges (Settings → TV Guide → Clean Channel Names)
++                GFChannelName(raw: stream.name, badgeSize: 11, placement: .trailing, showsSecondLine: true,
++                              secondLineFont: .subheadline)
+                     .font(.headline)
+-                    .lineLimit(1)
+ 
+                 if let current = currentEPG {
+                     Text(current.title)
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+index 9eb3ec6..c56e7e0 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+@@ -147,9 +147,9 @@ struct EPGChannelCell: View {
+     var body: some View {
+         HStack(spacing: 10) {
+             logo
+-            Text(row.name)
++            // Lume GF: clean name with badges under it
++            GFChannelName(raw: row.name, badgeSize: gfBadgeSize, titleLineLimit: 2, neutralTint: gfBadgeTint)
+                 .font(nameFont)
+-                .lineLimit(2)
+                 .frame(maxWidth: .infinity, alignment: .leading)
+             // Flag channels with an archive so the viewer knows the row
+             // offers replays — same idiom as the player's channel overlay.
+diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+index 05a5f0c..02a03f7 100644
+--- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
++++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+@@ -289,7 +289,7 @@ struct EPGGridScroller: View {
+             // on — a single strip owns the whole grid's focus — so the hub's
+             // long press raises them itself.
+             .confirmationDialog(
+-                channelActions?.name ?? "",
++                GFChannelNames.title(for: channelActions?.name ?? ""),
+                 isPresented: Binding(
+                     get: { channelActions != nil },
+                     set: { if !$0 { channelActions = nil } }
+diff --git a/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift b/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
+index 84712ea..84d6609 100644
+--- a/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
++++ b/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
+@@ -82,7 +82,7 @@ struct EPGProgramDetailView: View {
+                     .padding(.vertical, 24)
+                     .frame(maxWidth: .infinity, alignment: .leading)
+                 }
+-                .navigationTitle(stream.name)
++                .navigationTitle(GFChannelNames.title(for: stream.name))
+                 #if os(iOS)
+                     .navigationBarTitleDisplayMode(.inline)
+                 #endif
+@@ -118,7 +118,9 @@ struct EPGProgramDetailView: View {
+                             .font(.system(size: 56, weight: .bold))
+                             .lineLimit(3)
+ 
+-                        Text(stream.name)
++                        // Lume GF: clean name with badges and the second line
++                        GFChannelName(raw: stream.name, badgeSize: 22, showsSecondLine: true,
++                                      secondLineFont: .system(size: 26))
+                             .font(.system(size: 30, weight: .semibold))
+                             .foregroundStyle(.secondary)
+ 
+@@ -249,9 +251,10 @@ struct EPGProgramDetailView: View {
+             .frame(width: 60, height: 60)
+             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+ 
+-            Text(stream.name)
++            // Lume GF: clean name with badges and the second line
++            GFChannelName(raw: stream.name, badgeSize: 12, titleLineLimit: 2, showsSecondLine: true,
++                          secondLineFont: .subheadline)
+                 .font(.headline)
+-                .lineLimit(2)
+ 
+             Spacer(minLength: 0)
+         }
+diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
+index a7a564a..e9a7cb4 100644
+--- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
++++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
+@@ -183,10 +183,11 @@
+                     logo
+ 
+                     VStack(alignment: .leading, spacing: 6) {
+-                        Text(stream.name)
++                        // Lume GF: clean name with badges
++                        GFChannelName(raw: stream.name, badgeSize: 17, placement: .trailing, showsSecondLine: true,
++                                      secondLineFont: .system(size: 25))
+                             .font(.system(size: 30, weight: .semibold))
+                             .foregroundStyle(primaryColor)
+-                            .lineLimit(1)
+ 
+                         if let current = currentEPG {
+                             Text(current.title)
+diff --git a/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift b/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift
+index b58f52e..9128ed9 100644
+--- a/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift
++++ b/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift
+@@ -193,8 +193,8 @@
+                             .frame(width: 84, height: 56)
+                             .background(.white.opacity(0.08), in: .rect(cornerRadius: 10))
+ 
+-                            Text(channel.name)
+-                                .lineLimit(1)
++                            // Lume GF: clean name with badges (dark grey on the white focus)
++                            GFChannelName(raw: channel.name, badgeSize: 17, placement: .trailing, darkensOnFocus: true)
+ 
+                             Spacer(minLength: 0)
+ 
+diff --git a/Lume/Views/Player/TVChannelBrowserOverlay.swift b/Lume/Views/Player/TVChannelBrowserOverlay.swift
+index 58eb4b3..773ba05 100644
+--- a/Lume/Views/Player/TVChannelBrowserOverlay.swift
++++ b/Lume/Views/Player/TVChannelBrowserOverlay.swift
+@@ -248,8 +248,8 @@
+                 .background(.white.opacity(0.08), in: .rect(cornerRadius: 10))
+ 
+                 VStack(alignment: .leading, spacing: 3) {
+-                    Text(channel.name)
+-                        .lineLimit(1)
++                    // Lume GF: clean name with badges (dark grey on the white focus)
++                    GFChannelName(raw: channel.name, badgeSize: 17, placement: .trailing, darkensOnFocus: true)
+                     if let nowTitle = channel.epgChannelId.flatMap({ nowTitles[$0] }) {
+                         Text(nowTitle)
+                             .font(.system(size: 20))
+diff --git a/Lume/Views/Player/TVPlayerPanels.swift b/Lume/Views/Player/TVPlayerPanels.swift
+index 4fe27bd..af77f1d 100644
+--- a/Lume/Views/Player/TVPlayerPanels.swift
++++ b/Lume/Views/Player/TVPlayerPanels.swift
+@@ -327,10 +327,10 @@
+             Button(action: action) {
+                 VStack(alignment: .leading, spacing: 10) {
+                     logo
+-                    Text(channel.name)
++                    // Lume GF: clean name with badges under it
++                    GFChannelName(raw: channel.name, badgeSize: 17)
+                         .font(.system(size: 22, weight: .semibold))
+                         .foregroundStyle(.white)
+-                        .lineLimit(1)
+                     Text(nowTitle ?? String(localized: "Live"))
+                         .font(.system(size: 19))
+                         .foregroundStyle(.white.opacity(0.6))
 diff --git a/Lume/Views/Settings/EPGSettingsView.swift b/Lume/Views/Settings/EPGSettingsView.swift
 index b7ca9f0..c017d62 100644
 --- a/Lume/Views/Settings/EPGSettingsView.swift
@@ -20,6 +207,19 @@ index b7ca9f0..c017d62 100644
              }
              .frame(maxWidth: .infinity, alignment: .leading)
          }
+diff --git a/Lume/Views/Sports/ChannelPickerSheet.swift b/Lume/Views/Sports/ChannelPickerSheet.swift
+index 64f9038..788cc77 100644
+--- a/Lume/Views/Sports/ChannelPickerSheet.swift
++++ b/Lume/Views/Sports/ChannelPickerSheet.swift
+@@ -121,7 +121,7 @@ struct SportsChannelLabel: View {
+ 
+     private var nameLine: some View {
+         HStack(spacing: 6) {
+-            Text(verbatim: channel.stream.name)
++            Text(verbatim: GFChannelNames.title(for: channel.stream.name))
+                 .font(.subheadline.weight(.medium))
+                 .lineLimit(1)
+             if let badge = sportsQualityBadge(from: channel.stream.name) {
 diff --git a/Lume/Views/Sports/SportsBadges.swift b/Lume/Views/Sports/SportsBadges.swift
 index 2f235e8..e844f1e 100644
 --- a/Lume/Views/Sports/SportsBadges.swift
@@ -34,3 +234,29 @@ index 2f235e8..e844f1e 100644
      let fontSize: CGFloat
      let tint: Color
      @ViewBuilder var content: () -> Content
+diff --git a/Lume/Views/Sports/TVGameDetailSections.swift b/Lume/Views/Sports/TVGameDetailSections.swift
+index 218c4ed..10e00d3 100644
+--- a/Lume/Views/Sports/TVGameDetailSections.swift
++++ b/Lume/Views/Sports/TVGameDetailSections.swift
+@@ -53,7 +53,7 @@
+ 
+         private var name: some View {
+             HStack(spacing: 10) {
+-                Text(verbatim: channel.stream.name)
++                Text(verbatim: GFChannelNames.title(for: channel.stream.name))
+                     .font(.system(size: 28, weight: .semibold))
+                     .lineLimit(1)
+                 if let badge = sportsQualityBadge(from: channel.stream.name) {
+diff --git a/Lume/Views/Sports/TVGameDetailSheet.swift b/Lume/Views/Sports/TVGameDetailSheet.swift
+index a34de5d..069ddb4 100644
+--- a/Lume/Views/Sports/TVGameDetailSheet.swift
++++ b/Lume/Views/Sports/TVGameDetailSheet.swift
+@@ -320,7 +320,7 @@
+ 
+         private func channelName(_ channel: ResolvedChannel, size: CGFloat) -> some View {
+             HStack(spacing: 10) {
+-                Text(verbatim: channel.stream.name)
++                Text(verbatim: GFChannelNames.title(for: channel.stream.name))
+                     .font(.system(size: size, weight: .semibold))
+                     .lineLimit(1)
+                 if let badge = sportsQualityBadge(from: channel.stream.name) {
