@@ -1,0 +1,36 @@
+diff --git a/Lume/Services/Network/XMLTVParser.swift b/Lume/Services/Network/XMLTVParser.swift
+index ae21bc4..d931e5b 100644
+--- a/Lume/Services/Network/XMLTVParser.swift
++++ b/Lume/Services/Network/XMLTVParser.swift
+@@ -52,6 +52,31 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
+         return delegate.totalCount
+     }
+ 
++    /// Lume GF: like `parse`, but also says whether the whole file was read — false for a malformed or cut-off file,
++    /// or when `shouldStop` (asked after each delivered batch) ended it early — so a caller can hold back deletions.
++    static func parseChecked(
++        fileURL: URL,
++        batchSize: Int = 2000,
++        shouldStop: @escaping () -> Bool = { false },
++        onBatch: @escaping ([ParsedProgramme]) -> Void
++    ) -> (count: Int, completed: Bool) {
++        guard let xmlParser = XMLParser(contentsOf: fileURL) else { return (0, false) }
++        var stopped = false
++        let delegate = XMLTVParser(batchSize: batchSize) { batch in
++            onBatch(batch)
++            if shouldStop() {
++                stopped = true
++                xmlParser.abortParsing()
++            }
++        }
++        xmlParser.delegate = delegate
++        let finished = xmlParser.parse()
++        if !stopped, !delegate.batch.isEmpty {
++            onBatch(delegate.batch)
++        }
++        return (delegate.totalCount, finished && !stopped)
++    }
++
+     func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
+         currentText = ""
+         if elementName == "programme" {
