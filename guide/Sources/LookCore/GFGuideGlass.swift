@@ -67,6 +67,13 @@ nonisolated enum GFGuideGlass {
         blockMinX - pad
     }
 
+    /// How far the guide runs on past its safe area at the bottom (under the iPhone's tab bar, into the Apple TV's
+    /// overscan). SwiftUI reports no inset inside a layer that runs on under it, so it is measured: the guide's bottom
+    /// edge less where the safe area ends (`safeMaxY`, 0 before it is measured).
+    static func safeAreaBottom(guideMaxY: CGFloat, safeMaxY: CGFloat) -> CGFloat {
+        safeMaxY > 0 ? max(0, guideMaxY - safeMaxY) : 0
+    }
+
     /// Through the safe area (the TV's overscan, the iPhone's tab bar) and half a row more.
     static func bottomFade(safeAreaBottom: CGFloat, rowStride: CGFloat) -> CGFloat {
         max(0, safeAreaBottom) + rowStride / 2

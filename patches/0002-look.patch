@@ -295,10 +295,20 @@ index 9177710..401d526 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 05a5f0c..e180392 100644
+index 05a5f0c..18b6840 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-@@ -82,23 +82,33 @@ struct EPGGridScroller: View {
+@@ -46,6 +46,9 @@ struct EPGGridScroller: View {
+     @State private var sync = EPGScrollSync()
+     @State private var selection: EPGSelection?
+     @State private var scrollRequest: EPGScrollRequest?
++    /// Lume GF: where the guide's safe area ends on screen (the tab bar's top, the Apple TV's overscan), for the bottom
++    /// fade (GFGuideGlass.safeAreaBottom)
++    @State private var safeMaxY: CGFloat = 0
+     #if os(tvOS)
+         /// For the channel actions' favourite toggle.
+         @Environment(\.modelContext) private var modelContext
+@@ -82,23 +85,34 @@ struct EPGGridScroller: View {
              }
              .frame(height: metrics.headerHeight)
  
@@ -318,8 +328,9 @@ index 05a5f0c..e180392 100644
 +            // Lume GF: the programme grid runs under the glass channel sidebar; both run to the bottom of the screen
 +            // and fade out together, so the last row lines up (docs/superpowers/specs/2026-09-29-lume-gf-3-look-design.md).
 +            GeometryReader { geo in
++                let safeBottom = GFGuideGlass.safeAreaBottom(guideMaxY: geo.frame(in: .global).maxY, safeMaxY: safeMaxY)
 +                let bottomRoom = GFGuideGlass.bottomFade(
-+                    safeAreaBottom: geo.safeAreaInsets.bottom,
++                    safeAreaBottom: safeBottom,
 +                    rowStride: metrics.rowHeight + metrics.rowSpacing
                  )
 -
@@ -347,7 +358,16 @@ index 05a5f0c..e180392 100644
              // On tvOS the focus strip overlays the channel column — the
              // guide's leftmost band, directly beside the rail. Being adjacent
              // to the rail is what makes entry (right from a category) and exit
-@@ -119,6 +129,10 @@ struct EPGGridScroller: View {
+@@ -110,6 +124,8 @@ struct EPGGridScroller: View {
+             .focusSection()
+             #endif
+         }
++        // Lume GF: this stack keeps to the safe area; the grid's layer below runs on past it
++        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { safeMaxY = $0 }
+         #if os(tvOS)
+         .onChange(of: surfaceFocused) { _, focused in
+             if focused {
+@@ -119,6 +135,10 @@ struct EPGGridScroller: View {
                  guard virtualFocus == nil else { return }
                  Task { @MainActor in
                      landOnChannel()
@@ -358,7 +378,7 @@ index 05a5f0c..e180392 100644
                  }
              } else if selection == nil {
                  // Focus left towards the rail or the tab bar. A presented
-@@ -131,6 +145,18 @@ struct EPGGridScroller: View {
+@@ -131,6 +151,18 @@ struct EPGGridScroller: View {
          #else
          .background(.background)
          #endif
@@ -377,7 +397,7 @@ index 05a5f0c..e180392 100644
          .sheet(item: $selection) { selection in
              EPGProgramDetailView(
                  stream: selection.stream,
-@@ -142,7 +168,7 @@ struct EPGGridScroller: View {
+@@ -142,7 +174,7 @@ struct EPGGridScroller: View {
          }
      }
  
@@ -386,7 +406,7 @@ index 05a5f0c..e180392 100644
          EPGGrid(
              rows: rows,
              timeline: timeline,
-@@ -153,6 +179,9 @@ struct EPGGridScroller: View {
+@@ -153,6 +185,9 @@ struct EPGGridScroller: View {
              nowTarget: nowScrollTarget,
              scrollRequest: scrollRequest,
              virtualFocus: gridVirtualFocus,
@@ -396,7 +416,7 @@ index 05a5f0c..e180392 100644
              onPlay: { row, cell in playCell(row, cell) },
              onShowDetails: { row, cell in
                  selection = EPGSelection(id: cell.id, stream: row.stream, cell: cell)
-@@ -237,15 +266,18 @@ struct EPGGridScroller: View {
+@@ -237,15 +272,18 @@ struct EPGGridScroller: View {
              Button {
                  requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: sync.offset.y), animated: true)
              } label: {
@@ -416,7 +436,7 @@ index 05a5f0c..e180392 100644
          #endif
      }
  }
-@@ -289,7 +321,7 @@ struct EPGGridScroller: View {
+@@ -289,7 +327,7 @@ struct EPGGridScroller: View {
              // on — a single strip owns the whole grid's focus — so the hub's
              // long press raises them itself.
              .confirmationDialog(
