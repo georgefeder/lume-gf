@@ -1,7 +1,7 @@
 #if GF_DEMO
     import SwiftData
     import SwiftUI
-    #if os(iOS)
+    #if canImport(UIKit)
         import UIKit
     #endif
 
@@ -9,7 +9,8 @@
     /// with `-GFDemo guide` or `-GFDemo list`, the app shows Lume's own guide or channel list over made-up channels named
     /// like our server names them. `-GFDemoMoves right,down` moves the Apple TV guide's focus after it lands; `end`
     /// scrolls the iPhone guide to its last row, `landscape` turns the iPhone sideways. `-GFDemoChannels 3` shows a short
-    /// category.
+    /// category. `-GFDemoNoPanel 1` hides the channel column, glass and all (ci/guide-check.py sees what the programmes
+    /// leave under it: the simulator's glass is too frosted to show it, a real Apple TV's bends it into view).
     enum GFDemo {
         static var mode: String? {
             value(after: "-GFDemo")
@@ -21,6 +22,44 @@
 
         static var channelCount: Int {
             value(after: "-GFDemoChannels").flatMap(Int.init) ?? 12
+        }
+
+        static var noPanel: Bool {
+            value(after: "-GFDemoNoPanel") == "1"
+        }
+
+        /// For ci/guide-check.py, in points on screen: the guide, the glass panel, the fades and where the programmes
+        /// fade out under the panel.
+        static func logGeometry(guide: CGRect, columnWidth: CGFloat, rowSpacing: CGFloat, topFade: CGFloat) {
+            let tv = GFGuideGlass.isTV
+            let insets = GFGuideGlass.sidebarInsets(tv: tv)
+            let under = GFGuideGlass.underPanelFade(columnWidth: columnWidth, tv: tv)
+            let fields: [(String, CGFloat)] = [
+                ("scale", screenScale), ("guideX", guide.minX), ("guideY", guide.minY),
+                ("guideW", guide.width), ("guideH", guide.height),
+                ("panelMinX", guide.minX + insets.leading), ("panelMaxX", guide.minX + columnWidth - insets.trailing),
+                ("panelTop", guide.minY + GFGuideGlass.panelTop(tv: tv, rowSpacing: rowSpacing)),
+                ("fade", topFade), ("room", GFGuideGlass.gridTopRoom(tv: tv, rowSpacing: rowSpacing)),
+                ("rowSpacing", rowSpacing), ("gone", guide.minX + under.gone), ("clear", guide.minX + under.clear)
+            ]
+            log("guide geometry: " + fields.map { "\($0.0)=\($0.1)" }.joined(separator: " "))
+        }
+
+        /// For ci/guide-check.py: the focused programme's frame on screen as drawn (grown by `scale`).
+        static func logFocusedProgramme(_ frame: CGRect, scale: CGFloat) {
+            log("focused programme: x=\(frame.minX) y=\(frame.minY) w=\(frame.width) h=\(frame.height) scale=\(scale)")
+        }
+
+        private static var screenScale: CGFloat {
+            #if canImport(UIKit)
+                UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.screen.scale ?? 0
+            #else
+                0
+            #endif
+        }
+
+        private static func log(_ line: String) {
+            FileHandle.standardError.write(Data(("GFDemo " + line + "\n").utf8))
         }
 
         private static func value(after flag: String) -> String? {
@@ -132,6 +171,14 @@
                                      "Darts Night", "Sports Centre"]
 
         private static func programmes(channelId: String, index: Int, name: String, now: Date) -> [EPGListing] {
+            if index == 1 {
+                // ITV1: nothing until twenty minutes ago (Lume's "No Programme"), then six hours of one programme, as
+                // BBC Parliament in Georgs' photo of build 9 (focused, it spread over the "No Programme" before it)
+                let start = now.addingTimeInterval(-20 * 60)
+                return [EPGListing(id: "\(channelId)-long", channelId: channelId, title: "Parliament Live",
+                                   listingDescription: "Made-up programme for Lume GF's screenshots.", start: start,
+                                   end: start.addingTimeInterval(6 * 3600), subtitle: nil, category: nil)]
+            }
             let label = GFChannelLabel.parse(name, now: now)
             let quarter: TimeInterval = 15 * 60
             var start = Date(timeIntervalSince1970: (now.timeIntervalSince1970 / quarter).rounded(.down) * quarter)

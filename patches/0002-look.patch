@@ -1,8 +1,8 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 77166ee..b18c199 100644
+index a6b742d..14ebe2f 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -206,7 +206,8 @@ struct LumeApp: App {
+@@ -225,7 +225,8 @@ struct LumeApp: App {
  
      var body: some Scene {
          WindowGroup {
@@ -30,10 +30,10 @@ index 2d99a3d..1564538 100644
  
      // MARK: - State sampler
 diff --git a/Lume/Services/Player/PlayableMedia.swift b/Lume/Services/Player/PlayableMedia.swift
-index 250234d..1342373 100644
+index 5ca6724..105215f 100644
 --- a/Lume/Services/Player/PlayableMedia.swift
 +++ b/Lume/Services/Player/PlayableMedia.swift
-@@ -268,7 +268,7 @@ extension PlayableMedia {
+@@ -268,7 +268,7 @@ nonisolated extension PlayableMedia {
          return PlayableMedia(
              id: "live-\(stream.id)",
              url: url,
@@ -42,7 +42,7 @@ index 250234d..1342373 100644
              subtitle: nil,
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .live,
-@@ -311,7 +311,7 @@ extension PlayableMedia {
+@@ -311,7 +311,7 @@ nonisolated extension PlayableMedia {
          return PlayableMedia(
              id: "catchup-\(stream.id)-\(Int(start.timeIntervalSince1970))",
              url: url,
@@ -113,7 +113,7 @@ index 98ede44..9a5e17a 100644
      }
  
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
-index 9eb3ec6..af3502c 100644
+index 9eb3ec6..937a9c0 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
 @@ -147,13 +147,14 @@ struct EPGChannelCell: View {
@@ -190,8 +190,19 @@ index 9eb3ec6..af3502c 100644
                  } else if isLive {
                      shape.fill(.white.opacity(0.16))
                          .overlay {
+@@ -452,7 +461,9 @@ struct EPGBlockButtonStyle: ButtonStyle {
+ 
+         var body: some View {
+             let focused = isFocused
+-            let scale = focused ? 1.04 : (isPressed ? 0.97 : 1.0)
++            // Lume GF: Lume's 4 percent, but never over the gap to the neighbouring tile (GFGuideGlass.focusScale)
++            let scale = focused ? GFGuideGlass.focusScale(width: cell.width, rowSpacing: metrics.rowSpacing)
++                : (isPressed ? 0.97 : 1.0)
+             // Radius 0 when unfocused: a transparent radius-10 shadow still
+             // sits in the render tree of every realized cell, and hundreds of
+             // shadowed cells is what made focus-scrolling stutter (#27).
 diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-index 7c51648..ebf9c1b 100644
+index 7c51648..915bd54 100644
 --- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 @@ -27,12 +27,12 @@ struct EPGRulerStrip: View {
@@ -223,9 +234,17 @@ index 7c51648..ebf9c1b 100644
              .fixedSize()
              .alignmentGuide(.leading) { $0.width / 2 }
      }
-@@ -88,12 +89,10 @@ struct EPGFrozenColumn: View {
+@@ -86,14 +87,19 @@ struct EPGFrozenColumn: View {
+                     onStartMultiView: onStartMultiView
+                 )
                  .equatable()
++                // Lume GF: the first row starts one row gap below the top fade, level with the programmes
++                .padding(.top, GFGuideGlass.gridTopRoom(tv: GFGuideGlass.isTV, rowSpacing: metrics.rowSpacing))
                  .offset(y: -sync.mirror.y)
++                #if GF_DEMO
++                    // ci/guide-check.py: without the column, what the programmes leave under it shows
++                    .opacity(GFDemo.noPanel ? 0 : 1)
++                #endif
              }
 +            // Lume GF: the channel rows are clipped to the column and to the glass sidebar's outline (the scroller
 +            // puts the glass behind)
@@ -235,12 +254,13 @@ index 7c51648..ebf9c1b 100644
 -            // a vertical rule would only add visual weight.
 -            .overlay(alignment: .trailing) { Rectangle().fill(.quaternary).frame(width: 1) }
 -        #endif
-+            .clipShape(GFGuideSidebarShape())
++            .clipShape(GFGuideSidebarShape(top: GFGuideGlass.panelTop(tv: GFGuideGlass.isTV,
++                                                                      rowSpacing: metrics.rowSpacing)))
      }
  }
  
 diff --git a/Lume/Views/LiveTV/EPG/EPGGrid.swift b/Lume/Views/LiveTV/EPG/EPGGrid.swift
-index 9177710..4b28293 100644
+index 9177710..f4fea2a 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGrid.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGrid.swift
 @@ -29,6 +29,12 @@ struct EPGGrid: View, Equatable {
@@ -280,10 +300,12 @@ index 9177710..4b28293 100644
  
      var body: some View {
          ScrollView([.horizontal, .vertical]) {
-@@ -64,6 +80,10 @@ struct EPGGrid: View, Equatable {
+@@ -64,6 +80,12 @@ struct EPGGrid: View, Equatable {
                  onShowDetails: onShowDetails
              )
              .equatable()
++            // Lume GF: the first row starts one row gap below the top fade (GFGuideGlass.gridTopRoom)
++            .padding(.top, GFGuideGlass.gridTopRoom(tv: GFGuideGlass.isTV, rowSpacing: metrics.rowSpacing))
 +            .padding(.leading,
 +                     GFGuideGlass.gridContentPad(contentPad: contentPad, scrollInsetLeading: scrollInsetLeading))
 +            .padding(.bottom, GFGuideGlass.bottomPadding(bottomRoom: bottomRoom, scrollHeight: scrollHeight,
@@ -291,7 +313,7 @@ index 9177710..4b28293 100644
              .frame(minHeight: viewportHeight, alignment: .topLeading)
          }
          .background {
-@@ -73,20 +93,45 @@ struct EPGGrid: View, Equatable {
+@@ -73,35 +95,70 @@ struct EPGGrid: View, Equatable {
                      .onChange(of: geo.size.height) { viewportHeight = $1 }
              }
          }
@@ -347,11 +369,13 @@ index 9177710..4b28293 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
              if sync.window != window {
-@@ -94,14 +139,23 @@ struct EPGGrid: View, Equatable {
+                 sync.window = window
              }
              let rowWindow = EPGRealizeWindow.around(
-                 offset: clamped.y,
+-                offset: clamped.y,
 -                viewport: new.height,
++                // Lume GF: rows start `gridTopRoom` down
++                offset: clamped.y - GFGuideGlass.gridTopRoom(tv: GFGuideGlass.isTV, rowSpacing: metrics.rowSpacing),
 +                viewport: new.size.height,
                  blockLength: 2 * (metrics.rowHeight + metrics.rowSpacing)
              )
@@ -372,7 +396,7 @@ index 9177710..4b28293 100644
              guard !didInitialScroll else { return }
              didInitialScroll = true
              // Seed the realization windows and the pane mirror around the
-@@ -109,7 +163,7 @@ struct EPGGrid: View, Equatable {
+@@ -109,7 +166,7 @@ struct EPGGrid: View, Equatable {
              // right cells; the estimated viewports are corrected by the first
              // geometry event.
              sync.window = EPGRealizeWindow.around(
@@ -382,7 +406,7 @@ index 9177710..4b28293 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 05a5f0c..58be91f 100644
+index 05a5f0c..b67b328 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -46,6 +46,9 @@ struct EPGGridScroller: View {
@@ -395,7 +419,24 @@ index 05a5f0c..58be91f 100644
      #if os(tvOS)
          /// For the channel actions' favourite toggle.
          @Environment(\.modelContext) private var modelContext
-@@ -82,23 +85,36 @@ struct EPGGridScroller: View {
+@@ -68,6 +71,16 @@ struct EPGGridScroller: View {
+         @FocusState private var surfaceClaimsFocus: Bool
+     #endif
+ 
++    /// Lume GF: the room above the first row, in both panes (GFGuideGlass.gridTopRoom)
++    private var topRoom: CGFloat {
++        GFGuideGlass.gridTopRoom(tv: GFGuideGlass.isTV, rowSpacing: metrics.rowSpacing)
++    }
++
++    /// Lume GF: the glass panel's top in the channel column (GFGuideGlass.panelTop)
++    private var panelTop: CGFloat {
++        GFGuideGlass.panelTop(tv: GFGuideGlass.isTV, rowSpacing: metrics.rowSpacing)
++    }
++
+     var body: some View {
+         VStack(spacing: 0) {
+             // Header: corner + time ruler. Touch/pointer get a jump-to-now
+@@ -82,23 +95,49 @@ struct EPGGridScroller: View {
              }
              .frame(height: metrics.headerHeight)
  
@@ -423,10 +464,16 @@ index 05a5f0c..58be91f 100644
 -
 -                grid
 +                let topFade = GFGuideGlass.topFade(tv: GFGuideGlass.isTV)
++                // the programmes fade out under the panel, gone by its middle (Georgs on build 9)
++                let underPanel = GFGuideGlass.underPanelFade(columnWidth: metrics.channelColumnWidth,
++                                                             tv: GFGuideGlass.isTV)
 +                ZStack(alignment: .topLeading) {
 +                    grid(bottomRoom: bottomRoom, guideHeight: geo.size.height)
 +                        .padding(.leading, GFGuideGlass.gridLeadingInset(columnWidth: metrics.channelColumnWidth))
-+                        .gfGuideRowFade(top: topFade, bottom: bottomRoom)
++                        .gfGuideRowFade(top: topFade, bottom: bottomRoom, underPanel: underPanel)
++                    #if !os(tvOS)
++                        GFGuideUnderPanelCover(fade: underPanel)
++                    #endif
 +                    EPGFrozenColumn(
 +                        rows: rows,
 +                        metrics: metrics,
@@ -437,17 +484,24 @@ index 05a5f0c..58be91f 100644
 +                    )
 +                    .gfGuideRowFade(top: topFade, bottom: bottomRoom)
 +                    // one floating glass sidebar behind the channel rows
-+                    .background { GFGuideSidebarPanel() }
++                    .background { GFGuideSidebarPanel(top: panelTop) }
 +                }
 +                // sticky titles measure from the sidebar's edge in this space
 +                .coordinateSpace(.named(GFGuideGlass.spaceName))
 +                .gfGuideStripFade(top: topFade, bottom: bottomRoom)
++                #if GF_DEMO
++                    // for ci/guide-check.py: where the guide, the panel and the fades are on screen
++                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
++                        GFDemo.logGeometry(guide: frame, columnWidth: metrics.channelColumnWidth,
++                                           rowSpacing: metrics.rowSpacing, topFade: topFade)
++                    }
++                #endif
              }
 +            .ignoresSafeArea(.container, edges: .bottom)
              // On tvOS the focus strip overlays the channel column — the
              // guide's leftmost band, directly beside the rail. Being adjacent
              // to the rail is what makes entry (right from a category) and exit
-@@ -110,6 +126,13 @@ struct EPGGridScroller: View {
+@@ -110,6 +149,13 @@ struct EPGGridScroller: View {
              .focusSection()
              #endif
          }
@@ -461,7 +515,7 @@ index 05a5f0c..58be91f 100644
          #if os(tvOS)
          .onChange(of: surfaceFocused) { _, focused in
              if focused {
-@@ -119,6 +142,13 @@ struct EPGGridScroller: View {
+@@ -119,6 +165,13 @@ struct EPGGridScroller: View {
                  guard virtualFocus == nil else { return }
                  Task { @MainActor in
                      landOnChannel()
@@ -475,7 +529,7 @@ index 05a5f0c..58be91f 100644
                  }
              } else if selection == nil {
                  // Focus left towards the rail or the tab bar. A presented
-@@ -131,6 +161,18 @@ struct EPGGridScroller: View {
+@@ -131,6 +184,19 @@ struct EPGGridScroller: View {
          #else
          .background(.background)
          #endif
@@ -484,8 +538,9 @@ index 05a5f0c..58be91f 100644
 +            // Lume GF screenshot build: -GFDemoMoves end scrolls the guide to its last row
 +            guard GFDemo.moves.contains("end") else { return }
 +            try? await Task.sleep(for: .seconds(3))
-+            let stride = metrics.rowHeight + metrics.rowSpacing
-+            let bottom = max(0, CGFloat(rows.count) * stride - metrics.rowSpacing - sync.viewport.height)
++            let bottom = GFGuideGlass.maxScrollY(rows: rows.count, viewportHeight: sync.viewport.height,
++                                                 rowHeight: metrics.rowHeight, rowSpacing: metrics.rowSpacing,
++                                                 topRoom: topRoom)
 +            FileHandle.standardError.write(Data(
 +                "GFDemo end: \(rows.count) rows, readable \(sync.viewport), to y \(bottom)\n".utf8))
 +            requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: bottom), animated: false)
@@ -494,7 +549,7 @@ index 05a5f0c..58be91f 100644
          .sheet(item: $selection) { selection in
              EPGProgramDetailView(
                  stream: selection.stream,
-@@ -142,7 +184,7 @@ struct EPGGridScroller: View {
+@@ -142,7 +208,7 @@ struct EPGGridScroller: View {
          }
      }
  
@@ -503,7 +558,7 @@ index 05a5f0c..58be91f 100644
          EPGGrid(
              rows: rows,
              timeline: timeline,
-@@ -153,6 +195,9 @@ struct EPGGridScroller: View {
+@@ -153,6 +219,9 @@ struct EPGGridScroller: View {
              nowTarget: nowScrollTarget,
              scrollRequest: scrollRequest,
              virtualFocus: gridVirtualFocus,
@@ -513,7 +568,7 @@ index 05a5f0c..58be91f 100644
              onPlay: { row, cell in playCell(row, cell) },
              onShowDetails: { row, cell in
                  selection = EPGSelection(id: cell.id, stream: row.stream, cell: cell)
-@@ -209,24 +254,16 @@ struct EPGGridScroller: View {
+@@ -209,24 +278,16 @@ struct EPGGridScroller: View {
      /// both surfaces together without per-frame main-thread work.
      private func requestScroll(to point: CGPoint, animated: Bool) {
          let clamped = CGPoint(x: max(0, point.x), y: max(0, point.y))
@@ -543,7 +598,7 @@ index 05a5f0c..58be91f 100644
      }
  
      @ViewBuilder
-@@ -237,15 +274,18 @@ struct EPGGridScroller: View {
+@@ -237,15 +298,18 @@ struct EPGGridScroller: View {
              Button {
                  requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: sync.offset.y), animated: true)
              } label: {
@@ -563,7 +618,7 @@ index 05a5f0c..58be91f 100644
          #endif
      }
  }
-@@ -289,7 +329,7 @@ struct EPGGridScroller: View {
+@@ -289,7 +353,7 @@ struct EPGGridScroller: View {
              // on — a single strip owns the whole grid's focus — so the hub's
              // long press raises them itself.
              .confirmationDialog(
@@ -572,6 +627,40 @@ index 05a5f0c..58be91f 100644
                  isPresented: Binding(
                      get: { channelActions != nil },
                      set: { if !$0 { channelActions = nil } }
+@@ -483,25 +547,20 @@ struct EPGGridScroller: View {
+             clampAndScroll(to: target)
+         }
+ 
++        // Lume GF: the rows start `gridTopRoom` down (GFGuideGlass.rowScrollTarget, maxScrollY)
+         private func rowScrollTarget(_ rowIndex: Int, currentY: CGFloat) -> CGFloat {
+-            let rowStride = metrics.rowHeight + metrics.rowSpacing
+-            let top = CGFloat(rowIndex) * rowStride
+-            let bottom = top + metrics.rowHeight
+-            if top < currentY {
+-                return top
+-            }
+-            if bottom > currentY + sync.viewport.height {
+-                return bottom - sync.viewport.height
+-            }
+-            return currentY
++            GFGuideGlass.rowScrollTarget(row: rowIndex, currentY: currentY, viewportHeight: sync.viewport.height,
++                                         rowHeight: metrics.rowHeight, rowSpacing: metrics.rowSpacing,
++                                         topRoom: topRoom)
+         }
+ 
+         private func clampAndScroll(to point: CGPoint) {
+-            let rowStride = metrics.rowHeight + metrics.rowSpacing
+-            let contentHeight = max(0, CGFloat(rows.count) * rowStride - metrics.rowSpacing)
+             var target = point
+             target.x = max(0, min(target.x, max(0, timeline.totalWidth - sync.viewport.width)))
+-            target.y = max(0, min(target.y, max(0, contentHeight - sync.viewport.height)))
++            target.y = max(0, min(target.y, GFGuideGlass.maxScrollY(
++                rows: rows.count, viewportHeight: sync.viewport.height, rowHeight: metrics.rowHeight,
++                rowSpacing: metrics.rowSpacing, topRoom: topRoom
++            )))
+             if target != sync.offset {
+                 requestScroll(to: target, animated: true)
+             }
 diff --git a/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift b/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
 index 84712ea..84d6609 100644
 --- a/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
@@ -609,6 +698,36 @@ index 84712ea..84d6609 100644
  
              Spacer(minLength: 0)
          }
+diff --git a/Lume/Views/LiveTV/EPG/EPGProgramRows.swift b/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
+index 4ab49c5..7925582 100644
+--- a/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
++++ b/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
+@@ -166,6 +166,9 @@ struct EPGProgramStrip: View, Equatable {
+         @ViewBuilder
+         private func cellView(_ cell: EPGProgramCell) -> some View {
+             let focused = cell.id == focusedCellID
++            // Lume GF: Lume's 4 percent, but never over the gap to the neighbouring tile (GFGuideGlass.focusScale;
++            // a focused five-hour programme spread 75 points over the one before it)
++            let scale = focused ? GFGuideGlass.focusScale(width: cell.width, rowSpacing: metrics.rowSpacing) : 1
+             EPGProgramBlockView(
+                 cell: cell,
+                 metrics: metrics,
+@@ -173,8 +176,14 @@ struct EPGProgramStrip: View, Equatable {
+                 isFocused: focused,
+                 canReplay: canReplay(cell)
+             )
++            #if GF_DEMO
++            // ci/guide-check.py: where the focused programme is drawn, grown (read again when focus arrives)
++            .onGeometryChange(for: CGRect.self) { focused ? $0.frame(in: .global) : .null } action: { frame in
++                if !frame.isNull { GFDemo.logFocusedProgramme(frame, scale: scale) }
++            }
++            #endif
+             .shadow(color: .black.opacity(0.4), radius: focused ? 10 : 0, y: focused ? 6 : 0)
+-            .scaleEffect(focused ? 1.04 : 1)
++            .scaleEffect(scale)
+             .animation(.easeOut(duration: 0.18), value: focused)
+         }
+     #else
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 index a7a564a..9234bc6 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
@@ -642,7 +761,7 @@ index a7a564a..9234bc6 100644
          var body: some View {
              HStack(spacing: 0) {
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index 426e4e7..dc68d52 100644
+index fbe4361..a072997 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
 @@ -162,7 +162,7 @@ struct AVPlayerEngineView: View {
@@ -655,7 +774,7 @@ index 426e4e7..dc68d52 100644
              coordinator.onTime = { current in
                  if !isSeeking, current.isFinite { clock.current = current }
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index a0308c8..7448fab 100644
+index 1f94165..bd870fa 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
 @@ -241,7 +241,8 @@ struct FullScreenPlayerView: View {
@@ -691,7 +810,7 @@ index b2068ee..f451739 100644
                  attachNowPlayingTransport()
                  scheduleHide()
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index 4541e80..cf514f7 100644
+index 07774c4..a7a50c1 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
 @@ -183,7 +183,7 @@ struct LumeEngineEngineView: View {

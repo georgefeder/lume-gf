@@ -42,9 +42,9 @@ extension EPGChannelCell {
 /// guide's fade ends it). The glass is drawn in it and the channel rows are clipped to it, so a row scrolling up
 /// slides under the panel's top edge instead of showing beside its corner.
 nonisolated struct GFGuideSidebarShape: Shape {
-    /// The panel's top in the rect it is drawn in: the column's (above it on the Apple TV), or 0 where the view itself
-    /// already reaches up that far (the glass).
-    var top = GFGuideGlass.sidebarInsets(tv: GFGuideGlass.isTV).top
+    /// The panel's top in the rect it is drawn in: in the column `GFGuideGlass.panelTop` (on the Apple TV above the
+    /// first channel), or 0 where the view itself already reaches up that far (the glass).
+    var top: CGFloat
 
     func path(in rect: CGRect) -> Path {
         let tv = GFGuideGlass.isTV
@@ -60,12 +60,17 @@ nonisolated struct GFGuideSidebarShape: Shape {
 /// The guide's channel sidebar: one floating panel of Liquid Glass (Lume's `glassEffectCompat`: its frosted material
 /// before iOS/tvOS 26). It runs on past the bottom edge, where the guide's fade ends it.
 struct GFGuideSidebarPanel: View {
+    /// `GFGuideGlass.panelTop`: the panel's top in the channel column.
+    let top: CGFloat
+
     var body: some View {
-        let top = GFGuideGlass.sidebarInsets(tv: GFGuideGlass.isTV).top
         Color.clear
             .glassEffectCompat(.regular, in: GFGuideSidebarShape(top: max(0, top)))
             // the view reaches up as far as its panel does (on the Apple TV above the first channel)
             .padding(.top, min(0, top))
+        #if GF_DEMO
+            .opacity(GFDemo.noPanel ? 0 : 1)
+        #endif
     }
 }
 
@@ -91,28 +96,75 @@ struct GFGuideEdgeFade: View {
 }
 
 /// The Apple TV's fades: its backdrop is the system's gradient, not a colour a strip could match, so the rows
-/// themselves fade out to it (a mask on the grid and on the channel rows, never on the glass panel).
+/// themselves fade out to it (a mask on the grid and on the channel rows, never on the glass panel). On the grid it
+/// also fades the programmes out under the panel (`underPanel`, from the grid's leading edge: the column's).
 struct GFGuideEdgeMask: View {
     let top: CGFloat
     let bottom: CGFloat
+    var underPanel: GFGuideGlass.UnderPanel?
 
     var body: some View {
+        // on into the side margins, where the programmes run on (the Apple TV's overscan; the guide's leading edge is
+        // beside the category list, never in a margin, so the fade under the panel keeps its place). The channel rows
+        // get no second mask: Lume found every extra layer in the Apple TV's scrolling.
+        if let underPanel {
+            fades
+                .mask(alignment: .leading) { GFGuideUnderPanelFade(fade: underPanel) }
+                .ignoresSafeArea(.container, edges: .horizontal)
+        } else {
+            fades.ignoresSafeArea(.container, edges: .horizontal)
+        }
+    }
+
+    private var fades: some View {
         VStack(spacing: 0) {
             LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: max(0, top))
             Rectangle().fill(.black)
             LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: max(0, bottom))
         }
-        // on into the side margins, where the programmes run on (the Apple TV's overscan)
-        .ignoresSafeArea(.container, edges: .horizontal)
+    }
+}
+
+/// How much of the programmes shows across the channel column (black shows): nothing up to the panel's middle, then
+/// more and more, all of it from the panel's trailing edge on. `GFGuideGlass.underPanelFade`.
+struct GFGuideUnderPanelFade: View {
+    let fade: GFGuideGlass.UnderPanel
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: max(0, fade.gone))
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: max(0, fade.clear - fade.gone))
+            Rectangle().fill(.black)
+        }
+    }
+}
+
+/// iPhone and iPad: the guide's own background over the programmes under the panel, faded the other way round (it
+/// sits between the grid and the glass, so the glass still sees the programmes near its trailing edge). Covers the
+/// strip beside the panel and its rounded corners too.
+struct GFGuideUnderPanelCover: View {
+    let fade: GFGuideGlass.UnderPanel
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle().fill(.background).frame(width: max(0, fade.gone))
+            Rectangle().fill(.background)
+                .mask(LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing))
+                .frame(width: max(0, fade.clear - fade.gone))
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .allowsHitTesting(false)
     }
 }
 
 extension View {
     /// The guide's top and bottom fades on one pane (the grid, the channel rows): Apple TV only, see `GFGuideEdgeMask`.
+    /// The grid passes `underPanel` as well.
     @ViewBuilder
-    func gfGuideRowFade(top: CGFloat, bottom: CGFloat) -> some View {
+    func gfGuideRowFade(top: CGFloat, bottom: CGFloat, underPanel: GFGuideGlass.UnderPanel? = nil) -> some View {
         #if os(tvOS)
-            mask { GFGuideEdgeMask(top: top, bottom: bottom) }
+            mask { GFGuideEdgeMask(top: top, bottom: bottom, underPanel: underPanel) }
         #else
             self
         #endif

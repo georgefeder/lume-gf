@@ -82,6 +82,8 @@ done
 xcrun simctl ui "$IOS" appearance dark
 shoot "$IOS" "$BID" iphone-guide-bottom-dark -GFDemo guide -GFDemoMoves end
 shoot "$IOS" "$BID" iphone-guide-few-dark -GFDemo guide -GFDemoChannels 3
+# for guide-check.py: without the channel column, what the programmes leave under the glass panel
+shoot "$IOS" "$BID" iphone-guide-under-dark -GFDemo guide -GFDemoNoPanel 1
 # a channel opened in light mode, filmed (Georgs saw the screen flash dark): system light, then Lume's own Light setting
 xcrun simctl ui "$IOS" appearance light
 film "$IOS" "$BID" iphone-open-light -GFDemo list -GFDemoMoves play
@@ -97,6 +99,9 @@ xcrun simctl ui "$TV" appearance dark >/dev/null 2>&1 || true
 shoot "$TV" "$BID" tv-guide-channel -GFDemo guide
 shoot "$TV" "$BID" tv-guide-programme -GFDemo guide -GFDemoMoves right
 shoot "$TV" "$BID" tv-guide-bottom -GFDemo guide -GFDemoMoves down,down,down,down,down,down,down,down,down,down,down,right
+shoot "$TV" "$BID" tv-guide-under -GFDemo guide -GFDemoNoPanel 1
+# the second channel's six-hour programme after "No Programme", focused (Georgs' photo of build 9)
+shoot "$TV" "$BID" tv-guide-long -GFDemo guide -GFDemoMoves right,down
 shoot "$TV" "$BID" tv-list -GFDemo list
 [ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true
 echo "screenshots: done"

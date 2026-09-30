@@ -127,6 +127,64 @@ nonisolated enum GFGuideGlass {
         tv ? 36 : 16
     }
 
+    /// Room above the first row: the top fade, then the half row gap Lume leaves above every tile, so the first row
+    /// starts one row gap below the fade and rows only fade once you scroll (Georgs on build 9: the first channel and
+    /// programmes sat where the fade already starts). Both panes and the scroll maths start their rows this far down.
+    static func gridTopRoom(tv: Bool, rowSpacing: CGFloat) -> CGFloat {
+        topFade(tv: tv) + rowSpacing / 2
+    }
+
+    /// The panel's top in the channel column: `sidebarInsets.top` from the first row, which starts `gridTopRoom` down.
+    static func panelTop(tv: Bool, rowSpacing: CGFloat) -> CGFloat {
+        gridTopRoom(tv: tv, rowSpacing: rowSpacing) + sidebarInsets(tv: tv).top
+    }
+
+    /// Where programmes fade out under the panel, measured from the channel column's leading edge: whole up to its
+    /// trailing edge (`clear`), gone by its middle (`gone`) and everywhere left of that. Nothing is left under the
+    /// panel's left side for the Apple TV's glass to bend into view (Georgs on build 9: tiles showed along its left
+    /// edge), and nothing shows beside it (the iPhone's strip left of the panel).
+    struct UnderPanel: Equatable, Sendable {
+        var gone: CGFloat
+        var clear: CGFloat
+    }
+
+    static func underPanelFade(columnWidth: CGFloat, tv: Bool) -> UnderPanel {
+        let insets = sidebarInsets(tv: tv)
+        let clear = max(insets.leading, columnWidth - insets.trailing)
+        return UnderPanel(gone: (insets.leading + clear) / 2, clear: clear)
+    }
+
+    /// Lume grows a focused programme by 4 percent, which on a five-hour programme is 75 points each side, over the
+    /// tile before it (Georgs on build 9, "No Pr…" showing through the focused glass). Here it grows by at most half
+    /// the gap between tiles less a point, whatever its length; short tiles keep Lume's 4 percent.
+    static func focusScale(width: CGFloat, rowSpacing: CGFloat, lumeScale: CGFloat = 1.04) -> CGFloat {
+        guard width > 0 else { return 1 }
+        let maxGrowth = max(0, (rowSpacing - 2) / 2)
+        return min(lumeScale, 1 + 2 * maxGrowth / width)
+    }
+
+    /// Lume's keep-the-focused-row-visible (Apple TV) with its rows `topRoom` down: a row above the view scrolls to
+    /// where the first row sits at rest, a row below until it ends at the readable area's bottom.
+    static func rowScrollTarget(row: Int, currentY: CGFloat, viewportHeight: CGFloat, rowHeight: CGFloat,
+                                rowSpacing: CGFloat, topRoom: CGFloat) -> CGFloat {
+        let top = CGFloat(row) * (rowHeight + rowSpacing)
+        if top < currentY {
+            return top
+        }
+        let bottom = topRoom + top + rowHeight
+        if bottom > currentY + viewportHeight {
+            return bottom - viewportHeight
+        }
+        return currentY
+    }
+
+    /// How far down the guide scrolls: until the last row ends at the readable area's bottom.
+    static func maxScrollY(rows: Int, viewportHeight: CGFloat, rowHeight: CGFloat, rowSpacing: CGFloat,
+                           topRoom: CGFloat) -> CGFloat {
+        let content = topRoom + CGFloat(rows) * (rowHeight + rowSpacing) - rowSpacing
+        return max(0, content - viewportHeight)
+    }
+
     /// Apple TV: the focused channel's white highlight, inset inside the sidebar.
     static let tvHighlightInset: CGFloat = 8
 

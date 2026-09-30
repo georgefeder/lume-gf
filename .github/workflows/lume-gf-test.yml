@@ -140,6 +140,10 @@ jobs:
           sh gf/ci/apply-dep-patches.sh gf Lume "$RUNNER_TEMP/spm"
       - name: Screenshots (demo channels, iPhone and Apple TV)
         run: sh gf/ci/screenshots.sh Lume "$RUNNER_TEMP/screenshots"
+      # what Georgs saw on build 9 (programmes beside and under the panel, the first row in the fade, a focused long
+      # programme over its neighbour) must not come back
+      - name: Guide checks
+        run: python3 gf/ci/guide-check.py "$RUNNER_TEMP/screenshots"
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@v4
