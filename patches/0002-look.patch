@@ -699,7 +699,7 @@ index 84712ea..84d6609 100644
              Spacer(minLength: 0)
          }
 diff --git a/Lume/Views/LiveTV/EPG/EPGProgramRows.swift b/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
-index 4ab49c5..063b222 100644
+index 4ab49c5..7925582 100644
 --- a/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
 @@ -166,6 +166,9 @@ struct EPGProgramStrip: View, Equatable {
@@ -717,7 +717,7 @@ index 4ab49c5..063b222 100644
                  canReplay: canReplay(cell)
              )
 +            #if GF_DEMO
-+            // ci/guide-check.py: where the focused programme sits before it grows (read again when focus arrives)
++            // ci/guide-check.py: where the focused programme is drawn, grown (read again when focus arrives)
 +            .onGeometryChange(for: CGRect.self) { focused ? $0.frame(in: .global) : .null } action: { frame in
 +                if !frame.isNull { GFDemo.logFocusedProgramme(frame, scale: scale) }
 +            }

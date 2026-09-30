@@ -45,7 +45,7 @@
             log("guide geometry: " + fields.map { "\($0.0)=\($0.1)" }.joined(separator: " "))
         }
 
-        /// For ci/guide-check.py: the focused programme's frame on screen before it grows, and how much it grows.
+        /// For ci/guide-check.py: the focused programme's frame on screen as drawn (grown by `scale`).
         static func logFocusedProgramme(_ frame: CGRect, scale: CGFloat) {
             log("focused programme: x=\(frame.minX) y=\(frame.minY) w=\(frame.width) h=\(frame.height) scale=\(scale)")
         }

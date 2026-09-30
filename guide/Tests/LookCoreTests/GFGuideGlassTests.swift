@@ -157,7 +157,7 @@ struct GFGuideGlassTests {
     @Test func `a focused programme grows by Lume's 4 percent, but never over the gap to its neighbour`() {
         // Georgs on build 9: a focused five-hour programme spread 75 points over the tile before it
         #expect(GFGuideGlass.focusScale(width: 200, rowSpacing: 14) == 1.04)
-        #expect(GFGuideGlass.focusScale(width: 3850, rowSpacing: 14) == 1 + 12 / 3850)
+        #expect(GFGuideGlass.focusScale(width: 3850, rowSpacing: 14) == 1 + 12.0 / 3850)
         #expect(GFGuideGlass.focusScale(width: 200, rowSpacing: 4) == 1.01)
         #expect(GFGuideGlass.focusScale(width: 0, rowSpacing: 14) == 1)
         for width: CGFloat in [100, 300, 1000, 3850, 10000] {

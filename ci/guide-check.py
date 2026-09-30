@@ -83,13 +83,15 @@ def under_ok(left_lines, control_lines):
     return True, "nothing under the panel's left half (%.2f, beside it %.2f)" % (left, control)
 
 
-def first_row_ok(edges, fade):
+def first_row_ok(edges, fade, expected=None):
     found = [e for e in edges if e is not None]
     if not found:
         return False, "no row found below the ruler"
     top = statistics.median(found)
     if top < fade + 1:
         return False, "the first row starts %.1f points down, inside the %.0f-point fade" % (top, fade)
+    if expected is not None and abs(top - expected) > 1.5:
+        return False, "the first row starts %.1f points down, not %.0f" % (top, expected)
     return True, "the first row starts %.1f points down, below the %.0f-point fade" % (top, fade)
 
 
@@ -137,13 +139,24 @@ def first_row_lines(g):
     return [(_px(g["clear"] + d, s), y0, _px(g["clear"] + d, s), y1) for d in (40, 120, 200)]
 
 
+def focus_lines(f, scale):
+    """Down the gap just left of the focused programme as drawn (grown), and down the programme itself: the brightest
+    pixel of each line counts, so the programme's own text never decides it."""
+    before = (_px(f["x"] - 3, scale), _px(f["y"] + 7, scale), _px(f["x"] - 3, scale), _px(f["y"] + f["h"] - 7, scale))
+    inside = (_px(f["x"] + 30, scale), _px(f["y"] + 10, scale), _px(f["x"] + 30, scale),
+              _px(f["y"] + f["h"] - 10, scale))
+    return before, inside
+
+
 def run_checks(out, sample):
     """[(check, ok, detail)]. `sample(png, lines)` gives the brightness along each line."""
     logs = os.path.join(out, "logs")
     results = []
 
     def geometry(shot):
-        return last_fields(os.path.join(logs, shot + ".err"), GEOMETRY)
+        g = last_fields(os.path.join(logs, shot + ".err"), GEOMETRY)
+        # no screen scale, no pixels: a check measured at (0, 0) would pass on anything
+        return g if g is not None and g.get("scale", 0) > 0 else None
 
     def png(shot):
         return os.path.join(out, shot + ".png")
@@ -151,7 +164,7 @@ def run_checks(out, sample):
     shot = "iphone-guide-dark"
     g = geometry(shot)
     if g is None:
-        results.append(("beside the panel (%s)" % shot, False, "no guide geometry logged"))
+        results.append(("beside the panel (%s)" % shot, False, "no guide geometry or screen scale logged"))
     else:
         lines = strip_lines(g)
         results.append(("beside the panel (%s)" % shot,) + (strip_ok(sample(png(shot), lines)) if lines
@@ -160,7 +173,7 @@ def run_checks(out, sample):
     for shot in ("iphone-guide-under-dark", "tv-guide-under"):
         g = geometry(shot)
         if g is None:
-            results.append(("under the panel (%s)" % shot, False, "no guide geometry logged"))
+            results.append(("under the panel (%s)" % shot, False, "no guide geometry or screen scale logged"))
             continue
         left, control = under_lines(g)
         measured = sample(png(shot), left + control)
@@ -169,14 +182,15 @@ def run_checks(out, sample):
     for shot in ("iphone-guide-dark", "tv-guide-channel"):
         g = geometry(shot)
         if g is None:
-            results.append(("first row (%s)" % shot, False, "no guide geometry logged"))
+            results.append(("first row (%s)" % shot, False, "no guide geometry or screen scale logged"))
             continue
         lines = first_row_lines(g)
         edges = []
         for (x0, y0, _, _), values in zip(lines, sample(png(shot), lines)):
             i = first_edge(values) if values else None
             edges.append(None if i is None else (y0 + i) / g["scale"] - g["guideY"])
-        results.append(("first row (%s)" % shot,) + first_row_ok(edges, g["fade"]))
+        results.append(("first row (%s)" % shot,)
+                       + first_row_ok(edges, g["fade"], expected=g["room"] + g["rowSpacing"] / 2))
 
     shot = "tv-guide-long"
     g = geometry(shot)
@@ -184,15 +198,12 @@ def run_checks(out, sample):
     if g is None or f is None:
         results.append(("focused long programme (%s)" % shot, False, "no geometry or focus logged"))
     else:
-        s = g["scale"]
-        y = _px(f["y"] + f["h"] / 2, s)
-        points = [(_px(f["x"] - 8, s), y, _px(f["x"] - 8, s), y), (_px(f["x"] + 30, s), y, _px(f["x"] + 30, s), y)]
-        measured = sample(png(shot), points)
+        measured = sample(png(shot), list(focus_lines(f, g["scale"])))
         if not all(measured):
             results.append(("focused long programme (%s)" % shot, False, "no pixels measured"))
         else:
             results.append(("focused long programme (%s)" % shot,)
-                           + focus_ok(measured[0][0], measured[1][0], f["w"]))
+                           + focus_ok(max(measured[0]), max(measured[1]), f["w"]))
     return results
 
 

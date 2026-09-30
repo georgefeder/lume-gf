@@ -76,6 +76,16 @@ class CheckTests(unittest.TestCase):
         ok, _ = gc.first_row_ok([4.0, 3.7, 40.0], fade=10)
         self.assertFalse(ok)
 
+    def test_a_first_row_far_below_where_it_belongs_fails(self):
+        # the room above the first row added twice would still be "below the fade"
+        ok, detail = gc.first_row_ok([28.0, 28.0, 28.0], fade=10, expected=14)
+        self.assertFalse(ok)
+        self.assertIn("14", detail)
+
+    def test_a_first_row_where_it_belongs_passes(self):
+        ok, _ = gc.first_row_ok([14.0, 13.3, 14.7], fade=10, expected=14)
+        self.assertTrue(ok)
+
     def test_no_row_found_fails(self):
         ok, _ = gc.first_row_ok([None, None, None], fade=10)
         self.assertFalse(ok)
@@ -121,7 +131,31 @@ class PlanTests(unittest.TestCase):
             self.assertGreater(x0, 130 * 3)
 
 
+class FocusPlanTests(unittest.TestCase):
+    def test_the_focus_is_measured_just_left_of_the_tile_and_inside_it_top_to_bottom(self):
+        # the tile's text must not decide it (the reviewer: the row centre hit the start time's digits)
+        f = gc.parse_fields(FOCUSED.split(":", 1)[1])
+        before, inside = gc.focus_lines(f, scale=2.0)
+        self.assertEqual(before[0], before[2])
+        self.assertEqual(inside[0], inside[2])
+        self.assertEqual(before[0], (900 - 3) * 2)
+        self.assertEqual(inside[0], (900 + 30) * 2)
+        self.assertEqual((before[1], before[3]), ((300 + 7) * 2, (300 + 116 - 7) * 2))
+        self.assertEqual((inside[1], inside[3]), ((300 + 10) * 2, (300 + 116 - 10) * 2))
+
+
 class MainTests(unittest.TestCase):
+    def test_a_missing_screen_scale_is_a_failure(self):
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "logs"))
+        with open(os.path.join(d, "logs", "iphone-guide-dark.err"), "w") as f:
+            f.write(GEOMETRY.replace("scale=3.0", "scale=0.0") + "\n")
+        results = dict((check, (ok, detail)) for check, ok, detail in
+                       gc.run_checks(d, sample=lambda png, lines: [[0] * 50 for _ in lines]))
+        ok, detail = results["beside the panel (iphone-guide-dark)"]
+        self.assertFalse(ok)
+        self.assertIn("scale", detail)
+
     def test_missing_pictures_and_logs_are_failures_not_passes(self):
         d = tempfile.mkdtemp()
         os.makedirs(os.path.join(d, "logs"))

@@ -104,21 +104,24 @@ struct GFGuideEdgeMask: View {
     var underPanel: GFGuideGlass.UnderPanel?
 
     var body: some View {
+        // on into the side margins, where the programmes run on (the Apple TV's overscan; the guide's leading edge is
+        // beside the category list, never in a margin, so the fade under the panel keeps its place). The channel rows
+        // get no second mask: Lume found every extra layer in the Apple TV's scrolling.
+        if let underPanel {
+            fades
+                .mask(alignment: .leading) { GFGuideUnderPanelFade(fade: underPanel) }
+                .ignoresSafeArea(.container, edges: .horizontal)
+        } else {
+            fades.ignoresSafeArea(.container, edges: .horizontal)
+        }
+    }
+
+    private var fades: some View {
         VStack(spacing: 0) {
             LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: max(0, top))
             Rectangle().fill(.black)
             LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: max(0, bottom))
         }
-        .mask(alignment: .leading) {
-            if let underPanel {
-                GFGuideUnderPanelFade(fade: underPanel)
-            } else {
-                Rectangle()
-            }
-        }
-        // on into the side margins, where the programmes run on (the Apple TV's overscan; the guide's leading edge is
-        // beside the category list, never in a margin, so the fade under the panel keeps its place)
-        .ignoresSafeArea(.container, edges: .horizontal)
     }
 }
 

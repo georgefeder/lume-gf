@@ -32,8 +32,14 @@ let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
 guard drawn else { fail("cannot draw \(arguments[1])") }
 
 func luma(_ x: Int, _ y: Int) -> Int {
-    let i = (min(max(y, 0), height - 1) * width + min(max(x, 0), width - 1)) * 4
-    return Int((0.299 * Double(pixels[i]) + 0.587 * Double(pixels[i + 1]) + 0.114 * Double(pixels[i + 2])).rounded())
+    // a line off the picture is a mistake in the check, not something to measure quietly at the edge
+    guard (0 ..< width).contains(x), (0 ..< height).contains(y) else { fail("(\(x), \(y)) is off the picture") }
+    // in small steps: as one expression the type checker gives up (CI, Xcode 26)
+    let i: Int = (y * width + x) * 4
+    let red: Double = 0.299 * Double(pixels[i])
+    let green: Double = 0.587 * Double(pixels[i + 1])
+    let blue: Double = 0.114 * Double(pixels[i + 2])
+    return Int((red + green + blue).rounded())
 }
 
 for spec in arguments.dropFirst(2) {
