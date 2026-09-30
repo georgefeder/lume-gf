@@ -1,0 +1,59 @@
+Lume GF: a channel change closes the old stream before the next one opens.
+KSMEPlayer.replace hands the new item the one it replaces; the new item's open waits (at most 1.5 s) until the old
+item's close operation has closed its input, so two TVs zapping on a two-connection account never wait for each other.
+Test: LumeTests GFZapTests (local stream server). Made against KSPlayer bdfa2da (deps/KSPlayer/REVISION).
+
+diff --git a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+index 5d539f3..ab12128 100644
+--- a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
++++ b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+@@ -316,9 +316,12 @@ extension KSMEPlayer: MediaPlayerProtocol {
+ 
+     public func replace(url: URL, options: KSOptions) {
+         KSLog("replaceUrl \(self)")
++        // Lume GF: the next item opens only after this one has closed its input
++        let replaced = playerItem
+         shutdown()
+         playerItem.delegate = nil
+         playerItem = MEPlayerItem(url: url, options: options)
++        playerItem.replacedItem = replaced
+         if options.videoDisable {
+             videoOutput = nil
+         } else if videoOutput == nil {
+diff --git a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
+index 5c52790..00df390 100644
+--- a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
++++ b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
+@@ -23,6 +23,11 @@ public final class MEPlayerItem: Sendable {
+     private var openOperation: BlockOperation?
+     private var readOperation: BlockOperation?
+     private var closeOperation: BlockOperation?
++    /// Lume GF: signalled once this item's input is closed (the end of `shutdown()`'s close operation).
++    private let inputClosed = DispatchSemaphore(value: 0)
++    /// Lume GF: the item this one replaces (`KSMEPlayer.replace`). It closes its input before this one opens, so a
++    /// channel change never holds two connections to the server at once; waited for at most 1.5 s.
++    var replacedItem: MEPlayerItem?
+     private var seekingCompletionHandler: ((Bool) -> Void)?
+     // 没有音频数据可以渲染
+     private var isAudioStalled = true
+@@ -616,6 +621,11 @@ extension MEPlayerItem: MediaPlayback {
+             guard let self else { return }
+             Thread.current.name = (self.operationQueue.name ?? "") + "_open"
+             Thread.current.stackSize = KSOptions.stackSize
++            // Lume GF: one connection at a time — the replaced item closes its input first (at most 1.5 s)
++            if let replaced = self.replacedItem {
++                self.replacedItem = nil
++                _ = replaced.inputClosed.wait(timeout: .now() + 1.5)
++            }
+             self.openThread()
+         }
+         openOperation?.queuePriority = .veryHigh
+@@ -646,6 +656,8 @@ extension MEPlayerItem: MediaPlayback {
+             self.formatCtx?.pointee.interrupt_callback.callback = nil
+             avformat_close_input(&self.formatCtx)
+             avformat_close_input(&self.outputFormatCtx)
++            // Lume GF: the input is closed; the item replacing this one may open now
++            self.inputClosed.signal()
+             self.duration = 0
+             self.closeOperation = nil
+             self.operationQueue.cancelAllOperations()
