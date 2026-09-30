@@ -3,7 +3,8 @@
 set -u
 CI=$(cd "$(dirname "$0")" && pwd); T=$(mktemp -d); trap 'rm -rf "$T"' EXIT; fails=0
 ok() { echo "ok   $1"; }; no() { echo "FAIL $1"; fails=$((fails + 1)); }
-mkdir -p "$T/bin" "$T/Lume/Lume.xcodeproj"; LOG="$T/log"; : > "$LOG"; DEAD="$T/dead"; export LOG DEAD
+mkdir -p "$T/bin" "$T/Lume/Lume.xcodeproj"; LOG="$T/log"; : > "$LOG"; DEAD="$T/dead"; FLASH="$T/flash"
+export LOG DEAD FLASH
 cat > "$T/bin/xcodebuild" <<'EOF'
 #!/bin/sh
 echo "xcodebuild $*" >> "$LOG"
@@ -33,6 +34,7 @@ cat > "$T/bin/swift" <<'EOF'
 #!/bin/sh
 echo "swift $*" >> "$LOG"
 mkdir -p "$3" && echo "frame,seconds,luma" > "$3/luma.csv"
+if [ -e "$FLASH" ]; then printf '0,0,0.94\n1,0.1,0.09\n2,0.2,0.53\n3,0.3,0.01\n' >> "$3/luma.csv"; fi
 EOF
 chmod +x "$T/bin/xcodebuild" "$T/bin/xcrun" "$T/bin/plutil" "$T/bin/swift"
 out=$(PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_FILM_SECONDS=0 GF_DERIVED_DATA="$T/dd" GF_SPM="$T/spm" \
@@ -64,6 +66,8 @@ grep -qF "simctl io IPHONE-1 recordVideo" "$LOG" \
   && ok "opening a channel in light mode is filmed" || no "no film of a channel opening"
 [ -f "$T/out/film-iphone-open-light/luma.csv" ] && [ -f "$T/out/film-iphone-open-lightsetting/luma.csv" ] \
   && ok "the films' frames and brightness are kept" || no "film frames missing"
+printf '%s' "$out" | grep -q "film-check: film-iphone-open-light: " && ok "each film is checked for a flash" \
+  || no "films not checked"
 grep -qE "exportArchive| archive " "$LOG" && no "must never archive or upload" || ok "never archives or uploads"
 printf '%s' "$out" | grep -q "not running" && no "a running app must not be reported gone ($out)" || ok "a running app is photographed"
 grep -qF -- "--stdout=$T/out/logs/iphone-guide-dark.out" "$LOG" && ok "the app's own output is kept with the pictures" \
@@ -71,6 +75,12 @@ grep -qF -- "--stdout=$T/out/logs/iphone-guide-dark.out" "$LOG" && ok "the app's
 # a freshly booted iPhone shows first-boot notices (the Apple Intelligence banner covered a picture once)
 printf '%s' "$out" | grep -q "screenshots: letting the iPhone settle" && ok "the iPhone settles before its pictures" \
   || no "no settling after boot"
+# a film that flashes fails the job (after all pictures are taken)
+FLASH="$T/flash"; export FLASH; touch "$FLASH"
+out=$(PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_FILM_SECONDS=0 GF_DERIVED_DATA="$T/dd" \
+  sh "$CI/screenshots.sh" "$T/Lume" "$T/out3" 2>&1) && no "a flash must fail the job" || ok "a flash fails the job"
+[ -f "$T/out3/tv-list.png" ] && ok "every picture is still taken" || no "pictures missing after a flash"
+rm -f "$FLASH"
 touch "$DEAD"; : > "$LOG"
 out=$(HOME="$T/home" PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_FILM_SECONDS=0 GF_DERIVED_DATA="$T/dd" \
   sh "$CI/screenshots.sh" "$T/Lume" "$T/out2" 2>&1)

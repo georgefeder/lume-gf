@@ -641,6 +641,68 @@ index a7a564a..9234bc6 100644
  
          var body: some View {
              HStack(spacing: 0) {
+diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
+index 426e4e7..dc68d52 100644
+--- a/Lume/Views/Player/AVPlayerEngineView.swift
++++ b/Lume/Views/Player/AVPlayerEngineView.swift
+@@ -162,7 +162,7 @@ struct AVPlayerEngineView: View {
+                 .transition(.opacity)
+             }
+         }
+-        .preferredColorScheme(.dark)
++        .gfPlayerContentDark() // Lume GF: dark without switching the app (see GFPlayerAppearance)
+         .onAppear {
+             coordinator.onTime = { current in
+                 if !isSeeking, current.isFinite { clock.current = current }
+diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
+index a0308c8..7448fab 100644
+--- a/Lume/Views/Player/FullScreenPlayerView.swift
++++ b/Lume/Views/Player/FullScreenPlayerView.swift
+@@ -241,7 +241,8 @@ struct FullScreenPlayerView: View {
+         .statusBarHidden(true)
+         #endif
+         .persistentSystemOverlays(.hidden)
+-        .preferredColorScheme(.dark)
++        // Lume GF: only the player's screen is dark (iPhone/iPad: no dark flash of the app before a channel opens)
++        .gfPlayerScreenDark()
+         .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }
+         // Synchronous on purpose, and ahead of the `.task` below: the engine
+         // coordinators report `beginStartup` / `noteEngineFallback` from their
+diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
+index b2068ee..f451739 100644
+--- a/Lume/Views/Player/KSPlayerEngineView.swift
++++ b/Lume/Views/Player/KSPlayerEngineView.swift
+@@ -299,7 +299,7 @@ struct KSPlayerEngineView: View {
+                 }
+             }
+             .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
+-            .preferredColorScheme(.dark)
++            .gfPlayerContentDark() // Lume GF: dark without switching the app (see GFPlayerAppearance)
+             .onAppear {
+                 engine.attach(coordinator: coordinator)
+                 attachNowPlayingTransport()
+@@ -486,7 +486,7 @@ struct KSPlayerEngineView: View {
+                 }
+             }
+             .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
+-            .preferredColorScheme(.dark)
++            .gfPlayerContentDark() // Lume GF: dark without switching the app (see GFPlayerAppearance)
+             .onAppear {
+                 attachNowPlayingTransport()
+                 scheduleHide()
+diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
+index 4541e80..cf514f7 100644
+--- a/Lume/Views/Player/LumeEngineEngineView.swift
++++ b/Lume/Views/Player/LumeEngineEngineView.swift
+@@ -183,7 +183,7 @@ struct LumeEngineEngineView: View {
+         .subtitleSearch(isPresented: $isSearchingSubtitles, media: media) { subtitle in
+             coordinator.loadExternalSubtitle(subtitle)
+         }
+-        .preferredColorScheme(.dark)
++        .gfPlayerContentDark() // Lume GF: dark without switching the app (see GFPlayerAppearance)
+         .onAppear {
+             wireCoordinator()
+             coordinator.startupTimeout = usesQuickStartupTimeout ? 15 : 40
 diff --git a/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift b/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift
 index b58f52e..9128ed9 100644
 --- a/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift
@@ -656,6 +718,20 @@ index b58f52e..9128ed9 100644
  
                              Spacer(minLength: 0)
  
+diff --git a/Lume/Views/Player/MultiView/MultiViewScreen.swift b/Lume/Views/Player/MultiView/MultiViewScreen.swift
+index e24eb20..08ec3ca 100644
+--- a/Lume/Views/Player/MultiView/MultiViewScreen.swift
++++ b/Lume/Views/Player/MultiView/MultiViewScreen.swift
+@@ -204,7 +204,8 @@ struct MultiViewScreen: View {
+             .statusBarHidden(true)
+         #endif
+             .persistentSystemOverlays(.hidden)
+-            .preferredColorScheme(.dark)
++            // Lume GF: only the Multi-View screen is dark (iPhone/iPad: no dark flash of the app as it opens)
++            .gfPlayerScreenDark()
+             .task {
+                 // The tiles' QoE reports would be nonsense against a summary that
+                 // models one stream at a time.
 diff --git a/Lume/Views/Player/TVChannelBrowserOverlay.swift b/Lume/Views/Player/TVChannelBrowserOverlay.swift
 index 58eb4b3..773ba05 100644
 --- a/Lume/Views/Player/TVChannelBrowserOverlay.swift
@@ -688,6 +764,19 @@ index 4fe27bd..af77f1d 100644
                      Text(nowTitle ?? String(localized: "Live"))
                          .font(.system(size: 19))
                          .foregroundStyle(.white.opacity(0.6))
+diff --git a/Lume/Views/Player/VLCPlayerEngineView.swift b/Lume/Views/Player/VLCPlayerEngineView.swift
+index a2262dc..7d73f04 100644
+--- a/Lume/Views/Player/VLCPlayerEngineView.swift
++++ b/Lume/Views/Player/VLCPlayerEngineView.swift
+@@ -182,7 +182,7 @@ struct VLCPlayerEngineView: View {
+         .subtitleSearch(isPresented: $isSearchingSubtitles, media: media) { subtitle in
+             coordinator.loadExternalSubtitle(subtitle)
+         }
+-        .preferredColorScheme(.dark)
++        .gfPlayerContentDark() // Lume GF: dark without switching the app (see GFPlayerAppearance)
+         .onAppear {
+             coordinator.onTime = { current in
+                 if !isSeeking, current.isFinite { clock.current = current }
 diff --git a/Lume/Views/Settings/EPGSettingsView.swift b/Lume/Views/Settings/EPGSettingsView.swift
 index b7ca9f0..c017d62 100644
 --- a/Lume/Views/Settings/EPGSettingsView.swift

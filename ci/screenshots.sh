@@ -8,7 +8,7 @@ LUME="${1:?usage: screenshots.sh LUME_DIR OUT_DIR}"; OUT="${2:?usage: screenshot
 CI=$(cd "$(dirname "$0")" && pwd); LUME=$(cd "$LUME" && pwd); mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_SHOT_WAIT:-15}"
 SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"
-LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0  # the app's own output, kept with the pictures
+LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0  # the app's own output, kept with the pictures
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
 
@@ -56,6 +56,7 @@ film() {  # $1 = simulator id, $2 = bundle id, $3 = name, rest = launch argument
   # every 1/15 s a small frame and its brightness (luma.csv): a flash shows as a dip
   if swift "$CI/video-frames.swift" "$LOGS/$NAME.mp4" "$OUT/film-$NAME" 15 >&2; then
     echo "screenshots: film-$NAME"
+    python3 "$CI/film-check.py" "$OUT/film-$NAME" || FLASHED=1
   else
     echo "screenshots: film-$NAME: no frames"
   fi
@@ -99,3 +100,5 @@ shoot "$TV" "$BID" tv-guide-bottom -GFDemo guide -GFDemoMoves down,down,down,dow
 shoot "$TV" "$BID" tv-list -GFDemo list
 [ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true
 echo "screenshots: done"
+# the dark flash Georgs saw on opening a channel must not come back
+[ "$FLASHED" -eq 0 ] || { echo "screenshots: the screen flashed when a channel opened (see film-*/luma.csv)"; exit 1; }
