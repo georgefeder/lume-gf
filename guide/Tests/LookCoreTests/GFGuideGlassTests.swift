@@ -111,7 +111,7 @@ struct GFGuideGlassTests {
 
     @Test func `a rounded corner reaches down less the further in you go`() {
         #expect(GFGuideGlass.cornerIntrusion(radius: 36, inset: 0) == 36)
-        #expect(abs(GFGuideGlass.cornerIntrusion(radius: 36, inset: 8) - 13.39) < 0.01)
+        #expect(abs(GFGuideGlass.cornerIntrusion(radius: 36, inset: 8) - 13.37) < 0.01)
         #expect(GFGuideGlass.cornerIntrusion(radius: 36, inset: 40) == 0)
     }
 

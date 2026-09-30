@@ -113,7 +113,7 @@ index 98ede44..9a5e17a 100644
      }
  
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
-index 9eb3ec6..270ccb0 100644
+index 9eb3ec6..af3502c 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
 @@ -147,13 +147,14 @@ struct EPGChannelCell: View {
@@ -134,23 +134,25 @@ index 9eb3ec6..270ccb0 100644
                  Image(systemName: "clock.arrow.circlepath")
                      .font(catchupFont)
                      .foregroundStyle(catchupColor)
-@@ -162,18 +163,20 @@ struct EPGChannelCell: View {
+@@ -162,18 +163,21 @@ struct EPGChannelCell: View {
          }
          .padding(.horizontal, 12)
          #if os(tvOS)
 +            // Lume GF: rows sit on the glass sidebar; only the focused channel keeps Lume's white highlight, inset
-+            // inside the sidebar
++            // inside the sidebar and as tall as the programme tiles beside it (Lume leaves the row gap around those)
              .foregroundStyle(isFocused ? .black : .white)
 -            .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
 +            .frame(width: GFGuideGlass.tvHighlightWidth(columnWidth: metrics.channelColumnWidth),
-+                   height: metrics.rowHeight, alignment: .leading)
++                   height: GFGuideGlass.tileHeight(rowHeight: metrics.rowHeight, rowSpacing: metrics.rowSpacing),
++                   alignment: .leading)
              .background(
 -                isFocused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.06)),
+-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
 +                isFocused ? AnyShapeStyle(.white) : AnyShapeStyle(.clear),
-                 in: RoundedRectangle(cornerRadius: 14, style: .continuous)
++                in: RoundedRectangle(cornerRadius: metrics.blockCornerRadius, style: .continuous)
              )
 +            .padding(.leading, GFGuideGlass.tvHighlightLeading)
-+            .frame(width: metrics.channelColumnWidth, alignment: .leading)
++            .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
          #else
 +            // Lume GF: rows sit on the glass sidebar (no opaque background, no hairline)
              .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
@@ -161,7 +163,7 @@ index 9eb3ec6..270ccb0 100644
          #endif
      }
  
-@@ -293,10 +296,14 @@ struct EPGProgramBlockView: View {
+@@ -293,10 +297,14 @@ struct EPGProgramBlockView: View {
              // closure re-runs on geometry change without invalidating the
              // block's body, where observing the guide's per-frame offset would
              // re-render every realized cell — the cost the grid is built around.
@@ -178,7 +180,7 @@ index 9eb3ec6..270ccb0 100644
                          blockWidth: proxy.size.width,
                          inset: inset
                      )
-@@ -349,7 +356,8 @@ struct EPGProgramBlockView: View {
+@@ -349,7 +357,8 @@ struct EPGProgramBlockView: View {
                  // and translucent surfaces that sit lightly on the dark backdrop,
                  // matching the channel list rather than a heavy opaque grid.
                  if isFocused {
@@ -189,7 +191,7 @@ index 9eb3ec6..270ccb0 100644
                      shape.fill(.white.opacity(0.16))
                          .overlay {
 diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-index 7c51648..0bf0ca8 100644
+index 7c51648..ebf9c1b 100644
 --- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 @@ -27,12 +27,12 @@ struct EPGRulerStrip: View {
@@ -221,23 +223,24 @@ index 7c51648..0bf0ca8 100644
              .fixedSize()
              .alignmentGuide(.leading) { $0.width / 2 }
      }
-@@ -88,12 +89,8 @@ struct EPGFrozenColumn: View {
+@@ -88,12 +89,10 @@ struct EPGFrozenColumn: View {
                  .equatable()
                  .offset(y: -sync.mirror.y)
              }
--            .clipped()
++            // Lume GF: the channel rows are clipped to the column and to the glass sidebar's outline (the scroller
++            // puts the glass behind)
+             .clipped()
 -        #if !os(tvOS)
 -            // The channel cards on tvOS already read as a separate rail, so
 -            // a vertical rule would only add visual weight.
 -            .overlay(alignment: .trailing) { Rectangle().fill(.quaternary).frame(width: 1) }
 -        #endif
-+            // Lume GF: the channel rows are clipped to the glass sidebar's outline (the scroller puts the glass behind)
 +            .clipShape(GFGuideSidebarShape())
      }
  }
  
 diff --git a/Lume/Views/LiveTV/EPG/EPGGrid.swift b/Lume/Views/LiveTV/EPG/EPGGrid.swift
-index 9177710..23d0bad 100644
+index 9177710..4b28293 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGrid.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGrid.swift
 @@ -29,6 +29,12 @@ struct EPGGrid: View, Equatable {
@@ -288,7 +291,7 @@ index 9177710..23d0bad 100644
              .frame(minHeight: viewportHeight, alignment: .topLeading)
          }
          .background {
-@@ -73,11 +93,33 @@ struct EPGGrid: View, Equatable {
+@@ -73,20 +93,45 @@ struct EPGGrid: View, Equatable {
                      .onChange(of: geo.size.height) { viewportHeight = $1 }
              }
          }
@@ -315,19 +318,24 @@ index 9177710..23d0bad 100644
 +            let clamped = GFGuideGlass.mirrorOffset(new.offset, scrollInsetLeading: new.insetLeading)
              sync.offset = clamped
 -            sync.viewport = new.size
+-            #if !os(tvOS)
+-                // Touch scrolling has no known target — the panes mirror the
+-                // measured offset per frame. tvOS mirrors per programmatic
+-                // move instead (see EPGGridScroller.requestScroll).
+-                sync.mirror = clamped
 +            // Lume GF: the part the viewer reads — right of the glass sidebar, above the bottom fade, in the guide
 +            sync.viewport = GFGuideGlass.visibleSize(measured: new.size, guideHeight: guideHeight, pad: contentPad,
 +                                                     bottomFade: bottomRoom)
 +            #if GF_DEMO
 +                FileHandle.standardError.write(Data(("GFDemo grid: size \(new.size), inset below \(new.insetBottom), "
 +                        + "guide \(guideHeight), offset \(new.offset), readable \(sync.viewport)\n").utf8))
-+            #endif
-             #if !os(tvOS)
-                 // Touch scrolling has no known target — the panes mirror the
-                 // measured offset per frame. tvOS mirrors per programmatic
-@@ -85,8 +127,11 @@ struct EPGGrid: View, Equatable {
-                 sync.mirror = clamped
              #endif
++            // Touch scrolling has no known target — the panes mirror the
++            // measured offset per frame. Lume GF: the Apple TV too — its one
++            // animated write per move (EPGGridScroller.requestScroll) was often
++            // not redrawn in the Live TV screen, so the channel column and ruler
++            // lagged the programmes; per frame they move as one.
++            sync.mirror = clamped
              let window = EPGRealizeWindow.around(
 -                offset: clamped.x,
 -                viewport: new.width,
@@ -374,7 +382,7 @@ index 9177710..23d0bad 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 05a5f0c..5d7a7f1 100644
+index 05a5f0c..58be91f 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -46,6 +46,9 @@ struct EPGGridScroller: View {
@@ -505,7 +513,7 @@ index 05a5f0c..5d7a7f1 100644
              onPlay: { row, cell in playCell(row, cell) },
              onShowDetails: { row, cell in
                  selection = EPGSelection(id: cell.id, stream: row.stream, cell: cell)
-@@ -209,6 +254,9 @@ struct EPGGridScroller: View {
+@@ -209,24 +254,16 @@ struct EPGGridScroller: View {
      /// both surfaces together without per-frame main-thread work.
      private func requestScroll(to point: CGPoint, animated: Bool) {
          let clamped = CGPoint(x: max(0, point.x), y: max(0, point.y))
@@ -515,28 +523,27 @@ index 05a5f0c..5d7a7f1 100644
          scrollRequest = EPGScrollRequest(
              token: (scrollRequest?.token ?? 0) + 1,
              point: clamped,
-@@ -219,6 +267,20 @@ struct EPGGridScroller: View {
-                 withAnimation(.easeOut(duration: 0.25)) {
-                     sync.mirror = clamped
-                 }
-+                // Lume GF: in the Live TV screen the animated move is sometimes not redrawn — the ruler stays where
-+                // the move began although its value is right. Once the move is over (unless another has begun), the
-+                // place is set again without animation: nothing to see when it was drawn, the redraw when it was not.
-+                let token = scrollRequest?.token
-+                Task { @MainActor in
-+                    try? await Task.sleep(for: .milliseconds(300))
-+                    guard scrollRequest?.token == token else { return }
-+                    var transaction = Transaction()
-+                    transaction.disablesAnimations = true
-+                    // one ulp off, so it is a change even if equal values were skipped; the same place to the eye
-+                    withTransaction(transaction) {
-+                        sync.mirror = CGPoint(x: clamped.x.nextUp, y: clamped.y)
-+                    }
-+                }
-             } else {
-                 var transaction = Transaction()
-                 transaction.disablesAnimations = true
-@@ -237,15 +299,18 @@ struct EPGGridScroller: View {
+             animated: animated
+         )
+-        #if os(tvOS)
+-            if animated {
+-                withAnimation(.easeOut(duration: 0.25)) {
+-                    sync.mirror = clamped
+-                }
+-            } else {
+-                var transaction = Transaction()
+-                transaction.disablesAnimations = true
+-                withTransaction(transaction) {
+-                    sync.mirror = clamped
+-                }
+-            }
+-        #endif
++        // Lume GF: the panes follow the grid's measured offset frame by frame on the Apple TV too (EPGGrid); Lume's
++        // animated mirror write per move is gone
+     }
+ 
+     @ViewBuilder
+@@ -237,15 +274,18 @@ struct EPGGridScroller: View {
              Button {
                  requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: sync.offset.y), animated: true)
              } label: {
@@ -556,7 +563,7 @@ index 05a5f0c..5d7a7f1 100644
          #endif
      }
  }
-@@ -289,7 +354,7 @@ struct EPGGridScroller: View {
+@@ -289,7 +329,7 @@ struct EPGGridScroller: View {
              // on — a single strip owns the whole grid's focus — so the hub's
              // long press raises them itself.
              .confirmationDialog(

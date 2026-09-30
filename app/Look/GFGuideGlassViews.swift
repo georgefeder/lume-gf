@@ -42,13 +42,17 @@ extension EPGChannelCell {
 /// guide's fade ends it). The glass is drawn in it and the channel rows are clipped to it, so a row scrolling up
 /// slides under the panel's top edge instead of showing beside its corner.
 nonisolated struct GFGuideSidebarShape: Shape {
+    /// The panel's top in the rect it is drawn in: the column's (above it on the Apple TV), or 0 where the view itself
+    /// already reaches up that far (the glass).
+    var top = GFGuideGlass.sidebarInsets(tv: GFGuideGlass.isTV).top
+
     func path(in rect: CGRect) -> Path {
         let tv = GFGuideGlass.isTV
         let insets = GFGuideGlass.sidebarInsets(tv: tv)
         let radius = GFGuideGlass.sidebarCornerRadius(tv: tv)
-        let panel = CGRect(x: rect.minX + insets.leading, y: rect.minY + insets.top,
+        let panel = CGRect(x: rect.minX + insets.leading, y: rect.minY + top,
                            width: max(0, rect.width - insets.leading - insets.trailing),
-                           height: max(0, rect.height - insets.top + radius))
+                           height: max(0, rect.height - top + radius))
         return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: panel)
     }
 }
@@ -57,7 +61,11 @@ nonisolated struct GFGuideSidebarShape: Shape {
 /// before iOS/tvOS 26). It runs on past the bottom edge, where the guide's fade ends it.
 struct GFGuideSidebarPanel: View {
     var body: some View {
-        Color.clear.glassEffectCompat(.regular, in: GFGuideSidebarShape())
+        let top = GFGuideGlass.sidebarInsets(tv: GFGuideGlass.isTV).top
+        Color.clear
+            .glassEffectCompat(.regular, in: GFGuideSidebarShape(top: max(0, top)))
+            // the view reaches up as far as its panel does (on the Apple TV above the first channel)
+            .padding(.top, min(0, top))
     }
 }
 
