@@ -141,7 +141,7 @@ jobs:
       - name: Screenshots (demo channels, iPhone and Apple TV)
         run: sh gf/ci/screenshots.sh Lume "$RUNNER_TEMP/screenshots"
         env:
-          GF_SHOT_EXPERIMENT: pill
+          GF_SHOT_EXPERIMENT: ruler
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@v4

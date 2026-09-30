@@ -189,29 +189,45 @@ index 9eb3ec6..270ccb0 100644
                      shape.fill(.white.opacity(0.16))
                          .overlay {
 diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-index 7c51648..0bf0ca8 100644
+index 7c51648..d145176 100644
 --- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-@@ -27,12 +27,12 @@ struct EPGRulerStrip: View {
+@@ -27,12 +27,29 @@ struct EPGRulerStrip: View {
              .frame(maxWidth: .infinity)
              .frame(height: metrics.headerHeight)
              .overlay(alignment: .leading) {
 -                ZStack(alignment: .topLeading) {
--                    EPGTimeRuler(timeline: timeline, metrics: metrics)
++                #if GF_DEMO
++                    if GFDemo.rulerStyle == "zstack" {
++                        // temporary experiment: Lume's original arrangement
++                        ZStack(alignment: .topLeading) {
++                            EPGTimeRuler(timeline: timeline, metrics: metrics)
++                            nowPill.offset(x: timeline.x(for: now))
++                        }
++                        .frame(width: timeline.totalWidth, alignment: .leading)
++                        .offset(x: -sync.mirror.x)
++                    } else {
++                        EPGTimeRuler(timeline: timeline, metrics: metrics)
++                            .overlay(alignment: .topLeading) { nowPill.offset(x: timeline.x(for: now)) }
++                            .frame(width: timeline.totalWidth, alignment: .leading)
++                            .offset(x: -sync.mirror.x)
++                    }
++                #else
++                    // Lume GF: the pill is an overlay; as a ZStack sibling its centring overhang widened the ruler and
++                    // moved every time half a pill right of the grid
+                     EPGTimeRuler(timeline: timeline, metrics: metrics)
 -                    nowPill.offset(x: timeline.x(for: now))
 -                }
 -                .frame(width: timeline.totalWidth, alignment: .leading)
 -                .offset(x: -sync.mirror.x)
-+                // Lume GF: the pill is an overlay; as a ZStack sibling its centring overhang widened the ruler and
-+                // moved every time half a pill right of the grid
-+                EPGTimeRuler(timeline: timeline, metrics: metrics)
-+                    .overlay(alignment: .topLeading) { nowPill.offset(x: timeline.x(for: now)) }
-+                    .frame(width: timeline.totalWidth, alignment: .leading)
-+                    .offset(x: -sync.mirror.x)
++                        .overlay(alignment: .topLeading) { nowPill.offset(x: timeline.x(for: now)) }
++                        .frame(width: timeline.totalWidth, alignment: .leading)
++                        .offset(x: -sync.mirror.x)
++                #endif
              }
              .clipped()
      }
-@@ -43,7 +43,8 @@ struct EPGRulerStrip: View {
+@@ -43,7 +60,8 @@ struct EPGRulerStrip: View {
              .foregroundStyle(.white)
              .padding(.horizontal, 7)
              .padding(.vertical, 2)
@@ -221,7 +237,7 @@ index 7c51648..0bf0ca8 100644
              .fixedSize()
              .alignmentGuide(.leading) { $0.width / 2 }
      }
-@@ -88,12 +89,8 @@ struct EPGFrozenColumn: View {
+@@ -88,12 +106,8 @@ struct EPGFrozenColumn: View {
                  .equatable()
                  .offset(y: -sync.mirror.y)
              }

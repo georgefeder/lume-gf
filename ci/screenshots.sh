@@ -74,11 +74,11 @@ shoot "$TV" "$BID" tv-guide-channel -GFDemo guide
 shoot "$TV" "$BID" tv-guide-programme -GFDemo guide -GFDemoMoves right
 shoot "$TV" "$BID" tv-guide-bottom -GFDemo guide -GFDemoMoves down,down,down,down,down,down,down,down,down,down,down,right
 shoot "$TV" "$BID" tv-list -GFDemo list
-if [ "${GF_SHOT_EXPERIMENT:-}" = pill ]; then  # temporary: which Now pill lets the Apple TV ruler follow a move
-  for STYLE in interactive tinted solid; do
-    for I in 1 2 3 4; do
-      shoot "$TV" "$BID" "x-tv-$STYLE-$I" -GFDemo guide -GFDemoMoves right -GFDemoPill "$STYLE"
-    done
+if [ "${GF_SHOT_EXPERIMENT:-}" = ruler ]; then  # temporary: what keeps the Apple TV ruler following a move
+  for I in 1 2 3 4; do
+    shoot "$TV" "$BID" "x-tv-now-$I" -GFDemo guide -GFDemoMoves right
+    shoot "$TV" "$BID" "x-tv-zstack-$I" -GFDemo guide -GFDemoMoves right -GFDemoRuler zstack
+    shoot "$TV" "$BID" "x-tv-alone-$I" -GFDemo guide -GFDemoMoves right -GFDemoAlone yes
   done
 fi
 [ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true
