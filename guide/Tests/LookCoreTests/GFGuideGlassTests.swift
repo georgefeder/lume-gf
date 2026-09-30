@@ -24,22 +24,37 @@ struct GFGuideGlassTests {
     }
 
     @Test func `the readable part leaves out the sidebar and the bottom fade`() {
-        let size = GFGuideGlass.visibleSize(measured: CGSize(width: 1500, height: 1000), scrollInset: 0, pad: 300,
+        // Apple TV, as logged by the screenshot build: the grid fills the guide
+        let size = GFGuideGlass.visibleSize(measured: CGSize(width: 1480, height: 952), guideHeight: 952, pad: 300,
+                                            bottomFade: 65)
+        #expect(size == CGSize(width: 1180, height: 887))
+    }
+
+    @Test func `the readable part ends at the guide's edge when the scroll view runs on below it`() {
+        // iPhone above a tab bar: the guide is 718 high to the screen's edge, its scroll view 818
+        let size = GFGuideGlass.visibleSize(measured: CGSize(width: 402, height: 818), guideHeight: 718, pad: 136,
+                                            bottomFade: 134)
+        #expect(size == CGSize(width: 266, height: 584))
+    }
+
+    @Test func `before the guide is measured the scroll view's height counts`() {
+        let size = GFGuideGlass.visibleSize(measured: CGSize(width: 1500, height: 1000), guideHeight: 0, pad: 300,
                                             bottomFade: 125)
         #expect(size == CGSize(width: 1200, height: 875))
     }
 
-    @Test func `the readable part leaves out what the scroll view runs on below the screen`() {
-        // iPhone above a tab bar: the scroll view reaches 99 points past the screen's edge and insets its content by as
-        // much; the guide above the tab bar is 718 high and fades over its last 135
-        let size = GFGuideGlass.visibleSize(measured: CGSize(width: 402, height: 817), scrollInset: 99, pad: 136,
-                                            bottomFade: 135)
-        #expect(size == CGSize(width: 266, height: 583))
+    @Test func `a short guide never gets a negative size`() {
+        #expect(GFGuideGlass.visibleSize(measured: CGSize(width: 100, height: 80), guideHeight: 80, pad: 300,
+                                         bottomFade: 125) == .zero)
     }
 
-    @Test func `a short guide never gets a negative size`() {
-        #expect(GFGuideGlass.visibleSize(measured: CGSize(width: 100, height: 80), scrollInset: 30, pad: 300,
-                                         bottomFade: 125) == .zero)
+    @Test func `the room under the last row makes up for a scroll view running on below the guide`() {
+        // the last row can always scroll up to the fade: the fade's room, plus the run-on, less the scroll view's own
+        #expect(GFGuideGlass.bottomPadding(bottomRoom: 65, scrollHeight: 952, guideHeight: 952, scrollInset: 0) == 65)
+        #expect(GFGuideGlass.bottomPadding(bottomRoom: 134, scrollHeight: 818, guideHeight: 718, scrollInset: 0) == 234)
+        #expect(GFGuideGlass.bottomPadding(bottomRoom: 134, scrollHeight: 916, guideHeight: 718, scrollInset: 98) == 234)
+        #expect(GFGuideGlass.bottomPadding(bottomRoom: 134, scrollHeight: 718, guideHeight: 718, scrollInset: 98) == 36)
+        #expect(GFGuideGlass.bottomPadding(bottomRoom: 30, scrollHeight: 718, guideHeight: 718, scrollInset: 98) == 0)
     }
 
     @Test func `the bottom fade covers the safe area and half a row`() {
