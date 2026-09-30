@@ -40,6 +40,25 @@ nonisolated enum GFGuideGlass {
         var offset: CGPoint
         var size: CGSize
         var insetBottom: CGFloat
+        /// iPhone in landscape: the room kept at the content's start, as far as the scroll view runs into the notch
+        /// margin; the content is drawn from there, not from the guide's edge.
+        var insetLeading: CGFloat
+    }
+
+    /// The guide's own coordinate space (its leading edge at the sidebar's): sticky titles measure from here, whatever
+    /// the scroll view's frame and insets.
+    static let spaceName = "gfGuide"
+
+    /// The grid content's leading padding: one sidebar-width in from the guide's edge, plus the room the scroll view
+    /// keeps where it runs on into a side margin, so the ruler's times stay level with the programmes.
+    static func gridContentPad(contentPad: CGFloat, scrollInsetLeading: CGFloat) -> CGFloat {
+        contentPad + max(0, scrollInsetLeading)
+    }
+
+    /// The offset the ruler and channel column mirror: Lume clamps a bounce past the grid's start, which sits at minus
+    /// the room kept on the left.
+    static func mirrorOffset(_ offset: CGPoint, scrollInsetLeading: CGFloat) -> CGPoint {
+        CGPoint(x: max(-max(0, scrollInsetLeading), offset.x), y: max(0, offset.y))
     }
 
     /// The part the viewer reads: right of the sidebar, above the bottom fade, within the guide (`guideHeight`, the
