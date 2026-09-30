@@ -57,6 +57,14 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.bottomPadding(bottomRoom: 30, scrollHeight: 718, guideHeight: 718, scrollInset: 98) == 0)
     }
 
+    @Test func `the safe area under the guide is measured from where it ends`() {
+        // inside the layer that runs under the tab bar SwiftUI reports no inset, so the guide measures it
+        #expect(GFGuideGlass.safeAreaBottom(guideMaxY: 874, safeMaxY: 791) == 83) // iPhone: to the tab bar's top
+        #expect(GFGuideGlass.safeAreaBottom(guideMaxY: 1080, safeMaxY: 1020) == 60) // Apple TV overscan
+        #expect(GFGuideGlass.safeAreaBottom(guideMaxY: 874, safeMaxY: 0) == 0) // not measured yet
+        #expect(GFGuideGlass.safeAreaBottom(guideMaxY: 700, safeMaxY: 791) == 0)
+    }
+
     @Test func `the bottom fade covers the safe area and half a row`() {
         #expect(GFGuideGlass.bottomFade(safeAreaBottom: 60, rowStride: 130) == 125) // Apple TV
         #expect(GFGuideGlass.bottomFade(safeAreaBottom: 83, rowStride: 72) == 119) // iPhone above a tab bar
