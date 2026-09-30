@@ -24,7 +24,7 @@ index 6591386..6ccbdcb 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index f1ab1c3..77166ee 100644
+index 5595641..a6b742d 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -32,11 +32,15 @@ struct LumeApp: App {
@@ -43,7 +43,7 @@ index f1ab1c3..77166ee 100644
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -302,6 +306,8 @@ struct LumeApp: App {
+@@ -325,6 +329,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
@@ -52,7 +52,7 @@ index f1ab1c3..77166ee 100644
                  }
                  .onChange(of: cloudSync.status.lastReconcile) {
                      // A reconcile may have pulled a PIN this device didn't have
-@@ -314,6 +320,7 @@ struct LumeApp: App {
+@@ -337,6 +343,7 @@ struct LumeApp: App {
                      SportsFollowService.shared.reload()
                  }
                  .onChange(of: scenePhase) { _, phase in
@@ -61,7 +61,7 @@ index f1ab1c3..77166ee 100644
                      cloudSync.handleScenePhaseChange(to: phase)
                      #if !os(macOS)
 diff --git a/Lume/Services/Network/XMLTVParser.swift b/Lume/Services/Network/XMLTVParser.swift
-index ae21bc4..d931e5b 100644
+index 2a4c0c0..f4a9e4d 100644
 --- a/Lume/Services/Network/XMLTVParser.swift
 +++ b/Lume/Services/Network/XMLTVParser.swift
 @@ -52,6 +52,31 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
@@ -97,10 +97,23 @@ index ae21bc4..d931e5b 100644
          currentText = ""
          if elementName == "programme" {
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
-index bfc60be..39b0689 100644
+index c62cd45..cfb9d73 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
 +++ b/Lume/Services/Sync/EPGSyncManager.swift
-@@ -35,26 +35,29 @@ actor EPGSyncManager {
+@@ -4,9 +4,9 @@
+ //
+ //  The dedicated EPG pipeline, split out of the playlist sync. It rebuilds the
+ //  whole `EPGListing` store from every enabled `EPGSource`: collect the channel
+-//  ids any live stream references, download every source's XMLTV file, and only
+-//  then bulk-delete the old listings once and stream-parse each file, inserting
+-//  only programmes whose channel a stream actually uses.
++//  ids any live stream references, bulk-delete the old listings once, then
++//  stream-parse each source's XMLTV file and insert only programmes whose
++//  channel a stream actually uses.
+ //
+ //  A channel is guided by exactly one source. Sources are walked oldest-first
+ //  and each claims the channels it carries; later sources are then confined to
+@@ -35,53 +35,29 @@ actor EPGSyncManager {
      /// Refreshes the guide from every enabled source. Returns `true` when at
      /// least one source synced successfully.
      @discardableResult
@@ -121,47 +134,88 @@ index bfc60be..39b0689 100644
              return false
          }
  
+-        // Download every source before touching the listings. Clearing first
+-        // left the guide and now/next blank for the whole transfer (a 73 MB
+-        // XMLTV file on a large provider), and empty until the next refresh
+-        // when the download failed or was cancelled — which is routine, since a
+-        // content sync cancels a background guide refresh.
+-        var downloads: [Download] = []
+-        for source in sources {
+-            if let download = await download(source) {
+-                downloads.append(download)
+-            }
+-        }
+-        defer {
+-            for download in downloads where download.isRemote {
+-                try? FileManager.default.removeItem(at: download.fileURL)
+-            }
+-        }
+-        guard !downloads.isEmpty, !Task.isCancelled else {
+-            for download in downloads {
+-                markStatus(download.source.id, .idle)
+-            }
+-            return false
+-        }
+-
 -        clearListings()
 +        // Lume GF: no clearListings(). Each source's new guide is applied as only-what-changed on top of the stored
 +        // one (GuideRefresher), so a failed or cut-off download never empties the guide.
  
          var anySucceeded = false
          var unclaimedChannelIDs = knownChannelIDs
-         for source in sources {
--            let result = await sync(sourceID: source.id, url: source.url, knownChannelIDs: unclaimedChannelIDs)
+-        for download in downloads {
+-            guard !Task.isCancelled else {
+-                markStatus(download.source.id, .idle)
+-                continue
+-            }
+-            let result = ingest(download, knownChannelIDs: unclaimedChannelIDs)
++        for source in sources {
 +            let result = await sync(sourceID: source.id, url: source.url, knownChannelIDs: unclaimedChannelIDs, refresher: refresher, force: force)
              unclaimedChannelIDs.subtract(result.claimedChannelIDs)
              anySucceeded = anySucceeded || result.didSync
          }
-@@ -70,7 +73,7 @@ actor EPGSyncManager {
+@@ -97,53 +73,42 @@ actor EPGSyncManager {
          let claimedChannelIDs: Set<String>
      }
  
--    private func sync(sourceID: UUID, url: String, knownChannelIDs: Set<String>) async -> SourceResult {
+-    /// A source's XMLTV file, on disk and ready to ingest.
+-    private struct Download {
+-        let source: SourceInfo
+-        let fileURL: URL
+-        /// Downloaded to a temp file this refresh owns (a local `file://`
+-        /// source is read in place and never removed).
+-        let isRemote: Bool
+-    }
 +    private func sync(sourceID: UUID, url: String, knownChannelIDs: Set<String>, refresher: GuideRefresher, force: Bool) async -> SourceResult {
-         let interval = Perf.begin(.epgSourceSync)
-         defer { Perf.end(interval) }
++        let interval = Perf.begin(.epgSourceSync)
++        defer { Perf.end(interval) }
  
-@@ -83,18 +86,19 @@ actor EPGSyncManager {
-             // Every channel this source could guide is already covered by an
-             // earlier one; downloading it would only produce overlaps.
-             Logger.database.info("EPG source \(sourceID, privacy: .public) skipped, all channels already guided")
+-    private func download(_ source: SourceInfo) async -> Download? {
+-        markStatus(source.id, .syncing)
+-        guard !source.url.isEmpty else {
+-            markStatus(source.id, .error)
+-            return nil
++        markStatus(sourceID, .syncing)
++        guard !url.isEmpty else {
++            markStatus(sourceID, .error)
++            return SourceResult(didSync: false, claimedChannelIDs: [])
++        }
++        guard !knownChannelIDs.isEmpty else {
++            // Every channel this source could guide is already covered by an
++            // earlier one; downloading it would only produce overlaps.
++            Logger.database.info("EPG source \(sourceID, privacy: .public) skipped, all channels already guided")
 +            refresher.recordSkipped(sourceID: sourceID) // Lume GF: counts as a check
-             markSynced(sourceID)
-             return SourceResult(didSync: true, claimedChannelIDs: [])
++            markSynced(sourceID)
++            return SourceResult(didSync: true, claimedChannelIDs: [])
          }
          do {
--            let isRemote = !(URL(string: url)?.isFileURL ?? false)
--            let fileURL = try await client.downloadEPG(from: url)
--            defer { if isRemote { try? FileManager.default.removeItem(at: fileURL) } }
--
--            let inserted = insertListings(from: fileURL, knownChannelIDs: knownChannelIDs)
--            Logger.database.info("EPG source \(sourceID) inserted \(inserted.count) listings for \(inserted.channelIDs.count) channels")
+-            let isRemote = !(URL(string: source.url)?.isFileURL ?? false)
+-            let fileURL = try await client.downloadEPG(from: source.url)
+-            return Download(source: source, fileURL: fileURL, isRemote: isRemote)
 +            let outcome = try await refresher.refresh(sourceID: sourceID, url: url,
 +                                                      knownChannelIDs: knownChannelIDs, force: force)
 +            Logger.database.info("EPG source \(sourceID) \(outcome.summary, privacy: .public)")
-             markSynced(sourceID)
--            return SourceResult(didSync: true, claimedChannelIDs: inserted.channelIDs)
++            markSynced(sourceID)
 +            return SourceResult(didSync: true, claimedChannelIDs: outcome.claimedChannelIDs)
 +        } catch is CancellationError {
 +            markStatus(sourceID, .idle)
@@ -169,8 +223,39 @@ index bfc60be..39b0689 100644
          } catch {
              // Credential-free detail (never a URL) so it can be public in
              // user-exported diagnostic logs.
+             let nsError = error as NSError
+             let detail = (error as? M3UError)?.logDescription ?? "\(nsError.domain) \(nsError.code)"
+-            let sourceID = source.id
+             Logger.database.warning("EPG source \(sourceID, privacy: .public) sync failed: \(detail, privacy: .public)")
+-            markStatus(source.id, Task.isCancelled ? .idle : .error)
+-            return nil
+-        }
+-    }
+-
+-    private func ingest(_ download: Download, knownChannelIDs: Set<String>) -> SourceResult {
+-        let interval = Perf.begin(.epgSourceSync)
+-        defer { Perf.end(interval) }
+-
+-        let sourceID = download.source.id
+-        guard !knownChannelIDs.isEmpty else {
+-            // Every channel this source could guide is already covered by an
+-            // earlier one; ingesting it would only produce overlaps.
+-            Logger.database.info("EPG source \(sourceID, privacy: .public) skipped, all channels already guided")
+-            markSynced(sourceID)
+-            return SourceResult(didSync: true, claimedChannelIDs: [])
++            // Lume 2.2.1: a cancelled download (routine: a content sync cancels a background refresh) is no error
++            markStatus(sourceID, Task.isCancelled ? .idle : .error)
++            return SourceResult(didSync: false, claimedChannelIDs: [])
+         }
+-        let inserted = insertListings(from: download.fileURL, knownChannelIDs: knownChannelIDs)
+-        Logger.database.info("EPG source \(sourceID) inserted \(inserted.count) listings for \(inserted.channelIDs.count) channels")
+-        markSynced(sourceID)
+-        return SourceResult(didSync: true, claimedChannelIDs: inserted.channelIDs)
+     }
+ 
+     // MARK: - Source / channel lookups
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index edb8b64..beacfbd 100644
+index 9ea4637..4498429 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
 @@ -99,7 +99,7 @@ final class EPGSyncService {
@@ -245,16 +330,16 @@ index edb8b64..beacfbd 100644
          guard let container, task == nil else { return }
          isSyncing = true
          isBackgroundRefresh = background
-@@ -204,7 +220,7 @@ final class EPGSyncService {
-         // profile showed EPG ingest pegging a background thread at 100% in
+@@ -205,7 +221,7 @@ final class EPGSyncService {
          // lockstep with a frozen main thread right after a playlist sync.
          task = Task(priority: .utility) {
--            let succeeded = await manager.syncAllSources()
-+            let succeeded = await manager.syncAllSources(force: force)
+             let succeeded = await BackgroundActivity.perform("Guide refresh") {
+-                await manager.syncAllSources()
++                await manager.syncAllSources(force: force)
+             }
              if succeeded {
                  EPGSyncSchedule.lastSyncDate = Date()
-                 EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion
-@@ -212,6 +228,7 @@ final class EPGSyncService {
+@@ -214,6 +230,7 @@ final class EPGSyncService {
              isSyncing = false
              task = nil
              Logger.database.info("EPG refresh finished (success: \(succeeded))")
