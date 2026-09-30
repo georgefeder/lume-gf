@@ -207,7 +207,7 @@ index 7c51648..53a53c4 100644
  }
  
 diff --git a/Lume/Views/LiveTV/EPG/EPGGrid.swift b/Lume/Views/LiveTV/EPG/EPGGrid.swift
-index 9177710..2df2443 100644
+index 9177710..23d0bad 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGrid.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGrid.swift
 @@ -29,6 +29,12 @@ struct EPGGrid: View, Equatable {
@@ -309,7 +309,7 @@ index 9177710..2df2443 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
              if sync.window != window {
-@@ -94,13 +139,18 @@ struct EPGGrid: View, Equatable {
+@@ -94,14 +139,23 @@ struct EPGGrid: View, Equatable {
              }
              let rowWindow = EPGRealizeWindow.around(
                  offset: clamped.y,
@@ -327,9 +327,14 @@ index 9177710..2df2443 100644
 +        }
 +        #endif
          .onAppear {
++            #if GF_DEMO
++                FileHandle.standardError.write(Data(
++                    "GFDemo grid appears (first: \(!didInitialScroll)), now target \(nowTarget)\n".utf8))
++            #endif
              guard !didInitialScroll else { return }
              didInitialScroll = true
-@@ -109,7 +159,7 @@ struct EPGGrid: View, Equatable {
+             // Seed the realization windows and the pane mirror around the
+@@ -109,7 +163,7 @@ struct EPGGrid: View, Equatable {
              // right cells; the estimated viewports are corrected by the first
              // geometry event.
              sync.window = EPGRealizeWindow.around(
@@ -339,7 +344,7 @@ index 9177710..2df2443 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 05a5f0c..783c2b2 100644
+index 05a5f0c..82cbea6 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -46,6 +46,9 @@ struct EPGGridScroller: View {
@@ -418,18 +423,21 @@ index 05a5f0c..783c2b2 100644
          #if os(tvOS)
          .onChange(of: surfaceFocused) { _, focused in
              if focused {
-@@ -119,6 +142,10 @@ struct EPGGridScroller: View {
+@@ -119,6 +142,13 @@ struct EPGGridScroller: View {
                  guard virtualFocus == nil else { return }
                  Task { @MainActor in
                      landOnChannel()
 +                    #if GF_DEMO
 +                        // Lume GF screenshot build: the scripted remote presses (-GFDemoMoves)
 +                        await GFDemo.playMoves { moveVirtualFocus($0) }
++                        try? await Task.sleep(for: .seconds(3))
++                        FileHandle.standardError.write(Data(
++                            "GFDemo after moves: mirror \(sync.mirror) offset \(sync.offset)\n".utf8))
 +                    #endif
                  }
              } else if selection == nil {
                  // Focus left towards the rail or the tab bar. A presented
-@@ -131,6 +158,18 @@ struct EPGGridScroller: View {
+@@ -131,6 +161,18 @@ struct EPGGridScroller: View {
          #else
          .background(.background)
          #endif
@@ -448,7 +456,7 @@ index 05a5f0c..783c2b2 100644
          .sheet(item: $selection) { selection in
              EPGProgramDetailView(
                  stream: selection.stream,
-@@ -142,7 +181,7 @@ struct EPGGridScroller: View {
+@@ -142,7 +184,7 @@ struct EPGGridScroller: View {
          }
      }
  
@@ -457,7 +465,7 @@ index 05a5f0c..783c2b2 100644
          EPGGrid(
              rows: rows,
              timeline: timeline,
-@@ -153,6 +192,9 @@ struct EPGGridScroller: View {
+@@ -153,6 +195,9 @@ struct EPGGridScroller: View {
              nowTarget: nowScrollTarget,
              scrollRequest: scrollRequest,
              virtualFocus: gridVirtualFocus,
@@ -467,7 +475,17 @@ index 05a5f0c..783c2b2 100644
              onPlay: { row, cell in playCell(row, cell) },
              onShowDetails: { row, cell in
                  selection = EPGSelection(id: cell.id, stream: row.stream, cell: cell)
-@@ -237,15 +279,18 @@ struct EPGGridScroller: View {
+@@ -209,6 +254,9 @@ struct EPGGridScroller: View {
+     /// both surfaces together without per-frame main-thread work.
+     private func requestScroll(to point: CGPoint, animated: Bool) {
+         let clamped = CGPoint(x: max(0, point.x), y: max(0, point.y))
++        #if GF_DEMO
++            FileHandle.standardError.write(Data("GFDemo requestScroll to \(clamped) animated \(animated)\n".utf8))
++        #endif
+         scrollRequest = EPGScrollRequest(
+             token: (scrollRequest?.token ?? 0) + 1,
+             point: clamped,
+@@ -237,15 +285,18 @@ struct EPGGridScroller: View {
              Button {
                  requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: sync.offset.y), animated: true)
              } label: {
@@ -487,7 +505,7 @@ index 05a5f0c..783c2b2 100644
          #endif
      }
  }
-@@ -289,7 +334,7 @@ struct EPGGridScroller: View {
+@@ -289,7 +340,7 @@ struct EPGGridScroller: View {
              // on — a single strip owns the whole grid's focus — so the hub's
              // long press raises them itself.
              .confirmationDialog(
