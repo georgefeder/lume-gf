@@ -71,6 +71,12 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.bottomFade(safeAreaBottom: -5, rowStride: 72) == 36)
     }
 
+    @Test func `only the iPhone fades rows under the ruler`() {
+        // the Apple TV's rows meet the ruler as in Lume: a fade there painted a dark band over its backdrop
+        #expect(GFGuideGlass.topFade(tv: true) == 0)
+        #expect(GFGuideGlass.topFade(tv: false) == 10)
+    }
+
     @Test func `Lume's panel corners: 36 on Apple TV, 16 on iPhone`() {
         #expect(GFGuideGlass.sidebarCornerRadius(tv: true) == 36)
         #expect(GFGuideGlass.sidebarCornerRadius(tv: false) == 16)

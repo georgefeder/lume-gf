@@ -55,6 +55,17 @@ struct GFChannelNamesTests {
         #expect(PlayableMedia.from(stream: stream, playlist: playlist)?.title == live)
     }
 
+    @Test func `Home's channel cards show the clean name, the full one when switched off`() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.object(forKey: GFChannelNames.settingKey)
+        defer { defaults.set(saved, forKey: GFChannelNames.settingKey) }
+        let item = HomeMediaItem.live(LiveStream(id: "t-live-4", streamId: 4, name: live))
+        defaults.set(true, forKey: GFChannelNames.settingKey)
+        #expect(item.title == "Arsenal v Chelsea")
+        defaults.set(false, forKey: GFChannelNames.settingKey)
+        #expect(item.title == live)
+    }
+
     @Test func `a catch-up recording keeps the clean channel name`() {
         let defaults = UserDefaults.standard
         let saved = defaults.object(forKey: GFChannelNames.settingKey)
