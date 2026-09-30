@@ -127,6 +127,37 @@ nonisolated enum GFGuideGlass {
         tv ? 36 : 16
     }
 
+    static func gridTopRoom(tv _: Bool, rowSpacing _: CGFloat) -> CGFloat {
+        0
+    }
+
+    static func panelTop(tv: Bool, rowSpacing _: CGFloat) -> CGFloat {
+        sidebarInsets(tv: tv).top
+    }
+
+    struct UnderPanel: Equatable, Sendable {
+        var gone: CGFloat
+        var clear: CGFloat
+    }
+
+    static func underPanelFade(columnWidth _: CGFloat, tv _: Bool) -> UnderPanel {
+        UnderPanel(gone: 0, clear: 0)
+    }
+
+    static func focusScale(width _: CGFloat, rowSpacing _: CGFloat, lumeScale: CGFloat = 1.04) -> CGFloat {
+        lumeScale
+    }
+
+    static func rowScrollTarget(row _: Int, currentY: CGFloat, viewportHeight _: CGFloat, rowHeight _: CGFloat,
+                                rowSpacing _: CGFloat, topRoom _: CGFloat) -> CGFloat {
+        currentY
+    }
+
+    static func maxScrollY(rows _: Int, viewportHeight _: CGFloat, rowHeight _: CGFloat, rowSpacing _: CGFloat,
+                           topRoom _: CGFloat) -> CGFloat {
+        0
+    }
+
     /// Apple TV: the focused channel's white highlight, inset inside the sidebar.
     static let tvHighlightInset: CGFloat = 8
 

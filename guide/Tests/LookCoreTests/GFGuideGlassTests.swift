@@ -128,6 +128,62 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.tvHighlightWidth(columnWidth: 300) > 200)
     }
 
+    @Test func `the first row starts one row gap below the top fade, so nothing fades until you scroll`() {
+        // Georgs on build 9: the first channel and programmes sat where the fade already starts
+        #expect(GFGuideGlass.gridTopRoom(tv: true, rowSpacing: 14) == 14)
+        #expect(GFGuideGlass.gridTopRoom(tv: false, rowSpacing: 4) == 12)
+        for (tv, spacing) in [(true, CGFloat(14)), (false, CGFloat(4))] {
+            let firstTileTop = GFGuideGlass.gridTopRoom(tv: tv, rowSpacing: spacing) + spacing / 2
+            #expect(firstTileTop - GFGuideGlass.topFade(tv: tv) == spacing)
+        }
+    }
+
+    @Test func `the panel's top moves down with the first row`() {
+        #expect(GFGuideGlass.panelTop(tv: true, rowSpacing: 14) == -2) // still reaching above the first channel
+        #expect(GFGuideGlass.panelTop(tv: false, rowSpacing: 4) == 16)
+        let firstTileTop = GFGuideGlass.gridTopRoom(tv: true, rowSpacing: 14) + 7
+        let corner = GFGuideGlass.cornerIntrusion(radius: GFGuideGlass.sidebarCornerRadius(tv: true),
+                                                  inset: GFGuideGlass.tvHighlightLeading)
+        #expect(firstTileTop - GFGuideGlass.panelTop(tv: true, rowSpacing: 14) > corner)
+    }
+
+    @Test func `programmes fade out under the panel, gone by its middle`() {
+        // Georgs on build 9: tiles showed on the panel's left side (the Apple TV's glass bends what is under its edge)
+        #expect(GFGuideGlass.underPanelFade(columnWidth: 300, tv: true) == GFGuideGlass.UnderPanel(gone: 142, clear: 284))
+        #expect(GFGuideGlass.underPanelFade(columnWidth: 136, tv: false) == GFGuideGlass.UnderPanel(gone: 68, clear: 130))
+        #expect(GFGuideGlass.underPanelFade(columnWidth: 4, tv: false) == GFGuideGlass.UnderPanel(gone: 6, clear: 6))
+    }
+
+    @Test func `a focused programme grows by Lume's 4 percent, but never over the gap to its neighbour`() {
+        // Georgs on build 9: a focused five-hour programme spread 75 points over the tile before it
+        #expect(GFGuideGlass.focusScale(width: 200, rowSpacing: 14) == 1.04)
+        #expect(GFGuideGlass.focusScale(width: 3850, rowSpacing: 14) == 1 + 12 / 3850)
+        #expect(GFGuideGlass.focusScale(width: 200, rowSpacing: 4) == 1.01)
+        #expect(GFGuideGlass.focusScale(width: 0, rowSpacing: 14) == 1)
+        for width: CGFloat in [100, 300, 1000, 3850, 10000] {
+            let growth = width * (GFGuideGlass.focusScale(width: width, rowSpacing: 14) - 1) / 2
+            #expect(growth <= 6.0001)
+        }
+    }
+
+    @Test func `the Apple TV scrolls a row into view below the top room`() {
+        // Lume's rows start `gridTopRoom` down: a row above lands there, a row below ends at the readable bottom
+        func target(_ row: Int, from y: CGFloat) -> CGFloat {
+            GFGuideGlass.rowScrollTarget(row: row, currentY: y, viewportHeight: 800, rowHeight: 116, rowSpacing: 14,
+                                         topRoom: 14)
+        }
+        #expect(target(0, from: 300) == 0)
+        #expect(target(2, from: 300) == 260)
+        #expect(target(3, from: 0) == 0) // in view: 404...520
+        #expect(target(6, from: 0) == 110) // its bottom, 910, ends at 800
+    }
+
+    @Test func `the Apple TV scrolls no further than the last row`() {
+        #expect(GFGuideGlass.maxScrollY(rows: 20, viewportHeight: 800, rowHeight: 116, rowSpacing: 14, topRoom: 14)
+            == 1800)
+        #expect(GFGuideGlass.maxScrollY(rows: 3, viewportHeight: 800, rowHeight: 116, rowSpacing: 14, topRoom: 14) == 0)
+    }
+
     @Test func `the tests run on the Mac, so this is not the Apple TV`() {
         #expect(!GFGuideGlass.isTV)
     }
