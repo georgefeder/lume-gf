@@ -192,10 +192,10 @@ index 7c51648..681b83d 100644
  }
  
 diff --git a/Lume/Views/LiveTV/EPG/EPGGrid.swift b/Lume/Views/LiveTV/EPG/EPGGrid.swift
-index 9177710..17aa8ee 100644
+index 9177710..401d526 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGrid.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGrid.swift
-@@ -29,6 +29,10 @@ struct EPGGrid: View, Equatable {
+@@ -29,6 +29,12 @@ struct EPGGrid: View, Equatable {
      let nowTarget: CGFloat
      let scrollRequest: EPGScrollRequest?
      let virtualFocus: EPGVirtualFocus?
@@ -203,40 +203,43 @@ index 9177710..17aa8ee 100644
 +    /// end for the bottom fade (GFGuideGlass, docs/superpowers/specs/2026-09-29-lume-gf-3-look-design.md).
 +    let contentPad: CGFloat
 +    let bottomRoom: CGFloat
++    /// Lume GF: the guide's height on screen; the scroll view can run on past it (under the iPhone's tab bar)
++    let guideHeight: CGFloat
      let onPlay: (EPGChannelRow, EPGProgramCell) -> Void
      let onShowDetails: (EPGChannelRow, EPGProgramCell) -> Void
  
-@@ -39,6 +43,8 @@ struct EPGGrid: View, Equatable {
+@@ -39,6 +45,9 @@ struct EPGGrid: View, Equatable {
              && lhs.scrollRequest == rhs.scrollRequest
              && lhs.virtualFocus == rhs.virtualFocus
              && lhs.timeline == rhs.timeline
 +            && lhs.contentPad == rhs.contentPad
 +            && lhs.bottomRoom == rhs.bottomRoom
++            && lhs.guideHeight == rhs.guideHeight
      }
  
      @State private var position = ScrollPosition()
-@@ -49,6 +55,9 @@ struct EPGGrid: View, Equatable {
+@@ -49,6 +58,10 @@ struct EPGGrid: View, Equatable {
      /// channels. Pinning the rows to at least the viewport height (top-aligned)
      /// keeps them level on every platform.
      @State private var viewportHeight: CGFloat = 0
-+    /// Lume GF: the room the scroll view keeps below its content — as far as it runs on past the screen's edge (the
-+    /// safe area under the tab bar or the Apple TV's overscan); short content fills only the part above it.
++    /// Lume GF: the scroll view's own height and the room it keeps below its content, for the room under the last row
++    /// (GFGuideGlass.bottomPadding); written only when they change, never per scrolled frame.
++    @State private var scrollHeight: CGFloat = 0
 +    @State private var scrollInsetBottom: CGFloat = 0
  
      var body: some View {
          ScrollView([.horizontal, .vertical]) {
-@@ -64,7 +73,9 @@ struct EPGGrid: View, Equatable {
+@@ -64,6 +77,9 @@ struct EPGGrid: View, Equatable {
                  onShowDetails: onShowDetails
              )
              .equatable()
--            .frame(minHeight: viewportHeight, alignment: .topLeading)
 +            .padding(.leading, contentPad)
-+            .padding(.bottom, bottomRoom)
-+            .frame(minHeight: max(0, viewportHeight - scrollInsetBottom), alignment: .topLeading)
++            .padding(.bottom, GFGuideGlass.bottomPadding(bottomRoom: bottomRoom, scrollHeight: scrollHeight,
++                                                         guideHeight: guideHeight, scrollInset: scrollInsetBottom))
+             .frame(minHeight: viewportHeight, alignment: .topLeading)
          }
          .background {
-             GeometryReader { geo in
-@@ -74,10 +85,21 @@ struct EPGGrid: View, Equatable {
+@@ -74,10 +90,22 @@ struct EPGGrid: View, Equatable {
              }
          }
          .scrollPosition($position)
@@ -247,21 +250,22 @@ index 9177710..17aa8ee 100644
 +            GFGuideGlass.ScrollFrame(offset: $0.contentOffset, size: $0.containerSize,
 +                                     insetBottom: $0.contentInsets.bottom)
 +        } action: { _, new in
-+            scrollInsetBottom = new.insetBottom
++            if scrollHeight != new.size.height { scrollHeight = new.size.height }
++            if scrollInsetBottom != new.insetBottom { scrollInsetBottom = new.insetBottom }
 +            let clamped = CGPoint(x: max(0, new.offset.x), y: max(0, new.offset.y))
              sync.offset = clamped
 -            sync.viewport = new.size
-+            // Lume GF: the part the viewer reads — right of the glass sidebar, above the bottom fade, on the screen
-+            sync.viewport = GFGuideGlass.visibleSize(measured: new.size, scrollInset: new.insetBottom, pad: contentPad,
++            // Lume GF: the part the viewer reads — right of the glass sidebar, above the bottom fade, in the guide
++            sync.viewport = GFGuideGlass.visibleSize(measured: new.size, guideHeight: guideHeight, pad: contentPad,
 +                                                     bottomFade: bottomRoom)
 +            #if GF_DEMO
-+                print("GFDemo grid: size \(new.size), inset below \(new.insetBottom), offset \(clamped),",
-+                      "readable \(sync.viewport)")
++                FileHandle.standardError.write(Data(("GFDemo grid: size \(new.size), inset below \(new.insetBottom), "
++                        + "guide \(guideHeight), offset \(clamped), readable \(sync.viewport)\n").utf8))
 +            #endif
              #if !os(tvOS)
                  // Touch scrolling has no known target — the panes mirror the
                  // measured offset per frame. tvOS mirrors per programmatic
-@@ -85,8 +107,8 @@ struct EPGGrid: View, Equatable {
+@@ -85,8 +113,8 @@ struct EPGGrid: View, Equatable {
                  sync.mirror = clamped
              #endif
              let window = EPGRealizeWindow.around(
@@ -272,7 +276,7 @@ index 9177710..17aa8ee 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
              if sync.window != window {
-@@ -94,7 +116,7 @@ struct EPGGrid: View, Equatable {
+@@ -94,7 +122,7 @@ struct EPGGrid: View, Equatable {
              }
              let rowWindow = EPGRealizeWindow.around(
                  offset: clamped.y,
@@ -281,7 +285,7 @@ index 9177710..17aa8ee 100644
                  blockLength: 2 * (metrics.rowHeight + metrics.rowSpacing)
              )
              if sync.rowWindow != rowWindow {
-@@ -109,7 +131,7 @@ struct EPGGrid: View, Equatable {
+@@ -109,7 +137,7 @@ struct EPGGrid: View, Equatable {
              // right cells; the estimated viewports are corrected by the first
              // geometry event.
              sync.window = EPGRealizeWindow.around(
@@ -291,7 +295,7 @@ index 9177710..17aa8ee 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 05a5f0c..f7c4fe7 100644
+index 05a5f0c..e180392 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -82,23 +82,33 @@ struct EPGGridScroller: View {
@@ -321,7 +325,7 @@ index 05a5f0c..f7c4fe7 100644
 -
 -                grid
 +                ZStack(alignment: .topLeading) {
-+                    grid(bottomRoom: bottomRoom)
++                    grid(bottomRoom: bottomRoom, guideHeight: geo.size.height)
 +                        .padding(.leading, GFGuideGlass.gridLeadingInset(columnWidth: metrics.channelColumnWidth))
 +                    EPGFrozenColumn(
 +                        rows: rows,
@@ -354,7 +358,7 @@ index 05a5f0c..f7c4fe7 100644
                  }
              } else if selection == nil {
                  // Focus left towards the rail or the tab bar. A presented
-@@ -131,6 +145,16 @@ struct EPGGridScroller: View {
+@@ -131,6 +145,18 @@ struct EPGGridScroller: View {
          #else
          .background(.background)
          #endif
@@ -365,31 +369,34 @@ index 05a5f0c..f7c4fe7 100644
 +            try? await Task.sleep(for: .seconds(3))
 +            let stride = metrics.rowHeight + metrics.rowSpacing
 +            let bottom = max(0, CGFloat(rows.count) * stride - metrics.rowSpacing - sync.viewport.height)
++            FileHandle.standardError.write(Data(
++                "GFDemo end: \(rows.count) rows, readable \(sync.viewport), to y \(bottom)\n".utf8))
 +            requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: bottom), animated: false)
 +        }
 +        #endif
          .sheet(item: $selection) { selection in
              EPGProgramDetailView(
                  stream: selection.stream,
-@@ -142,7 +166,7 @@ struct EPGGridScroller: View {
+@@ -142,7 +168,7 @@ struct EPGGridScroller: View {
          }
      }
  
 -    private var grid: some View {
-+    private func grid(bottomRoom: CGFloat) -> some View {
++    private func grid(bottomRoom: CGFloat, guideHeight: CGFloat) -> some View {
          EPGGrid(
              rows: rows,
              timeline: timeline,
-@@ -153,6 +177,8 @@ struct EPGGridScroller: View {
+@@ -153,6 +179,9 @@ struct EPGGridScroller: View {
              nowTarget: nowScrollTarget,
              scrollRequest: scrollRequest,
              virtualFocus: gridVirtualFocus,
 +            contentPad: GFGuideGlass.contentPad(columnWidth: metrics.channelColumnWidth),
 +            bottomRoom: bottomRoom,
++            guideHeight: guideHeight,
              onPlay: { row, cell in playCell(row, cell) },
              onShowDetails: { row, cell in
                  selection = EPGSelection(id: cell.id, stream: row.stream, cell: cell)
-@@ -237,15 +263,18 @@ struct EPGGridScroller: View {
+@@ -237,15 +266,18 @@ struct EPGGridScroller: View {
              Button {
                  requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: sync.offset.y), animated: true)
              } label: {
@@ -409,7 +416,7 @@ index 05a5f0c..f7c4fe7 100644
          #endif
      }
  }
-@@ -289,7 +318,7 @@ struct EPGGridScroller: View {
+@@ -289,7 +321,7 @@ struct EPGGridScroller: View {
              // on — a single strip owns the whole grid's focus — so the hub's
              // long press raises them itself.
              .confirmationDialog(

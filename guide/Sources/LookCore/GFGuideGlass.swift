@@ -35,19 +35,26 @@ nonisolated enum GFGuideGlass {
     }
 
     /// What the grid's scroll view reports in one reading: its offset, its size and the room it keeps below its
-    /// content.
-    /// A SwiftUI scroll view runs on into the safe area along the ways it scrolls and insets its content by as much, so
-    /// under the iPhone's tab bar it reaches that far past the screen's edge (`insetBottom`).
+    /// content. Under the iPhone's tab bar it runs on past the guide's edge (the screen's): its size is not what shows.
     nonisolated struct ScrollFrame: Equatable, Sendable {
         var offset: CGPoint
         var size: CGSize
         var insetBottom: CGFloat
     }
 
-    /// The part the viewer reads: right of the sidebar, above the bottom fade, on the screen.
-    static func visibleSize(measured: CGSize, scrollInset: CGFloat, pad: CGFloat, bottomFade: CGFloat) -> CGSize {
-        CGSize(width: max(0, measured.width - pad),
-               height: max(0, measured.height - max(0, scrollInset) - bottomFade))
+    /// The part the viewer reads: right of the sidebar, above the bottom fade, within the guide (`guideHeight`, the
+    /// guide's height on screen; 0 before it is measured).
+    static func visibleSize(measured: CGSize, guideHeight: CGFloat, pad: CGFloat, bottomFade: CGFloat) -> CGSize {
+        let height = guideHeight > 0 ? min(measured.height, guideHeight) : measured.height
+        return CGSize(width: max(0, measured.width - pad), height: max(0, height - bottomFade))
+    }
+
+    /// The room under the last row, so it can always scroll up to the fade: the fade's room, plus however far the
+    /// scroll view runs on below the guide, less the room the scroll view keeps below its content itself.
+    static func bottomPadding(bottomRoom: CGFloat, scrollHeight: CGFloat, guideHeight: CGFloat,
+                              scrollInset: CGFloat) -> CGFloat {
+        let runOn = guideHeight > 0 ? max(0, scrollHeight - guideHeight) : 0
+        return max(0, bottomRoom + runOn - max(0, scrollInset))
     }
 
     /// The timeline x at the scroll area's leading edge (under the sidebar), for the realise window.
