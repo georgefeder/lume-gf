@@ -140,6 +140,8 @@ jobs:
           sh gf/ci/apply-dep-patches.sh gf Lume "$RUNNER_TEMP/spm"
       - name: Screenshots (demo channels, iPhone and Apple TV)
         run: sh gf/ci/screenshots.sh Lume "$RUNNER_TEMP/screenshots"
+        env:
+          GF_SHOT_EXPERIMENT: pill
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@v4

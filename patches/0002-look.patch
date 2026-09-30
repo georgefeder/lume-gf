@@ -51,6 +51,36 @@ index 250234d..1342373 100644
              subtitle: programTitle,
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .vod,
+diff --git a/Lume/Views/Components/GlassEffectCompat.swift b/Lume/Views/Components/GlassEffectCompat.swift
+index dd50f51..92cb0c8 100644
+--- a/Lume/Views/Components/GlassEffectCompat.swift
++++ b/Lume/Views/Components/GlassEffectCompat.swift
+@@ -19,6 +19,8 @@ enum GlassEffectStyle {
+     case regularInteractive
+     /// Interactive glass tinted toward `color` (e.g. the tvOS focus state).
+     case tintedInteractive(Color)
++    /// Lume GF: glass tinted toward `color` that is only a label (the guide's Now pill).
++    case tinted(Color)
+ }
+ 
+ extension View {
+@@ -31,7 +33,7 @@ extension View {
+             glassEffect(style.resolvedGlass, in: shape)
+         } else {
+             switch style {
+-            case let .tintedInteractive(color):
++            case let .tintedInteractive(color), let .tinted(color):
+                 background(color, in: shape)
+             case .regular, .regularInteractive:
+                 background(.regularMaterial, in: shape)
+@@ -47,6 +49,7 @@ private extension GlassEffectStyle {
+         case .regular: .regular
+         case .regularInteractive: .regular.interactive()
+         case let .tintedInteractive(color): .regular.tint(color).interactive()
++        case let .tinted(color): .regular.tint(color)
+         }
+     }
+ }
 diff --git a/Lume/Views/Components/LiveStreamCardView.swift b/Lume/Views/Components/LiveStreamCardView.swift
 index fa8f4f9..65ef1db 100644
 --- a/Lume/Views/Components/LiveStreamCardView.swift
@@ -159,7 +189,7 @@ index 9eb3ec6..270ccb0 100644
                      shape.fill(.white.opacity(0.16))
                          .overlay {
 diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-index 7c51648..53a53c4 100644
+index 7c51648..0bf0ca8 100644
 --- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 @@ -27,12 +27,12 @@ struct EPGRulerStrip: View {
@@ -186,8 +216,8 @@ index 7c51648..53a53c4 100644
              .padding(.horizontal, 7)
              .padding(.vertical, 2)
 -            .background(Capsule().fill(Color.red))
-+            // Lume GF: red-tinted glass (a solid red capsule before iOS/tvOS 26)
-+            .glassEffectCompat(.tintedInteractive(.red), in: Capsule())
++            // Lume GF: red-tinted glass, a label, not a control (a solid red capsule before iOS/tvOS 26)
++            .modifier(GFNowPillBackground())
              .fixedSize()
              .alignmentGuide(.leading) { $0.width / 2 }
      }

@@ -19,6 +19,11 @@
             value(after: "-GFDemoMoves")?.split(separator: ",").map(String.init) ?? []
         }
 
+        /// `-GFDemoPill interactive|tinted|solid`: the ruler's Now pill (the Apple TV ruler experiment).
+        static var pillStyle: String? {
+            value(after: "-GFDemoPill")
+        }
+
         static var channelCount: Int {
             value(after: "-GFDemoChannels").flatMap(Int.init) ?? 12
         }
