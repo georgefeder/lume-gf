@@ -189,45 +189,29 @@ index 9eb3ec6..270ccb0 100644
                      shape.fill(.white.opacity(0.16))
                          .overlay {
 diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-index 7c51648..d145176 100644
+index 7c51648..0bf0ca8 100644
 --- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-@@ -27,12 +27,29 @@ struct EPGRulerStrip: View {
+@@ -27,12 +27,12 @@ struct EPGRulerStrip: View {
              .frame(maxWidth: .infinity)
              .frame(height: metrics.headerHeight)
              .overlay(alignment: .leading) {
 -                ZStack(alignment: .topLeading) {
-+                #if GF_DEMO
-+                    if GFDemo.rulerStyle == "zstack" {
-+                        // temporary experiment: Lume's original arrangement
-+                        ZStack(alignment: .topLeading) {
-+                            EPGTimeRuler(timeline: timeline, metrics: metrics)
-+                            nowPill.offset(x: timeline.x(for: now))
-+                        }
-+                        .frame(width: timeline.totalWidth, alignment: .leading)
-+                        .offset(x: -sync.mirror.x)
-+                    } else {
-+                        EPGTimeRuler(timeline: timeline, metrics: metrics)
-+                            .overlay(alignment: .topLeading) { nowPill.offset(x: timeline.x(for: now)) }
-+                            .frame(width: timeline.totalWidth, alignment: .leading)
-+                            .offset(x: -sync.mirror.x)
-+                    }
-+                #else
-+                    // Lume GF: the pill is an overlay; as a ZStack sibling its centring overhang widened the ruler and
-+                    // moved every time half a pill right of the grid
-                     EPGTimeRuler(timeline: timeline, metrics: metrics)
+-                    EPGTimeRuler(timeline: timeline, metrics: metrics)
 -                    nowPill.offset(x: timeline.x(for: now))
 -                }
 -                .frame(width: timeline.totalWidth, alignment: .leading)
 -                .offset(x: -sync.mirror.x)
-+                        .overlay(alignment: .topLeading) { nowPill.offset(x: timeline.x(for: now)) }
-+                        .frame(width: timeline.totalWidth, alignment: .leading)
-+                        .offset(x: -sync.mirror.x)
-+                #endif
++                // Lume GF: the pill is an overlay; as a ZStack sibling its centring overhang widened the ruler and
++                // moved every time half a pill right of the grid
++                EPGTimeRuler(timeline: timeline, metrics: metrics)
++                    .overlay(alignment: .topLeading) { nowPill.offset(x: timeline.x(for: now)) }
++                    .frame(width: timeline.totalWidth, alignment: .leading)
++                    .offset(x: -sync.mirror.x)
              }
              .clipped()
      }
-@@ -43,7 +60,8 @@ struct EPGRulerStrip: View {
+@@ -43,7 +43,8 @@ struct EPGRulerStrip: View {
              .foregroundStyle(.white)
              .padding(.horizontal, 7)
              .padding(.vertical, 2)
@@ -237,7 +221,7 @@ index 7c51648..d145176 100644
              .fixedSize()
              .alignmentGuide(.leading) { $0.width / 2 }
      }
-@@ -88,12 +106,8 @@ struct EPGFrozenColumn: View {
+@@ -88,12 +89,8 @@ struct EPGFrozenColumn: View {
                  .equatable()
                  .offset(y: -sync.mirror.y)
              }
@@ -390,7 +374,7 @@ index 9177710..23d0bad 100644
                  blockLength: 30 * metrics.pointsPerMinute
              )
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 05a5f0c..82cbea6 100644
+index 05a5f0c..5d7a7f1 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -46,6 +46,9 @@ struct EPGGridScroller: View {
@@ -531,7 +515,28 @@ index 05a5f0c..82cbea6 100644
          scrollRequest = EPGScrollRequest(
              token: (scrollRequest?.token ?? 0) + 1,
              point: clamped,
-@@ -237,15 +285,18 @@ struct EPGGridScroller: View {
+@@ -219,6 +267,20 @@ struct EPGGridScroller: View {
+                 withAnimation(.easeOut(duration: 0.25)) {
+                     sync.mirror = clamped
+                 }
++                // Lume GF: in the Live TV screen the animated move is sometimes not redrawn — the ruler stays where
++                // the move began although its value is right. Once the move is over (unless another has begun), the
++                // place is set again without animation: nothing to see when it was drawn, the redraw when it was not.
++                let token = scrollRequest?.token
++                Task { @MainActor in
++                    try? await Task.sleep(for: .milliseconds(300))
++                    guard scrollRequest?.token == token else { return }
++                    var transaction = Transaction()
++                    transaction.disablesAnimations = true
++                    // one ulp off, so it is a change even if equal values were skipped; the same place to the eye
++                    withTransaction(transaction) {
++                        sync.mirror = CGPoint(x: clamped.x.nextUp, y: clamped.y)
++                    }
++                }
+             } else {
+                 var transaction = Transaction()
+                 transaction.disablesAnimations = true
+@@ -237,15 +299,18 @@ struct EPGGridScroller: View {
              Button {
                  requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: sync.offset.y), animated: true)
              } label: {
@@ -551,7 +556,7 @@ index 05a5f0c..82cbea6 100644
          #endif
      }
  }
-@@ -289,7 +340,7 @@ struct EPGGridScroller: View {
+@@ -289,7 +354,7 @@ struct EPGGridScroller: View {
              // on — a single strip owns the whole grid's focus — so the hub's
              // long press raises them itself.
              .confirmationDialog(

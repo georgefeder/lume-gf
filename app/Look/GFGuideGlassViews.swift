@@ -124,18 +124,8 @@ extension View {
 
 /// The ruler's Now pill: red-tinted glass that is a label, not a control (Lume's interactive tint reacts to input).
 struct GFNowPillBackground: ViewModifier {
-    @ViewBuilder
     func body(content: Content) -> some View {
-        #if GF_DEMO
-            // screenshot build: -GFDemoPill picks the style (the Apple TV ruler experiment)
-            switch GFDemo.pillStyle {
-            case "interactive": content.glassEffectCompat(.tintedInteractive(.red), in: Capsule())
-            case "solid": content.background(Capsule().fill(Color.red))
-            default: content.glassEffectCompat(.tinted(.red), in: Capsule())
-            }
-        #else
-            content.glassEffectCompat(.tinted(.red), in: Capsule())
-        #endif
+        content.glassEffectCompat(.tinted(.red), in: Capsule())
     }
 }
 

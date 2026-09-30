@@ -19,21 +19,6 @@
             value(after: "-GFDemoMoves")?.split(separator: ",").map(String.init) ?? []
         }
 
-        /// `-GFDemoPill interactive|tinted|solid`: the ruler's Now pill (the Apple TV ruler experiment).
-        static var pillStyle: String? {
-            value(after: "-GFDemoPill")
-        }
-
-        /// Temporary Apple TV ruler experiment: `-GFDemoRuler zstack` (Lume's original pill arrangement),
-        /// `-GFDemoAlone yes` (the guide on its own, without Lume's Live TV screen).
-        static var rulerStyle: String? {
-            value(after: "-GFDemoRuler")
-        }
-
-        static var guideAlone: Bool {
-            value(after: "-GFDemoAlone") == "yes"
-        }
-
         static var channelCount: Int {
             value(after: "-GFDemoChannels").flatMap(Int.init) ?? 12
         }
@@ -186,10 +171,6 @@
 
         @ViewBuilder private var content: some View {
             #if os(tvOS)
-                if GFDemo.guideAlone {
-                    EPGGuideView(scope: store.scope, playlistPrefix: "", sort: .playlist, onPlay: { _ in },
-                                 focusToken: 1, onDidClaimFocus: {})
-                } else {
                 TVLiveTVScreen(
                     sections: store.categories.map { LiveTVSection.category($0) },
                     selectedSection: $section,
@@ -203,7 +184,6 @@
                     playlistPrefix: "",
                     sourceType: nil
                 )
-                }
             #elseif os(iOS)
                 TabView {
                     Tab("Live TV", systemImage: "tv") {
