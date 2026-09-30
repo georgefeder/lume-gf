@@ -63,6 +63,7 @@ done
 xcrun simctl ui "$IOS" appearance dark
 shoot "$IOS" "$BID" iphone-guide-bottom-dark -GFDemo guide -GFDemoMoves end
 shoot "$IOS" "$BID" iphone-guide-few-dark -GFDemo guide -GFDemoChannels 3
+shoot "$IOS" "$BID" iphone-guide-landscape-dark -GFDemo guide -GFDemoMoves landscape  # last: the iPhone stays sideways
 xcrun simctl shutdown "$IOS" >/dev/null 2>&1 || true
 
 TV=$(sh "$CI/pick-simulator.sh" tvOS 2>/dev/null) || TV=$(new_tv) \

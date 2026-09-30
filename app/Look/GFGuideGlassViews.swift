@@ -82,6 +82,46 @@ struct GFGuideEdgeFade: View {
     }
 }
 
+/// The Apple TV's fades: its backdrop is the system's gradient, not a colour a strip could match, so the rows
+/// themselves fade out to it (a mask on the grid and on the channel rows, never on the glass panel).
+struct GFGuideEdgeMask: View {
+    let top: CGFloat
+    let bottom: CGFloat
+
+    var body: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: max(0, top))
+            Rectangle().fill(.black)
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: max(0, bottom))
+        }
+        // on into the side margins, where the programmes run on (the Apple TV's overscan)
+        .ignoresSafeArea(.container, edges: .horizontal)
+    }
+}
+
+extension View {
+    /// The guide's top and bottom fades on one pane (the grid, the channel rows): Apple TV only, see `GFGuideEdgeMask`.
+    @ViewBuilder
+    func gfGuideRowFade(top: CGFloat, bottom: CGFloat) -> some View {
+        #if os(tvOS)
+            mask { GFGuideEdgeMask(top: top, bottom: bottom) }
+        #else
+            self
+        #endif
+    }
+
+    /// The guide's top and bottom fades over both panes: iPhone and iPad, a strip of the guide's own background.
+    @ViewBuilder
+    func gfGuideStripFade(top: CGFloat, bottom: CGFloat) -> some View {
+        #if os(tvOS)
+            self
+        #else
+            overlay(alignment: .top) { GFGuideEdgeFade(edge: .top, height: top) }
+                .overlay(alignment: .bottom) { GFGuideEdgeFade(edge: .bottom, height: bottom) }
+        #endif
+    }
+}
+
 /// The focused programme on Apple TV: Lume's white focus glass.
 struct GFGuideFocusGlass<S: Shape>: View {
     let shape: S

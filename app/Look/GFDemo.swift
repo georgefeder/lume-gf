@@ -1,11 +1,15 @@
 #if GF_DEMO
     import SwiftData
     import SwiftUI
+    #if os(iOS)
+        import UIKit
+    #endif
 
     /// Screenshot build only (compiled with `-D GF_DEMO` by ci/screenshots.sh, never in a TestFlight build). Started
     /// with `-GFDemo guide` or `-GFDemo list`, the app shows Lume's own guide or channel list over made-up channels named
     /// like our server names them. `-GFDemoMoves right,down` moves the Apple TV guide's focus after it lands; `end`
-    /// scrolls the iPhone guide to its last row. `-GFDemoChannels 3` shows a short category.
+    /// scrolls the iPhone guide to its last row, `landscape` turns the iPhone sideways. `-GFDemoChannels 3` shows a short
+    /// category.
     enum GFDemo {
         static var mode: String? {
             value(after: "-GFDemo")
@@ -38,6 +42,14 @@
                     default: break
                     }
                 }
+            }
+        #endif
+
+        #if os(iOS)
+            /// `-GFDemoMoves landscape`: the iPhone turns sideways.
+            static func turnToLandscape() {
+                let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+                scene?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { _ in }
             }
         #endif
     }
@@ -192,6 +204,11 @@
                     Tab("Movies", systemImage: "film") { Color.clear }
                     Tab("Series", systemImage: "rectangle.stack") { Color.clear }
                     Tab("Search", systemImage: "magnifyingglass") { Color.clear }
+                }
+                // as in the app (MainTabView): the tab bar shrinks while the guide scrolls down
+                .tabBarMinimizeOnScrollDownIfAvailable()
+                .task {
+                    if GFDemo.moves.contains("landscape") { GFDemo.turnToLandscape() }
                 }
             #endif
         }

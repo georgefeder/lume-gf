@@ -79,8 +79,10 @@ nonisolated enum GFGuideGlass {
         max(0, safeAreaBottom) + rowStride / 2
     }
 
+    /// Rows scrolling under the ruler fade on iPhone; the Apple TV's meet it as in Lume (they move a row at a time,
+    /// and a fade there painted a band over the system's backdrop).
     static func topFade(tv: Bool) -> CGFloat {
-        tv ? 18 : 10
+        tv ? 0 : 10
     }
 
     static func sidebarInsets(tv: Bool) -> Insets {

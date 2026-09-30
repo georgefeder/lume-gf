@@ -41,14 +41,16 @@ grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMov
   && ok "moves the Apple TV focus" || no "tv moves"
 grep -qF "launch TZ=Europe/London" "$LOG" && ok "the app runs on UK time" || no "time zone"
 # unsigned builds crash on iCloud at launch; Lume keeps iCloud off under -ui-testing (as its own UI tests do)
-[ "$(grep -c "simctl launch " "$LOG")" -eq 10 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
+[ "$(grep -c "simctl launch " "$LOG")" -eq 11 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
   && ok "every launch keeps iCloud off" || no "a launch without -ui-testing"
 n=0
 for f in iphone-guide-dark iphone-list-dark iphone-guide-light iphone-list-light iphone-guide-bottom-dark \
-         iphone-guide-few-dark tv-guide-channel tv-guide-programme tv-guide-bottom tv-list; do
+         iphone-guide-few-dark iphone-guide-landscape-dark tv-guide-channel tv-guide-programme tv-guide-bottom tv-list; do
   if [ -f "$T/out/$f.png" ]; then n=$((n + 1)); else no "missing $f.png"; fi
 done
-[ "$n" -eq 10 ] && ok "ten screenshots" || no "screenshots ($n)"
+[ "$n" -eq 11 ] && ok "eleven screenshots" || no "screenshots ($n)"
+grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMoves landscape" "$LOG" \
+  && ok "the iPhone guide is photographed in landscape" || no "no landscape picture"
 grep -qE "exportArchive| archive " "$LOG" && no "must never archive or upload" || ok "never archives or uploads"
 printf '%s' "$out" | grep -q "not running" && no "a running app must not be reported gone ($out)" || ok "a running app is photographed"
 grep -qF -- "--stdout=$T/out/logs/iphone-guide-dark.out" "$LOG" && ok "the app's own output is kept with the pictures" \
