@@ -61,6 +61,9 @@
         let container: ModelContainer
         let scope: LiveChannelScope
         let categories: [Category]
+        let playlist: Playlist
+        /// The first channel, for `-GFDemoMoves play` (the iPhone opens it as Lume's Live TV screen does).
+        let firstStream: LiveStream?
 
         init(count: Int = GFDemo.channelCount, now: Date = .now) {
             // swiftlint:disable:next force_try
@@ -77,13 +80,15 @@
             }
             categories.forEach { context.insert($0) }
             let category = categories[0]
+            var streams: [LiveStream] = []
             for (index, name) in Self.channelNames(now: now).prefix(count).enumerated() {
                 let channelId = "demo-\(index)"
-                context.insert(LiveStream(
+                streams.append(LiveStream(
                     id: "\(playlist.id.uuidString)-live-\(index)", streamId: 100 + index, name: name,
                     epgChannelId: channelId, tvArchive: index % 4 == 3 ? 1 : 0, tvArchiveDuration: 7,
                     num: index + 1, categoryId: category.id
                 ))
+                context.insert(streams[streams.count - 1])
                 for listing in Self.programmes(channelId: channelId, index: index, name: name, now: now) {
                     context.insert(listing)
                 }
@@ -91,6 +96,8 @@
             try? context.save()
             self.container = container
             self.categories = categories
+            self.playlist = playlist
+            firstStream = streams.first
             scope = .category(category.id)
         }
 
@@ -158,6 +165,7 @@
         @State private var store: GFDemoStore
         @State private var section: LiveTVSection?
         @State private var layoutMode = (GFDemo.mode == "list" ? LiveTVLayoutMode.list : .guide).rawValue
+        @State private var playing: PlayableMedia?
 
         init() {
             let store = GFDemoStore()
@@ -167,6 +175,10 @@
 
         var body: some View {
             content.modelContainer(store.container)
+        }
+
+        private func play(_ stream: LiveStream) {
+            playing = PlayableMedia.from(stream: stream, playlist: store.playlist)
         }
 
         @ViewBuilder private var content: some View {
@@ -191,14 +203,17 @@
                             Group {
                                 if GFDemo.mode == "list" {
                                     ChannelsList(scope: store.scope, playlistPrefix: "", sort: .playlist,
-                                                 onStartMultiView: { _ in }, onPlay: { _ in })
+                                                 onStartMultiView: { _ in }, onPlay: play)
                                 } else {
-                                    EPGGuideView(scope: store.scope, playlistPrefix: "", sort: .playlist,
-                                                 onPlay: { _ in })
+                                    EPGGuideView(scope: store.scope, playlistPrefix: "", sort: .playlist, onPlay: play)
                                 }
                             }
                             .navigationTitle("Sport")
                             .navigationBarTitleDisplayMode(.inline)
+                            // as Lume's Live TV screen opens a channel (LiveTVView)
+                            .fullScreenCover(item: $playing) { media in
+                                FullScreenPlayerView(media: media)
+                            }
                         }
                     }
                     Tab("Movies", systemImage: "film") { Color.clear }
@@ -209,6 +224,11 @@
                 .tabBarMinimizeOnScrollDownIfAvailable()
                 .task {
                     if GFDemo.moves.contains("landscape") { GFDemo.turnToLandscape() }
+                    if GFDemo.moves.contains("play"), let stream = store.firstStream {
+                        // -GFDemoMoves play: the first channel opens after four seconds (filmed by ci/screenshots.sh)
+                        try? await Task.sleep(for: .seconds(4))
+                        play(stream)
+                    }
                 }
             #endif
         }

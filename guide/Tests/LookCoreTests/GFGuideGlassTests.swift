@@ -87,10 +87,32 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.mirrorOffset(CGPoint(x: -3, y: 0), scrollInsetLeading: 0) == CGPoint(x: 0, y: 0))
     }
 
-    @Test func `only the iPhone fades rows under the ruler`() {
-        // the Apple TV's rows meet the ruler as in Lume: a fade there painted a dark band over its backdrop
-        #expect(GFGuideGlass.topFade(tv: true) == 0)
+    @Test func `rows fade under the ruler, on the Apple TV only above where the first tile starts`() {
+        // Apple TV: half Lume's 14-point row gap, the space above each programme tile (a mask, so no painted band)
+        #expect(GFGuideGlass.topFade(tv: true) == 7)
         #expect(GFGuideGlass.topFade(tv: false) == 10)
+    }
+
+    @Test func `the Apple TV channel highlight is as tall as the programme tiles beside it`() {
+        // Lume leaves the row gap around each programme tile: 116 - 14 = 102 on the Apple TV
+        #expect(GFGuideGlass.tileHeight(rowHeight: 116, rowSpacing: 14) == 102)
+        #expect(GFGuideGlass.tileHeight(rowHeight: 10, rowSpacing: 14) == 0)
+    }
+
+    @Test func `the Apple TV panel reaches above the first channel, clear of its rounded corner`() {
+        let insets = GFGuideGlass.sidebarInsets(tv: true)
+        #expect(insets.top < 0)
+        let firstTileTop = -insets.top + 14 / 2
+        let corner = GFGuideGlass.cornerIntrusion(radius: GFGuideGlass.sidebarCornerRadius(tv: true),
+                                                  inset: GFGuideGlass.tvHighlightLeading - insets.leading)
+        #expect(firstTileTop > corner)
+        #expect(GFGuideGlass.sidebarInsets(tv: false) == GFGuideGlass.Insets(leading: 6, trailing: 6, top: 4))
+    }
+
+    @Test func `a rounded corner reaches down less the further in you go`() {
+        #expect(GFGuideGlass.cornerIntrusion(radius: 36, inset: 0) == 36)
+        #expect(abs(GFGuideGlass.cornerIntrusion(radius: 36, inset: 8) - 13.37) < 0.01)
+        #expect(GFGuideGlass.cornerIntrusion(radius: 36, inset: 40) == 0)
     }
 
     @Test func `Lume's panel corners: 36 on Apple TV, 16 on iPhone`() {

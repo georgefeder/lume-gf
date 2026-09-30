@@ -98,14 +98,28 @@ nonisolated enum GFGuideGlass {
         max(0, safeAreaBottom) + rowStride / 2
     }
 
-    /// Rows scrolling under the ruler fade on iPhone; the Apple TV's meet it as in Lume (they move a row at a time,
-    /// and a fade there painted a band over the system's backdrop).
+    /// Rows scrolling under the ruler fade out: on the Apple TV over the space above each programme tile (half Lume's
+    /// 14-point row gap, so the first tile starts below it; a mask there, no painted band), on iPhone over 10 points.
     static func topFade(tv: Bool) -> CGFloat {
-        tv ? 0 : 10
+        tv ? 7 : 10
+    }
+
+    /// The height of a programme tile: Lume leaves the row gap around each (the Apple TV's channel highlight matches).
+    static func tileHeight(rowHeight: CGFloat, rowSpacing: CGFloat) -> CGFloat {
+        max(0, rowHeight - rowSpacing)
+    }
+
+    /// How far a rounded corner of `radius` reaches down from the top edge at `inset` in from the side.
+    static func cornerIntrusion(radius: CGFloat, inset: CGFloat) -> CGFloat {
+        guard inset < radius else { return 0 }
+        let across = radius - max(0, inset)
+        return radius - (radius * radius - across * across).squareRoot()
     }
 
     static func sidebarInsets(tv: Bool) -> Insets {
-        tv ? Insets(leading: 0, trailing: 16, top: 2) : Insets(leading: 6, trailing: 6, top: 4)
+        // Apple TV: the panel reaches 16 points above the first channel, which then sits in the glass like the
+        // programme tiles beside it (not on its edge)
+        tv ? Insets(leading: 0, trailing: 16, top: -16) : Insets(leading: 6, trailing: 6, top: 4)
     }
 
     /// Lume's own panel sizes: 36 for its big Apple TV panels, 16 for its glass cards.

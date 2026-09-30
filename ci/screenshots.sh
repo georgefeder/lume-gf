@@ -7,8 +7,8 @@ set -eu
 LUME="${1:?usage: screenshots.sh LUME_DIR OUT_DIR}"; OUT="${2:?usage: screenshots.sh LUME_DIR OUT_DIR}"
 CI=$(cd "$(dirname "$0")" && pwd); LUME=$(cd "$LUME" && pwd); mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_SHOT_WAIT:-15}"
-SETTLE="${GF_BOOT_SETTLE:-120}"
-LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0  # the app's own output, kept with the pictures
+SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"
+LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0  # the app's own output, kept with the pictures
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
 
@@ -43,6 +43,25 @@ shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch ar
   fi
 }
 
+film() {  # $1 = simulator id, $2 = bundle id, $3 = name, rest = launch arguments; films the screen, keeps frames
+  SIM="$1"; BID="$2"; NAME="$3"; shift 3
+  xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
+  SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
+    "$SIM" "$BID" -ui-testing "$@" >/dev/null
+  xcrun simctl io "$SIM" recordVideo --codec=h264 --force "$LOGS/$NAME.mp4" >/dev/null 2>&1 &
+  REC=$!
+  sleep "$FILM"
+  kill -INT "$REC" 2>/dev/null || true
+  wait "$REC" 2>/dev/null || true
+  # every 1/15 s a small frame and its brightness (luma.csv): a flash shows as a dip
+  if swift "$CI/video-frames.swift" "$LOGS/$NAME.mp4" "$OUT/film-$NAME" 15 >&2; then
+    echo "screenshots: film-$NAME"
+    python3 "$CI/film-check.py" "$OUT/film-$NAME" || FLASHED=1
+  else
+    echo "screenshots: film-$NAME: no frames"
+  fi
+}
+
 new_tv() {  # an Apple TV simulator on the newest tvOS runtime; prints its id
   RT=$(xcrun simctl list runtimes --json | python3 -c 'import json, sys
 r = [x for x in json.load(sys.stdin)["runtimes"] if x.get("platform") == "tvOS" and x.get("isAvailable")]
@@ -63,6 +82,11 @@ done
 xcrun simctl ui "$IOS" appearance dark
 shoot "$IOS" "$BID" iphone-guide-bottom-dark -GFDemo guide -GFDemoMoves end
 shoot "$IOS" "$BID" iphone-guide-few-dark -GFDemo guide -GFDemoChannels 3
+# a channel opened in light mode, filmed (Georgs saw the screen flash dark): system light, then Lume's own Light setting
+xcrun simctl ui "$IOS" appearance light
+film "$IOS" "$BID" iphone-open-light -GFDemo list -GFDemoMoves play
+film "$IOS" "$BID" iphone-open-lightsetting -GFDemo list -GFDemoMoves play -app.appearance light
+xcrun simctl ui "$IOS" appearance dark
 shoot "$IOS" "$BID" iphone-guide-landscape-dark -GFDemo guide -GFDemoMoves landscape  # last: the iPhone stays sideways
 xcrun simctl shutdown "$IOS" >/dev/null 2>&1 || true
 
@@ -76,3 +100,5 @@ shoot "$TV" "$BID" tv-guide-bottom -GFDemo guide -GFDemoMoves down,down,down,dow
 shoot "$TV" "$BID" tv-list -GFDemo list
 [ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true
 echo "screenshots: done"
+# the dark flash Georgs saw on opening a channel must not come back
+[ "$FLASHED" -eq 0 ] || { echo "screenshots: the screen flashed when a channel opened (see film-*/luma.csv)"; exit 1; }
