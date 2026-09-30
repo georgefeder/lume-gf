@@ -71,6 +71,22 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.bottomFade(safeAreaBottom: -5, rowStride: 72) == 36)
     }
 
+    @Test func `the grid's content starts one sidebar-width in from the guide's edge, wherever its scroll view starts`() {
+        // iPhone in landscape: the scroll view runs on 62 points into the notch margin and insets its content by as
+        // much; the content moves in by the same so the ruler's times stay level with the programmes
+        #expect(GFGuideGlass.gridContentPad(contentPad: 136, scrollInsetLeading: 62) == 198)
+        #expect(GFGuideGlass.gridContentPad(contentPad: 136, scrollInsetLeading: 0) == 136)
+        #expect(GFGuideGlass.gridContentPad(contentPad: 300, scrollInsetLeading: -4) == 300)
+    }
+
+    @Test func `the panes follow the grid into its leading room but not past its start`() {
+        // Lume clamps a bounce past the start; with room kept on the left the start itself is at minus that room
+        #expect(GFGuideGlass.mirrorOffset(CGPoint(x: -62, y: -5), scrollInsetLeading: 62) == CGPoint(x: -62, y: 0))
+        #expect(GFGuideGlass.mirrorOffset(CGPoint(x: -80, y: 10), scrollInsetLeading: 62) == CGPoint(x: -62, y: 10))
+        #expect(GFGuideGlass.mirrorOffset(CGPoint(x: 500, y: 20), scrollInsetLeading: 0) == CGPoint(x: 500, y: 20))
+        #expect(GFGuideGlass.mirrorOffset(CGPoint(x: -3, y: 0), scrollInsetLeading: 0) == CGPoint(x: 0, y: 0))
+    }
+
     @Test func `only the iPhone fades rows under the ruler`() {
         // the Apple TV's rows meet the ruler as in Lume: a fade there painted a dark band over its backdrop
         #expect(GFGuideGlass.topFade(tv: true) == 0)
