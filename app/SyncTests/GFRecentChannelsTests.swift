@@ -54,4 +54,24 @@ struct GFRecentChannelsTests {
         let updated = try #require(try ctx.fetch(FetchDescriptor<LiveStream>(predicate: #Predicate { $0.id == id })).first)
         #expect(updated.lastWatchedDate == watched)
     }
+
+    @Test func `a channel whose playlist is gone stops syncing its watched date`() async throws {
+        // Lume resets an item's personal state when its playlist is gone, and on a profile switch (the same reset):
+        // the watched date must go too, or the channel keeps making cloud records and one profile's recently
+        // watched channels show, and are saved, under the next
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let stream = LiveStream(id: "\(UUID().uuidString)-live-9", streamId: 9, name: "Channel 9", epgChannelId: nil,
+                                tvArchive: 0, tvArchiveDuration: 0, num: 9, categoryId: nil) // no playlist anywhere
+        stream.lastWatchedDate = Date(timeIntervalSince1970: 1_790_001_000)
+        ctx.insert(stream)
+        try ctx.save()
+
+        _ = await CloudSyncEngine(container: container, shadow: freshShadow()).reconcile()
+
+        let id = stream.id
+        let after = try #require(try ctx.fetch(FetchDescriptor<LiveStream>(predicate: #Predicate { $0.id == id })).first)
+        #expect(after.lastWatchedDate == nil)
+        #expect(try ctx.fetch(FetchDescriptor<UserContentState>()).isEmpty)
+    }
 }
