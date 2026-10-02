@@ -164,3 +164,24 @@ jobs:
           name: screenshots
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: warn
+
+  # Part 4: our iCloud layout (cloudkit/schema.ckdb) uploaded to the container's development environment; production
+  # takes it only from Georgs' "Deploy Schema Changes". Uses the token only here, never echoed.
+  icloud-layout:
+    name: iCloud layout (development)
+    runs-on: macos-26
+    timeout-minutes: 15
+    if: ${{ !inputs.baseline && !inputs.only_logic && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/part4/')) }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Upload the layout to development (needs CLOUDKIT_MANAGEMENT_TOKEN)
+        env:
+          CLOUDKIT_MANAGEMENT_TOKEN: ${{ secrets.CLOUDKIT_MANAGEMENT_TOKEN }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          if [ -z "$CLOUDKIT_MANAGEMENT_TOKEN" ]; then echo "iCloud layout: no CLOUDKIT_MANAGEMENT_TOKEN secret yet (Georgs adds it, Task 8)"; exit 0; fi
+          xcrun cktool validate-schema --token "$CLOUDKIT_MANAGEMENT_TOKEN" --team-id "$TEAM_ID" \
+            --container-id iCloud.lv.georgefeder.lume --environment development --file cloudkit/schema.ckdb
+          xcrun cktool import-schema --token "$CLOUDKIT_MANAGEMENT_TOKEN" --team-id "$TEAM_ID" \
+            --container-id iCloud.lv.georgefeder.lume --environment development --validate --file cloudkit/schema.ckdb
+          echo "iCloud layout: uploaded to development; production needs Deploy Schema Changes once per change"
