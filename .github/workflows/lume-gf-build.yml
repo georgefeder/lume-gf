@@ -36,6 +36,7 @@ jobs:
           sh gf/ci/test_check_export.sh
           sh gf/ci/test_keepalive.sh
           sh gf/ci/test_add_sources.sh
+          sh gf/ci/test_run_app_tests.sh
           sh gf/ci/test_apply_patches.sh
           sh gf/ci/test_workflows.sh
           sh gf/ci/test_apply_dep_patches.sh
