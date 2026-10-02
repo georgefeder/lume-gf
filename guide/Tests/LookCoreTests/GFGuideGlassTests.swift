@@ -128,19 +128,26 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.tvHighlightWidth(columnWidth: 300) > 200)
     }
 
-    @Test func `the first row starts one row gap below the top fade, so nothing fades until you scroll`() {
+    @Test func `the first row starts below the top fade, so nothing fades until you scroll`() {
         // Georgs on build 9: the first channel and programmes sat where the fade already starts
         #expect(GFGuideGlass.gridTopRoom(tv: true, rowSpacing: 14) == 14)
-        #expect(GFGuideGlass.gridTopRoom(tv: false, rowSpacing: 4) == 12)
+        #expect(GFGuideGlass.gridTopRoom(tv: false, rowSpacing: 4) == 22)
         for (tv, spacing) in [(true, CGFloat(14)), (false, CGFloat(4))] {
             let firstTileTop = GFGuideGlass.gridTopRoom(tv: tv, rowSpacing: spacing) + spacing / 2
-            #expect(firstTileTop - GFGuideGlass.topFade(tv: tv) == spacing)
+            #expect(firstTileTop - GFGuideGlass.topFade(tv: tv) == spacing + GFGuideGlass.topBreathingRoom(tv: tv))
         }
+    }
+
+    @Test func `the iPhone's first row starts 24 points under the ruler`() {
+        // Georgs on build 16: the first channel still sat too close under the ruler (14 points)
+        #expect(GFGuideGlass.gridTopRoom(tv: false, rowSpacing: 4) + 4 / 2 == 24)
+        #expect(GFGuideGlass.topBreathingRoom(tv: false) == 10)
+        #expect(GFGuideGlass.topBreathingRoom(tv: true) == 0) // the Apple TV's panel already reaches above its first row
     }
 
     @Test func `the panel's top moves down with the first row`() {
         #expect(GFGuideGlass.panelTop(tv: true, rowSpacing: 14) == -2) // still reaching above the first channel
-        #expect(GFGuideGlass.panelTop(tv: false, rowSpacing: 4) == 16)
+        #expect(GFGuideGlass.panelTop(tv: false, rowSpacing: 4) == 26)
         let firstTileTop = GFGuideGlass.gridTopRoom(tv: true, rowSpacing: 14) + 7
         let corner = GFGuideGlass.cornerIntrusion(radius: GFGuideGlass.sidebarCornerRadius(tv: true),
                                                   inset: GFGuideGlass.tvHighlightLeading)

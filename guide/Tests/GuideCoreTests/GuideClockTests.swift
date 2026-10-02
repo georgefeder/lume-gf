@@ -88,8 +88,21 @@ struct GuideClockTests {
     }
 
     @Test func `status line when never updated`() {
-        #expect(GuideStatusSummary.line(for: [], time: time) == "Guide not updated yet")
         #expect(GuideStatusSummary.line(for: [GuideSourceState()], time: time) == "Guide not updated yet")
+    }
+
+    @Test func `status line says when no guide source is switched on`() {
+        // Georgs on build 16: the Apple TV's guide never loaded; a device without a source said "not updated yet"
+        #expect(GuideStatusSummary.line(for: [], time: time) == "No guide source switched on")
+    }
+
+    @Test func `status line says why a guide that never loaded failed`() {
+        // the first download failing said only "Guide not updated yet"
+        var older = GuideSourceState(), newer = GuideSourceState()
+        older.recordFailure("HTTP 500", at: build.addingTimeInterval(4 * minute))
+        newer.recordFailure("HTTP 404", at: build.addingTimeInterval(9 * minute))
+        #expect(GuideStatusSummary.line(for: [older, newer], time: time)
+            == "Guide not updated yet · last check failed 00:20 (HTTP 404)")
     }
 
     @Test func `status line shows the update and the server's build time`() {
