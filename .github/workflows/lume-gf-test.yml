@@ -37,6 +37,7 @@ jobs:
         run: |
           sh ci/test_add_sources.sh
           sh ci/test_run_app_tests.sh
+          sh ci/test_settings_tripwire.sh
           sh ci/test_patch_scripts.sh
           sh ci/test_check_export.sh
           sh ci/test_apply_patches.sh
@@ -93,6 +94,10 @@ jobs:
       - name: Our changes onto Lume
         if: ${{ !inputs.baseline }}
         run: sh gf/ci/apply-patches.sh gf Lume && sh gf/ci/add-sources.sh gf Lume
+      # Part 4: a Lume release with a setting GFSettingsCatalog does not place stops here (it would stay on each device)
+      - name: Every Lume setting has a sync group
+        if: ${{ !inputs.baseline }}
+        run: sh gf/ci/settings-tripwire.sh gf Lume
       - name: Our patches to Lume's packages
         if: ${{ !inputs.baseline }}
         run: |

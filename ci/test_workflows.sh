@@ -51,5 +51,7 @@ check "the tests run never runs on pull requests" \
   'y=YAML.load_file(ARGV[0]); o=y["on"] || y[true]; exit(o.key?("pull_request") || o.key?("pull_request_target") ? 1 : 0)' "$WT"
 check "every TestFlight leg waits for production's iCloud layout" \
   'y=YAML.load_file(ARGV[0]); r=y["jobs"]["icloud-gate"]["steps"].map { |s| s["run"].to_s }.join; exit(Array(y["jobs"]["build"]["needs"]).include?("icloud-gate") && r.include?("schema-check.py") ? 0 : 1)'
+check "the app tests stop on a Lume setting without a sync group (after our sources, before the tests)" \
+  'y=YAML.load_file(ARGV[0]); s=y["jobs"]["app"]["steps"]; f=->(n) { s.index { |x| x["run"].to_s.include?(n) } }; i, t, a = f["add-sources.sh"], f["settings-tripwire.sh gf Lume"], f["run-app-tests.sh"]; exit(i && t && a && i < t && t < a ? 0 : 1)' "$WT"
 [ "$fails" -eq 0 ] && echo "test_workflows: all passed" || echo "test_workflows: $fails failed"
 exit "$fails"
