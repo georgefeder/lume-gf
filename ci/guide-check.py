@@ -7,7 +7,9 @@
   - both: the first row starts below the top fade (it sat where the fade starts);
   - Apple TV: a focused six-hour programme keeps to itself ("No Pr..." showed through the focus glass over it).
 And for Georgs' notes of 2 Oct: posters in a row line up at the top (a title on two lines lifted its poster), and Home
-shows Recently Watched and the recently added films and series (his Apple TV's Home showed only the sports row).
+shows Recently Watched and the recently added films and series (his Apple TV's Home showed only the sports row). Rows
+below the first screen are never drawn, so the recently added rows are checked on a second picture of Home with
+Recently Watched and Favorites switched off.
 Positions come from the demo build's log lines ("GFDemo guide geometry:", "GFDemo focused programme:", in points on
 screen), brightness from png-lines.swift. Exit 1 when a check fails. Usage: guide-check.py <screenshots dir>"""
 import os, statistics, subprocess, sys
@@ -15,7 +17,12 @@ import os, statistics, subprocess, sys
 GEOMETRY = "GFDemo guide geometry:"
 FOCUSED = "GFDemo focused programme:"
 RAIL_CARD = "GFDemo rail card:"
-HOME_ROWS = ("Recently Watched", "Recently Added Movies", "Recently Added Series")
+HOME_TOP = ("Recently Watched",)
+HOME_ADDED = ("Recently Added Movies", "Recently Added Series")
+HOME_SHOTS = {"iphone-home-dark": HOME_TOP, "tv-home": HOME_TOP,
+              "iphone-home-added-dark": HOME_ADDED, "tv-home-added": HOME_ADDED}
+POSTER_SHOTS = ("iphone-movies-dark", "iphone-series-dark", "iphone-home-dark", "iphone-home-added-dark",
+                "tv-movies", "tv-home", "tv-home-added")
 
 
 def parse_fields(text):
@@ -76,11 +83,11 @@ def rows_level_ok(rows):
     return True, "posters level in %d rows" % len(rows)
 
 
-def home_rows_ok(rows):
-    missing = [title for title in HOME_ROWS if not rows.get(title)]
+def home_rows_ok(rows, expected):
+    missing = [title for title in expected if not rows.get(title)]
     if missing:
         return False, "Home is missing: " + ", ".join(missing)
-    return True, "Home shows " + ", ".join(HOME_ROWS)
+    return True, "Home shows " + ", ".join(expected)
 
 
 def residual(values, half=20):
@@ -236,10 +243,11 @@ def run_checks(out, sample):
         results.append(("first row (%s)" % shot,)
                        + first_row_ok(edges, g["fade"], expected=g["room"] + g["rowSpacing"] / 2))
 
-    for shot in ("iphone-movies-dark", "iphone-series-dark", "iphone-home-dark", "tv-movies", "tv-home"):
+    for shot in POSTER_SHOTS:
         results.append(("posters level (%s)" % shot,) + rows_level_ok(rail_cards(os.path.join(logs, shot + ".err"))))
-    for shot in ("iphone-home-dark", "tv-home"):
-        results.append(("Home rows (%s)" % shot,) + home_rows_ok(rail_cards(os.path.join(logs, shot + ".err"))))
+    for shot, expected in HOME_SHOTS.items():
+        results.append(("Home rows (%s)" % shot,)
+                       + home_rows_ok(rail_cards(os.path.join(logs, shot + ".err")), expected))
 
     shot = "tv-guide-long"
     g = geometry(shot)
