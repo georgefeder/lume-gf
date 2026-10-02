@@ -7,8 +7,8 @@ set -eu
 LUME="${1:?usage: screenshots.sh LUME_DIR OUT_DIR}"; OUT="${2:?usage: screenshots.sh LUME_DIR OUT_DIR}"
 CI=$(cd "$(dirname "$0")" && pwd); LUME=$(cd "$LUME" && pwd); mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_SHOT_WAIT:-15}"
-SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"
-LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0  # the app's own output, kept with the pictures
+SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"; REC_GRACE="${GF_REC_GRACE:-20}"
+LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0  # the app's own output, kept with the pictures
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
 
@@ -45,14 +45,26 @@ shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch ar
 
 film() {  # $1 = simulator id, $2 = bundle id, $3 = name, rest = launch arguments; films the screen, keeps frames
   SIM="$1"; BID="$2"; NAME="$3"; shift 3
-  xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
-  SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
-    "$SIM" "$BID" -ui-testing "$@" >/dev/null
-  xcrun simctl io "$SIM" recordVideo --codec=h264 --force "$LOGS/$NAME.mp4" >/dev/null 2>&1 &
-  REC=$!
-  sleep "$FILM"
-  kill -INT "$REC" 2>/dev/null || true
-  wait "$REC" 2>/dev/null || true
+  for TRY in 1 2; do
+    xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
+    SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
+      "$SIM" "$BID" -ui-testing "$@" >/dev/null
+    xcrun simctl io "$SIM" recordVideo --codec=h264 --force "$LOGS/$NAME.mp4" >/dev/null 2>&1 &
+    REC=$!
+    sleep "$FILM"
+    kill -INT "$REC" 2>/dev/null || true
+    # the simulator's recorder sometimes never finishes its file (an empty .mp4, and the job held until its time
+    # limit): it gets REC_GRACE seconds, then is stopped, and the film is taken once more
+    i=0
+    while kill -0 "$REC" 2>/dev/null && [ "$i" -lt "$REC_GRACE" ]; do sleep 1; i=$((i + 1)); done
+    kill -KILL "$REC" 2>/dev/null || true
+    wait "$REC" 2>/dev/null || true
+    [ -s "$LOGS/$NAME.mp4" ] && break
+    echo "screenshots: film-$NAME: the simulator's recorder gave no film (try $TRY)"
+  done
+  if [ ! -s "$LOGS/$NAME.mp4" ]; then
+    echo "screenshots: no film of $NAME"; NOFILM=1; return 0
+  fi
   # every 1/15 s a small frame and its brightness (luma.csv): a flash shows as a dip
   if swift "$CI/video-frames.swift" "$LOGS/$NAME.mp4" "$OUT/film-$NAME" 15 >&2; then
     echo "screenshots: film-$NAME"
@@ -117,3 +129,5 @@ shoot "$TV" "$BID" tv-list -GFDemo list
 echo "screenshots: done"
 # the dark flash Georgs saw on opening a channel must not come back
 [ "$FLASHED" -eq 0 ] || { echo "screenshots: the screen flashed when a channel opened (see film-*/luma.csv)"; exit 1; }
+# a film the recorder never gave twice is a flash check not done
+[ "$NOFILM" -eq 0 ] || { echo "screenshots: the simulator's recorder gave no film twice running (see above)"; exit 1; }
