@@ -144,6 +144,75 @@ class FocusPlanTests(unittest.TestCase):
         self.assertEqual((inside[1], inside[3]), ((300 + 10) * 2, (300 + 116 - 10) * 2))
 
 
+class RowTests(unittest.TestCase):
+    LOG = ("GFDemo rail card: 0 310.0 260.0 Recently Added\n"
+           "GFDemo rail card: 1 290.0 280.0 Recently Added\n"     # a two-line title, centred: 20 points higher
+           "GFDemo rail card: 1 310.0 280.0 Recently Added\n"     # later line wins
+           "GFDemo rail card: 0 600.0 200.0 Recently Watched\n"
+           "GFDemo rail card: 1 600.0 120.0 Recently Watched\n")
+
+    def write(self, text):
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, "shot.err")
+        with open(path, "w") as f:
+            f.write(text)
+        return path
+
+    def test_cards_are_read_per_row_with_the_last_position_winning(self):
+        rows = gc.rail_cards(self.write(self.LOG))
+        self.assertEqual(sorted(rows), ["Recently Added", "Recently Watched"])
+        self.assertEqual(rows["Recently Added"][1], 310.0)
+
+    def test_posters_level_at_the_top_pass(self):
+        ok, _ = gc.rows_level_ok(gc.rail_cards(self.write(self.LOG)))
+        self.assertTrue(ok)
+
+    def test_a_poster_higher_than_its_neighbours_fails(self):
+        # Georgs' photo of the Series page (2 Oct): the two-line titles' posters sat higher
+        ok, detail = gc.rows_level_ok(gc.rail_cards(self.write(self.LOG + "GFDemo rail card: 2 290.0 280.0 Recently Added\n")))
+        self.assertFalse(ok)
+        self.assertIn("Recently Added", detail)
+
+    def test_no_rows_logged_fails(self):
+        ok, _ = gc.rows_level_ok({})
+        self.assertFalse(ok)
+
+    def test_the_top_of_home_shows_recently_watched(self):
+        ok, _ = gc.home_rows_ok({"Recently Watched": {0: 1.0}, "Favorites": {0: 1.0}}, gc.HOME_TOP)
+        self.assertTrue(ok)
+
+    def test_a_home_without_recently_watched_fails(self):
+        ok, detail = gc.home_rows_ok({"Favorites": {0: 1.0}}, gc.HOME_TOP)
+        self.assertFalse(ok)
+        self.assertIn("Recently Watched", detail)
+
+    def test_home_shows_the_recently_added_rows(self):
+        rows = {"Recently Added Movies": {0: 1.0}, "Recently Added Series": {0: 1.0}}
+        ok, _ = gc.home_rows_ok(rows, gc.HOME_ADDED)
+        self.assertTrue(ok)
+
+    def test_a_home_without_recently_added_fails(self):
+        # Georgs' Apple TV (2 Oct): Home showed only the sports row
+        ok, detail = gc.home_rows_ok({"Recently Added Movies": {0: 1.0}}, gc.HOME_ADDED)
+        self.assertFalse(ok)
+        self.assertIn("Recently Added Series", detail)
+
+    def test_each_home_picture_is_checked_for_its_own_rows(self):
+        # the rows below the first screen are never drawn (Lume builds Home's rows as they scroll in), so the recently
+        # added rows are checked on a Home with Recently Watched and Favorites switched off
+        self.assertEqual(gc.HOME_SHOTS["iphone-home-dark"], gc.HOME_TOP)
+        self.assertEqual(gc.HOME_SHOTS["tv-home"], gc.HOME_TOP)
+        self.assertEqual(gc.HOME_SHOTS["iphone-home-added-dark"], gc.HOME_ADDED)
+        self.assertEqual(gc.HOME_SHOTS["tv-home-added"], gc.HOME_ADDED)
+        self.assertEqual(gc.HOME_TOP + gc.HOME_ADDED,
+                         ("Recently Watched", "Recently Added Movies", "Recently Added Series"))
+
+    def test_the_posters_are_checked_on_every_poster_picture(self):
+        for shot in ("iphone-home-dark", "iphone-home-added-dark", "iphone-movies-dark", "iphone-series-dark",
+                     "tv-home", "tv-home-added", "tv-movies"):
+            self.assertIn(shot, gc.POSTER_SHOTS)
+
+
 class MainTests(unittest.TestCase):
     def test_a_missing_screen_scale_is_a_failure(self):
         d = tempfile.mkdtemp()
