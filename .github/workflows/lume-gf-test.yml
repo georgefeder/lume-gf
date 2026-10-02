@@ -44,6 +44,11 @@ jobs:
       - name: swift test
         working-directory: guide
         run: swift test
+      - name: iCloud layout is current
+        run: |
+          swift run --package-path guide gf-schema > "$RUNNER_TEMP/schema.ckdb"
+          diff -u cloudkit/schema.ckdb "$RUNNER_TEMP/schema.ckdb" \
+            || { echo "cloudkit/schema.ckdb is out of date: swift run --package-path guide gf-schema > cloudkit/schema.ckdb"; exit 1; }
   app:
     name: App tests (iOS Simulator)
     if: ${{ !inputs.only_logic }}
