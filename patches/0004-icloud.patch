@@ -1,0 +1,36 @@
+diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
+index e37e976..c6e3712 100644
+--- a/Lume/LumeApp.swift
++++ b/Lume/LumeApp.swift
+@@ -14,7 +14,7 @@ struct LumeApp: App {
+     /// The CloudKit private-database container backing iCloud sync. Must match
+     /// the id in `Lume.entitlements` and exist in the Apple Developer portal /
+     /// CloudKit Console (schema deployed to Production before App Store release).
+-    static let cloudKitContainerIdentifier = "iCloud.bilipp.Lume"
++    static let cloudKitContainerIdentifier = GFCloudConfig.containerID // Lume GF: Georgs' own container
+ 
+     /// The local-only catalog store. The app's environment container — every
+     /// browse `@Query` binds to it, so CloudKit's churn (which only touches the
+@@ -182,14 +182,14 @@ struct LumeApp: App {
+     /// Real, properly-signed builds get full CloudKit sync.
+     static let isCloudKitEnvironment: Bool = {
+         #if SIDE_LOAD
+-            // Sideloaded / self-compiled builds are re-signed with an identity that
+-            // doesn't own the `iCloud.bilipp.Lume` container, so the CloudKit
+-            // entitlement is stripped at install time. Touching CloudKit then hard-
+-            // crashes at launch — the un-catchable `_os_crash` in
+-            // `containerWithIdentifier:` documented above. Keep all user data
+-            // local-only: both stores resolve to `cloudKitDatabase: .none` and the
+-            // sync coordinator skips every `CKContainer`/`accountStatus` call.
+-            return false
++            // Lume GF: our Sideload builds are signed with our own container (iCloud.lv.georgefeder.lume), so they
++            // sync like a signed App Store build; tests, previews and UI tests (the screenshot demo) stay local
++            guard GFCloudConfig.enabled else { return false }
++            let environment = ProcessInfo.processInfo.environment
++            let isPreview = environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
++            let isUnitTest = environment["XCTestConfigurationFilePath"] != nil
++            let isUITest = CommandLine.arguments.contains("-ui-testing")
++            return !(isPreview || isUnitTest || isUITest)
+         #else
+             let environment = ProcessInfo.processInfo.environment
+             let isPreview = environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
