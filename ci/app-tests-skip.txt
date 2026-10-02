@@ -10,3 +10,4 @@ ContentSyncTests              # "sync movies from example JSON": the same missin
 TextEmbedderTests             # on-device text embeddings are not available on the CI simulator
 SportsHubStringsTests         # fails on plain Lume too (baseline run 36525661807)
 SportsSyncStaleRefreshTests   # timing-dependent: failed once on plain Lume (baseline run 36525661807)
+SportsResolveCacheTests       # "an unchanged catalog reuses the answer, a sync recomputes it" fails on plain Lume 2.2.2 too (baseline run 37012552348)
