@@ -29,9 +29,13 @@ nonisolated struct GFChannelLabel: Equatable, Sendable {
         return parseEvent(raw, kind: kind, now: now, serverTimeZone: serverTimeZone) ?? unchanged(raw)
     }
 
-    /// Stub (red): the title as written.
+    /// A narrow column's last resort, once no text size fits every word on a line (the iPhone guide): one word per
+    /// line, so a word too wide shrinks instead of breaking (Georgs on build 16: "BLOOMBER / G"). More words than
+    /// lines stay as written.
     static func lastResortLines(_ title: String, lineLimit: Int) -> (text: String, lineLimit: Int) {
-        (title, lineLimit)
+        let words = title.split(separator: " ").map(String.init)
+        guard !words.isEmpty, words.count <= lineLimit else { return (title, lineLimit) }
+        return (words.joined(separator: "\n"), words.count)
     }
 
     /// "BBC One FHD" → "BBC One" + FHD. Nothing else is touched (a provider prefix like "AR| " stays).

@@ -45,12 +45,13 @@ nonisolated enum GuideClock {
 /// The one-line guide status for the settings, e.g. "Guide updated 00:13 · server built 00:11".
 nonisolated enum GuideStatusSummary {
     static func line(for states: [GuideSourceState], time: (Date) -> String) -> String {
+        guard !states.isEmpty else { return "No guide source switched on" }
         // the source that imported a guide last (a source that never downloads - all its channels covered by
         // another - must not hide it)
         guard let s = states.filter({ $0.lastUpdate != nil })
             .max(by: { ($0.lastUpdate ?? .distantPast) < ($1.lastUpdate ?? .distantPast) }),
             let update = s.lastUpdate
-        else { return "Guide not updated yet" }
+        else { return neverUpdated(states, time: time) }
         var line = "Guide updated \(time(update))"
         if let build = s.serverBuild { line += " · server built \(time(build))" }
         if let error = s.lastError, let attempt = s.lastAttempt {
@@ -58,5 +59,14 @@ nonisolated enum GuideStatusSummary {
         }
         if let check = s.lastCheck, check > update.addingTimeInterval(60) { line += " · checked \(time(check))" }
         return line
+    }
+
+    /// No guide imported yet: the newest failure says why (Georgs on build 16: the Apple TV's guide never loaded).
+    private static func neverUpdated(_ states: [GuideSourceState], time: (Date) -> String) -> String {
+        guard let failed = states.filter({ $0.lastError != nil && $0.lastAttempt != nil })
+            .max(by: { ($0.lastAttempt ?? .distantPast) < ($1.lastAttempt ?? .distantPast) }),
+            let error = failed.lastError, let attempt = failed.lastAttempt
+        else { return "Guide not updated yet" }
+        return "Guide not updated yet · last check failed \(time(attempt)) (\(error))"
     }
 }

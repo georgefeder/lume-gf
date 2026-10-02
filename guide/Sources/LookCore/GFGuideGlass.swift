@@ -127,16 +127,18 @@ nonisolated enum GFGuideGlass {
         tv ? 36 : 16
     }
 
-    /// Room above the first row: the top fade, then the half row gap Lume leaves above every tile, so the first row
-    /// starts one row gap below the fade and rows only fade once you scroll (Georgs on build 9: the first channel and
-    /// programmes sat where the fade already starts). Both panes and the scroll maths start their rows this far down.
+    /// Room above the first row: the top fade, the iPhone's breathing room, then the half row gap Lume leaves above
+    /// every tile, so the first row starts below the fade and rows only fade once you scroll (Georgs on build 9: the
+    /// first channel and programmes sat where the fade already starts). Both panes and the scroll maths start their
+    /// rows this far down.
     static func gridTopRoom(tv: Bool, rowSpacing: CGFloat) -> CGFloat {
-        topFade(tv: tv) + rowSpacing / 2
+        topFade(tv: tv) + topBreathingRoom(tv: tv) + rowSpacing / 2
     }
 
-    /// Stub (red): no extra room yet.
+    /// The iPhone's first row starts 24 points under the ruler, not 14 (Georgs on build 16: the first channel still
+    /// sat too close to it); the Apple TV's panel already reaches above its first row.
     static func topBreathingRoom(tv: Bool) -> CGFloat {
-        0
+        tv ? 0 : 10
     }
 
     /// The panel's top in the channel column: `sidebarInsets.top` from the first row, which starts `gridTopRoom` down.
