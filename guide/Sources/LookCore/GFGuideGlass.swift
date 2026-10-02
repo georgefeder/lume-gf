@@ -134,6 +134,11 @@ nonisolated enum GFGuideGlass {
         topFade(tv: tv) + rowSpacing / 2
     }
 
+    /// Stub (red): no extra room yet.
+    static func topBreathingRoom(tv: Bool) -> CGFloat {
+        0
+    }
+
     /// The panel's top in the channel column: `sidebarInsets.top` from the first row, which starts `gridTopRoom` down.
     static func panelTop(tv: Bool, rowSpacing: CGFloat) -> CGFloat {
         gridTopRoom(tv: tv, rowSpacing: rowSpacing) + sidebarInsets(tv: tv).top

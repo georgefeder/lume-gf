@@ -29,6 +29,11 @@ nonisolated struct GFChannelLabel: Equatable, Sendable {
         return parseEvent(raw, kind: kind, now: now, serverTimeZone: serverTimeZone) ?? unchanged(raw)
     }
 
+    /// Stub (red): the title as written.
+    static func lastResortLines(_ title: String, lineLimit: Int) -> (text: String, lineLimit: Int) {
+        (title, lineLimit)
+    }
+
     /// "BBC One FHD" → "BBC One" + FHD. Nothing else is touched (a provider prefix like "AR| " stays).
     static func parseOrdinary(_ raw: String) -> GFChannelLabel {
         let name = raw.trimmingCharacters(in: .whitespaces)
