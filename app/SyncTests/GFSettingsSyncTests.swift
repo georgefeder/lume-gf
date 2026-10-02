@@ -60,7 +60,10 @@ struct GFSettingsSyncTests {
         ud.set("dark", forKey: AppAppearance.storageKey)
         let sync = GFSettingsSync(store: store, defaults: ud, deviceGroup: .ios, fallbackDelay: .milliseconds(50))
         sync.start()
-        try await Task.sleep(for: .milliseconds(300))
+        // up to 3 s: a parallel run can hold the main thread far longer than the 50 ms wait (decision 10)
+        for _ in 0 ..< 60 where store.values[GFSettingsPlan.readyMarker] == nil {
+            try await Task.sleep(for: .milliseconds(50))
+        }
         #expect(store.values["gf.settings.ios.\(AppAppearance.storageKey)"] as? String == "dark")
         #expect(store.values[GFSettingsPlan.readyMarker] as? Bool == true)
     }

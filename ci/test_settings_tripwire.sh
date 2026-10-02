@@ -34,7 +34,8 @@ printf '%s\n' 'static let everywhere: [String] = [SortStorageKey.liveContent]' \
   'static let deviceOnly: [String] = ["tv.quickSwitch.hintShown.v1"]' > "$CATALOG"
 trip
 [ "$code" -eq 1 ] && printf '%s' "$out" | grep -q "SortStorageKey.live " \
-  && ok "a setting named only inside a longer name is not placed" || no "part of a longer name counted (exit $code, $out)"
+  && ok "a setting named only inside a longer name is not placed" \
+  || no "part of a longer name counted (exit $code, $out)"
 rm "$T/lume/Lume/Views/Home/Sort.swift"
 
 rm "$CATALOG"; trip
