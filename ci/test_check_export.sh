@@ -14,6 +14,12 @@ ents() {  # $1 file, then flags: group, debug, appid=<value>
                 -c "Add :com.apple.security.application-groups:0 string group.lv.georgefeder.lume" "$f" >/dev/null ;;
     debug) $PB -c "Add :get-task-allow bool true" "$f" >/dev/null ;;
     push) $PB -c "Add :aps-environment string production" "$f" >/dev/null ;;
+    icloud) $PB -c "Add :com.apple.developer.icloud-services array" -c "Add :com.apple.developer.icloud-services:0 string CloudKit" \
+                -c "Add :com.apple.developer.icloud-container-identifiers array" \
+                -c "Add :com.apple.developer.icloud-container-identifiers:0 string iCloud.lv.georgefeder.lume" \
+                -c "Add :com.apple.developer.ubiquity-kvstore-identifier string $TEAM.lv.georgefeder.lume" "$f" >/dev/null ;;
+    lumecloud) $PB -c "Add :com.apple.developer.icloud-container-identifiers:1 string iCloud.bilipp.Lume" "$f" >/dev/null ;;
+    pushdev) $PB -c "Add :aps-environment string development" "$f" >/dev/null ;;
     appid=*) $PB -c "Set :application-identifier ${a#appid=}" "$f" >/dev/null ;;
   esac; done
 }
@@ -41,16 +47,19 @@ expect() {  # $1 name, $2 0|1, $3 export dir, $4 platform, [$5 text]
   if [ "$rc" -eq "$2" ] && { [ -z "${5:-}" ] || printf '%s' "$out" | grep -qF "$5"; }; then echo "ok   $1"
   else echo "FAIL $1 (exit $rc, want $2${5:+, text '$5'})"; printf '%s\n' "$out" | sed 's/^/     /'; fails=$((fails + 1)); fi
 }
-expect "good iOS export passes" 0 "$(ipa good 'Lume GF' group group)" iOS "check-export: OK"
-expect "app without the app group fails" 1 "$(ipa nogroup 'Lume GF' - group)" iOS "app group missing in Lume.app"
-expect "widget extension without the app group fails" 1 "$(ipa xnogroup 'Lume GF' group -)" iOS "app group missing in LumeWidgets.appex"
-expect "debug entitlement fails" 1 "$(ipa debug 'Lume GF' group,debug group)" iOS "get-task-allow"
-expect "push entitlement fails" 1 "$(ipa push 'Lume GF' group,push group)" iOS "push/iCloud entitlement in Lume.app"
-expect "another team's app id fails" 1 "$(ipa appid 'Lume GF' group,appid=ZZZZZ99999.lv.georgefeder.lume group)" iOS "application-identifier"
-expect "wrong home-screen name fails" 1 "$(ipa name 'Lume' group group)" iOS "display name"
-expect "tvOS export without app group passes" 0 "$(ipa tv 'Lume GF' - none)" tvOS "check-export: OK"
+expect "good iOS export passes" 0 "$(ipa good 'Lume GF' group,icloud,push group)" iOS "check-export: OK"
+expect "app without the app group fails" 1 "$(ipa nogroup 'Lume GF' icloud,push group)" iOS "app group missing in Lume.app"
+expect "widget extension without the app group fails" 1 "$(ipa xnogroup 'Lume GF' group,icloud,push -)" iOS "app group missing in LumeWidgets.appex"
+expect "debug entitlement fails" 1 "$(ipa debug 'Lume GF' group,icloud,push,debug group)" iOS "get-task-allow"
+expect "app without our container fails" 1 "$(ipa nocloud 'Lume GF' group,push group)" iOS "our iCloud container missing in Lume.app"
+expect "Lume's container fails" 1 "$(ipa lumecloud 'Lume GF' group,icloud,lumecloud,push group)" iOS "Lume's container in Lume.app"
+expect "development push fails" 1 "$(ipa pushdev 'Lume GF' group,icloud,pushdev group)" iOS "push is not production in Lume.app"
+expect "iCloud in the widgets fails" 1 "$(ipa xcloud 'Lume GF' group,icloud,push group,icloud)" iOS "push/iCloud entitlement in LumeWidgets.appex"
+expect "another team's app id fails" 1 "$(ipa appid 'Lume GF' group,icloud,push,appid=ZZZZZ99999.lv.georgefeder.lume group)" iOS "application-identifier"
+expect "wrong home-screen name fails" 1 "$(ipa name 'Lume' group,icloud,push group)" iOS "display name"
+expect "tvOS export without app group passes" 0 "$(ipa tv 'Lume GF' icloud,push none)" tvOS "check-export: OK"
 mkdir -p "$T/none/export"
 expect "no .ipa fails" 1 "$T/none/export" iOS "no .ipa"
-expect "missing background task ids fails" 1 "$(ipa nobg 'Lume GF' group group)" iOS "background task"
+expect "missing background task ids fails" 1 "$(ipa nobg 'Lume GF' group,icloud,push group)" iOS "background task"
 [ "$fails" -eq 0 ] && echo "test_check_export: all passed" || echo "test_check_export: $fails failed"
 exit "$fails"

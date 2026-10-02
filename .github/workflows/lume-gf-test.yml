@@ -8,14 +8,18 @@ on:
         description: Test plain Lume without our changes (diagnosis)
         type: boolean
         default: false
+      only_logic:
+        description: Only the logic tests (swift test) - quick, for pure-logic changes
+        type: boolean
+        default: false
   push:
-    branches: ['part2/**', 'part3/**']
+    branches: ['part2/**', 'part3/**', 'part4/**']
 
 permissions:
   contents: read
 
 concurrency:
-  group: lume-gf-test-${{ github.ref }}-${{ inputs.baseline && 'baseline' || 'normal' }}
+  group: lume-gf-test-${{ github.ref }}-${{ inputs.baseline && 'baseline' || (inputs.only_logic && 'logic' || 'normal') }}
   cancel-in-progress: true
 
 jobs:
@@ -32,6 +36,9 @@ jobs:
       - name: Script tests
         run: |
           sh ci/test_add_sources.sh
+          sh ci/test_run_app_tests.sh
+          sh ci/test_patch_scripts.sh
+          sh ci/test_check_export.sh
           sh ci/test_apply_patches.sh
           sh ci/test_workflows.sh
           sh ci/test_apply_dep_patches.sh
@@ -40,8 +47,14 @@ jobs:
       - name: swift test
         working-directory: guide
         run: swift test
+      - name: iCloud layout is current
+        run: |
+          swift run --package-path guide gf-schema > "$RUNNER_TEMP/schema.ckdb"
+          diff -u cloudkit/schema.ckdb "$RUNNER_TEMP/schema.ckdb" \
+            || { echo "cloudkit/schema.ckdb is out of date: swift run --package-path guide gf-schema > cloudkit/schema.ckdb"; exit 1; }
   app:
     name: App tests (iOS Simulator)
+    if: ${{ !inputs.only_logic }}
     runs-on: macos-26
     timeout-minutes: 90
     steps:
@@ -96,7 +109,7 @@ jobs:
             -clonedSourcePackagesDirPath "$GF_SPM" -disableAutomaticPackageResolution
   screenshots:
     name: Screenshots (simulators)
-    if: ${{ !inputs.baseline }}
+    if: ${{ !inputs.baseline && !inputs.only_logic }}
     runs-on: macos-26
     timeout-minutes: 120
     steps:
@@ -151,3 +164,24 @@ jobs:
           name: screenshots
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: warn
+
+  # Part 4: our iCloud layout (cloudkit/schema.ckdb) uploaded to the container's development environment; production
+  # takes it only from Georgs' "Deploy Schema Changes". Uses the token only here, never echoed.
+  icloud-layout:
+    name: iCloud layout (development)
+    runs-on: macos-26
+    timeout-minutes: 15
+    if: ${{ !inputs.baseline && !inputs.only_logic && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/part4/')) }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Upload the layout to development (needs CLOUDKIT_MANAGEMENT_TOKEN)
+        env:
+          CLOUDKIT_MANAGEMENT_TOKEN: ${{ secrets.CLOUDKIT_MANAGEMENT_TOKEN }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          if [ -z "$CLOUDKIT_MANAGEMENT_TOKEN" ]; then echo "iCloud layout: no CLOUDKIT_MANAGEMENT_TOKEN secret yet (Georgs adds it, Task 8)"; exit 0; fi
+          xcrun cktool validate-schema --token "$CLOUDKIT_MANAGEMENT_TOKEN" --team-id "$TEAM_ID" \
+            --container-id iCloud.lv.georgefeder.lume --environment development --file cloudkit/schema.ckdb
+          xcrun cktool import-schema --token "$CLOUDKIT_MANAGEMENT_TOKEN" --team-id "$TEAM_ID" \
+            --container-id iCloud.lv.georgefeder.lume --environment development --validate --file cloudkit/schema.ckdb
+          echo "iCloud layout: uploaded to development; production needs Deploy Schema Changes once per change"

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Copies Lume GF's own Swift files into a Lume checkout before building: the guide logic (guide/Sources/GuideCore,
-# app/Guide) into Lume/Services/Sync/Guide, the look (guide/Sources/LookCore, app/Look) into Lume/Views/GFLook, and
-# their tests (app/GuideTests, app/LookTests) into LumeTests/Guide and LumeTests/GFLook. Lume's Xcode project picks up
+# app/Guide) into Lume/Services/Sync/Guide, the look (guide/Sources/LookCore, app/Look) into Lume/Views/GFLook, the
+# iCloud sync (guide/Sources/SyncCore, app/Sync) into Lume/Services/Sync/GFSync, and their tests (app/GuideTests,
+# app/LookTests, app/SyncTests) into LumeTests/Guide, LumeTests/GFLook and LumeTests/GFSync. Lume's Xcode project picks up
 # files in its folders by itself (file-system synchronized groups), so no project file is edited. Everything lands in
 # one module with Lume's own files, where a second file of the same name breaks the build: that stops here instead.
 # Usage: sh add-sources.sh <our repo dir> <Lume checkout dir>
@@ -25,7 +26,10 @@ copy "$LUME/Lume/Services/Sync/Guide" "$OURS"/guide/Sources/GuideCore/*.swift "$
 copy "$LUME/LumeTests/Guide" "$OURS"/app/GuideTests/*.swift
 copy "$LUME/Lume/Views/GFLook" "$OURS"/guide/Sources/LookCore/*.swift "$OURS"/app/Look/*.swift
 copy "$LUME/LumeTests/GFLook" "$OURS"/app/LookTests/*.swift
+copy "$LUME/Lume/Services/Sync/GFSync" "$OURS"/guide/Sources/SyncCore/*.swift "$OURS"/app/Sync/*.swift
+copy "$LUME/LumeTests/GFSync" "$OURS"/app/SyncTests/*.swift
 count() { find "$@" -maxdepth 1 -name '*.swift' 2>/dev/null | wc -l | tr -d ' '; }
-n=$(count "$OURS/guide/Sources/GuideCore" "$OURS/app/Guide" "$OURS/guide/Sources/LookCore" "$OURS/app/Look")
-t=$(count "$OURS/app/GuideTests" "$OURS/app/LookTests")
+n=$(count "$OURS/guide/Sources/GuideCore" "$OURS/app/Guide" "$OURS/guide/Sources/LookCore" "$OURS/app/Look" \
+          "$OURS/guide/Sources/SyncCore" "$OURS/app/Sync")
+t=$(count "$OURS/app/GuideTests" "$OURS/app/LookTests" "$OURS/app/SyncTests")
 echo "add-sources: $n app file(s), $t test file(s) added"

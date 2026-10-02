@@ -1,0 +1,98 @@
+diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
+index e37e976..c6e3712 100644
+--- a/Lume/LumeApp.swift
++++ b/Lume/LumeApp.swift
+@@ -14,7 +14,7 @@ struct LumeApp: App {
+     /// The CloudKit private-database container backing iCloud sync. Must match
+     /// the id in `Lume.entitlements` and exist in the Apple Developer portal /
+     /// CloudKit Console (schema deployed to Production before App Store release).
+-    static let cloudKitContainerIdentifier = "iCloud.bilipp.Lume"
++    static let cloudKitContainerIdentifier = GFCloudConfig.containerID // Lume GF: Georgs' own container
+ 
+     /// The local-only catalog store. The app's environment container — every
+     /// browse `@Query` binds to it, so CloudKit's churn (which only touches the
+@@ -182,14 +182,14 @@ struct LumeApp: App {
+     /// Real, properly-signed builds get full CloudKit sync.
+     static let isCloudKitEnvironment: Bool = {
+         #if SIDE_LOAD
+-            // Sideloaded / self-compiled builds are re-signed with an identity that
+-            // doesn't own the `iCloud.bilipp.Lume` container, so the CloudKit
+-            // entitlement is stripped at install time. Touching CloudKit then hard-
+-            // crashes at launch — the un-catchable `_os_crash` in
+-            // `containerWithIdentifier:` documented above. Keep all user data
+-            // local-only: both stores resolve to `cloudKitDatabase: .none` and the
+-            // sync coordinator skips every `CKContainer`/`accountStatus` call.
+-            return false
++            // Lume GF: our Sideload builds are signed with our own container (iCloud.lv.georgefeder.lume), so they
++            // sync like a signed App Store build; tests, previews and UI tests (the screenshot demo) stay local
++            guard GFCloudConfig.enabled else { return false }
++            let environment = ProcessInfo.processInfo.environment
++            let isPreview = environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
++            let isUnitTest = environment["XCTestConfigurationFilePath"] != nil
++            let isUITest = CommandLine.arguments.contains("-ui-testing")
++            return !(isPreview || isUnitTest || isUITest)
+         #else
+             let environment = ProcessInfo.processInfo.environment
+             let isPreview = environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+diff --git a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Content.swift b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Content.swift
+index c607ba8..c20cf88 100644
+--- a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Content.swift
++++ b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Content.swift
+@@ -132,6 +132,7 @@ extension CloudSyncEngine {
+         stream.isFavorite = values.isFavorite
+         stream.favoriteOrder = values.favoriteOrder
+         stream.isHidden = values.isHidden
++        stream.lastWatchedDate = values.lastWatchedDate // Lume GF: recently watched channels travel too
+         // `customOrder` (per-category channel order) is intentionally
+         // device-local — not pulled from the mirror.
+         return true
+@@ -170,6 +171,7 @@ extension CloudSyncEngine {
+             stream.isFavorite = false
+             stream.favoriteOrder = nil
+             stream.isHidden = false
++            stream.lastWatchedDate = nil // Lume GF: it syncs now, so it resets with the rest (profile switch too)
+         // `customOrder` is device-local (not projected per profile) — leave it.
+         case let category as Category:
+             // `isRestricted` is a parental control, not per-profile state: it
+diff --git a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
+index f62141d..cb2f9be 100644
+--- a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
++++ b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
+@@ -174,19 +174,19 @@ extension CloudSyncEngine {
+     }
+ 
+     /// Live streams sync their favorite flag/order and their Content Management
+-    /// visibility (`isHidden`) — channel-surfing "recently watched" and the
+-    /// per-category `customOrder` stay device-local to avoid mirror bloat (one
+-    /// record per channel in a reordered category).
++    /// visibility (`isHidden`) — the per-category `customOrder` stays device-local
++    /// to avoid mirror bloat (one record per channel in a reordered category).
++    /// Lume GF: "recently watched" travels too (Georgs, Part 4).
+     func liveEntries() throws -> [(String, LocalContentEntry)] {
+         let streams = try catalogContext.fetch(FetchDescriptor<LiveStream>(
+-            predicate: #Predicate { $0.isFavorite || $0.isHidden }
++            predicate: #Predicate { $0.isFavorite || $0.isHidden || $0.lastWatchedDate != nil }
+         ))
+         return streams.map { stream in
+             (stream.id, LocalContentEntry(
+                 values: ContentStateValues(
+                     watchProgress: 0,
+                     isWatched: false,
+-                    lastWatchedDate: nil,
++                    lastWatchedDate: stream.lastWatchedDate, // Lume GF: recently watched channels travel too
+                     isFavorite: stream.isFavorite,
+                     addedToWatchlistDate: nil,
+                     favoriteOrder: stream.favoriteOrder,
+diff --git a/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift b/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
+index 116b913..1638d57 100644
+--- a/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
++++ b/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
+@@ -130,6 +130,8 @@ actor CloudSyncEngine {
+             // Collapse any duplicate default profile a freshly-synced device
+             // imported before its own bootstrap-created one could converge.
+             try reconcileProfiles()
++            // Lume GF: copies of the same playlist (added by hand on several devices) become one first
++            try gfMergeDuplicatePlaylists()
+             let livePrefixes = try reconcilePlaylists(into: &result)
+             try reconcileContent(livePrefixes: livePrefixes, into: &result)
+             // Parental controls: the PIN and category restrictions. Neither is

@@ -1,6 +1,7 @@
 #!/bin/sh
-# Fails unless this Lume checkout carries Lume GF's identity. Run inside the checkout after gf-patch.sh, before
-# archiving, so a Lume release that moved or renamed something stops the build instead of producing a wrong app.
+# Fails unless this Lume checkout carries Lume GF's identity (ids, team, app group, our iCloud in the app only). Run
+# inside the checkout after gf-patch.sh, before archiving, so a Lume release that moved or renamed something stops
+# the build instead of producing a wrong app.
 # Usage: sh verify-patch.sh <TEAM_ID>
 set -u
 TEAM="${1:?usage: verify-patch.sh TEAM_ID}"
@@ -16,20 +17,32 @@ grep -q 'SWIFT_ACTIVE_COMPILATION_CONDITIONS = "SIDE_LOAD' "$PBX" || bad "Sidelo
 # every entitlements file the project names (all targets and platforms)
 ENTS=$(sed -nE 's/.*CODE_SIGN_ENTITLEMENTS(\[[^]]*\])?"? = "?([^";]+)"?;.*/\2/p' "$PBX" | sort -u)
 [ -n "$ENTS" ] || bad "no entitlements files named in $PBX"
-ours=0
+ours=0; cloud=0
 while IFS= read -r E; do
   [ -n "$E" ] || continue
   [ -f "$E" ] || { bad "$E missing (named in the project)"; continue; }
-  grep -qiE "icloud|ubiquity" "$E" && bad "iCloud entitlement still in $E"
-  grep -q "aps-environment" "$E" && bad "push entitlement still in $E"
+  grep -q "iCloud.bilipp.Lume" "$E" && bad "Lume's container still in $E"
+  case "$E" in
+    Lume/*)
+      [ "$($PB -c 'Print :com.apple.developer.icloud-container-identifiers:0' "$E" 2>/dev/null)" = "iCloud.lv.georgefeder.lume" ] \
+        || bad "our iCloud container missing in $E"
+      $PB -c "Print :com.apple.developer.icloud-services" "$E" 2>/dev/null | grep -q CloudKit || bad "CloudKit missing in $E"
+      [ "$($PB -c 'Print :com.apple.developer.ubiquity-kvstore-identifier' "$E" 2>/dev/null)" = "$TEAM.lv.georgefeder.lume" ] \
+        || bad "our key-value store missing in $E"
+      $PB -c "Print :aps-environment" "$E" >/dev/null 2>&1 || bad "push entitlement missing in $E"
+      cloud=1 ;;
+    *) grep -qiE "icloud|ubiquity|aps-environment" "$E" && bad "iCloud entitlement in the widgets ($E)" ;;
+  esac
   grep -q "group.lv.georgefeder.lume" "$E" && ours=1
 done <<EOF
 $ENTS
 EOF
 [ "$ours" -eq 1 ] || bad "our app group group.lv.georgefeder.lume is in no entitlements file"
+[ "$cloud" -eq 1 ] || bad "no app entitlements file under Lume/ any more (Lume moved them)"
 LEFT=$(grep -rlF --exclude-dir=.git "group.com.bilipp.lume" . | sed 's#^\./##' | tr '\n' ' ')
 [ -z "$LEFT" ] || bad "upstream app group still in: $LEFT"
 [ "$($PB -c 'Print :CFBundleDisplayName' Lume/Info.plist 2>/dev/null)" = "Lume GF" ] || bad "display name is not 'Lume GF'"
-$PB -c "Print :UIBackgroundModes" Lume/Info.plist 2>/dev/null | grep -q "remote-notification" && bad "remote-notification background mode still set"
+$PB -c "Print :UIBackgroundModes" Lume/Info.plist 2>/dev/null | grep -q "remote-notification" \
+  || bad "remote-notification background mode missing (iCloud's change notices need it)"
 [ "$fail" -eq 0 ] && echo "verify-patch: Lume GF identity OK"
 exit "$fail"

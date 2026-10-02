@@ -36,6 +36,7 @@ jobs:
           sh gf/ci/test_check_export.sh
           sh gf/ci/test_keepalive.sh
           sh gf/ci/test_add_sources.sh
+          sh gf/ci/test_run_app_tests.sh
           sh gf/ci/test_apply_patches.sh
           sh gf/ci/test_workflows.sh
           sh gf/ci/test_apply_dep_patches.sh
@@ -89,9 +90,31 @@ jobs:
       - name: App tests (iOS Simulator)
         run: sh gf/ci/run-app-tests.sh Lume
 
+  # Part 4: no TestFlight build until production iCloud has every type and field the app writes (Georgs presses
+  # "Deploy Schema Changes" in the CloudKit Console). A job of its own, so the tests job holds no credentials.
+  icloud-gate:
+    name: iCloud layout is live in production
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - name: Our changes
+        uses: actions/checkout@v5
+        with:
+          path: gf
+
+      - name: Production has our layout
+        env:
+          CLOUDKIT_MANAGEMENT_TOKEN: ${{ secrets.CLOUDKIT_MANAGEMENT_TOKEN }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          [ -n "$CLOUDKIT_MANAGEMENT_TOKEN" ] || { echo "iCloud layout: no CLOUDKIT_MANAGEMENT_TOKEN secret yet (Georgs adds it, Task 8)"; exit 1; }
+          xcrun cktool export-schema --token "$CLOUDKIT_MANAGEMENT_TOKEN" --team-id "$TEAM_ID" \
+            --container-id iCloud.lv.georgefeder.lume --environment production --output-file "$RUNNER_TEMP/production.ckdb"
+          python3 gf/ci/schema-check.py gf/cloudkit/schema.ckdb "$RUNNER_TEMP/production.ckdb"
+
   build:
     name: ${{ matrix.platform }} to TestFlight
-    needs: tests
+    needs: [tests, icloud-gate]
     runs-on: macos-26
     timeout-minutes: 120
     strategy:

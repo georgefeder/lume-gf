@@ -69,12 +69,31 @@ expect "unpatched checkout fails" 1 "$(fixture raw)" "upstream bundle id still i
 expect "patched checkout passes" 0 "$(patched base)" "identity OK"
 
 L=$(patched clean)
-for E in Lume/Lume.entitlements Lume/Lume-iOS.entitlements LumeWidgets/LumeWidgets.entitlements; do
-  if grep -qiE "icloud|aps-environment" "$L/$E"; then echo "FAIL $E still has iCloud/push after gf-patch"; fails=$((fails + 1))
-  else echo "ok   $E has no iCloud/push after gf-patch"; fi
+for E in Lume/Lume.entitlements Lume/Lume-iOS.entitlements; do
+  v=$(/usr/libexec/PlistBuddy -c "Print :com.apple.developer.icloud-container-identifiers:0" "$L/$E" 2>/dev/null)
+  [ "$v" = "iCloud.lv.georgefeder.lume" ] && echo "ok   $E names our container" \
+    || { echo "FAIL $E container ($v)"; fails=$((fails + 1)); }
+  grep -q "iCloud.bilipp.Lume" "$L/$E" && { echo "FAIL $E still names Lume's container"; fails=$((fails + 1)); }
+  /usr/libexec/PlistBuddy -c "Print :com.apple.developer.ubiquity-kvstore-identifier" "$L/$E" 2>/dev/null | grep -q "^$TEAM.lv.georgefeder.lume$" \
+    && echo "ok   $E has our key-value store" || { echo "FAIL $E key-value store"; fails=$((fails + 1)); }
+  /usr/libexec/PlistBuddy -c "Print :aps-environment" "$L/$E" >/dev/null 2>&1 \
+    && echo "ok   $E can receive iCloud's pushes" || { echo "FAIL $E push"; fails=$((fails + 1)); }
 done
-L=$(patched iospush); /usr/libexec/PlistBuddy -c "Add :aps-environment string development" "$L/Lume/Lume-iOS.entitlements"
-expect "push in the iPhone-only entitlements file fails" 1 "$L" "push entitlement still in Lume/Lume-iOS.entitlements"
+grep -qiE "icloud|aps-environment|ubiquity" "$L/LumeWidgets/LumeWidgets.entitlements" \
+  && { echo "FAIL the widgets got iCloud/push"; fails=$((fails + 1)); } || echo "ok   the widgets have no iCloud/push"
+/usr/libexec/PlistBuddy -c "Print :UIBackgroundModes" "$L/Lume/Info.plist" | grep -q remote-notification \
+  && echo "ok   remote-notification stays" || { echo "FAIL remote-notification removed"; fails=$((fails + 1)); }
+L=$(patched lumecloud)
+/usr/libexec/PlistBuddy -c "Add :com.apple.developer.icloud-container-identifiers:1 string iCloud.bilipp.Lume" "$L/Lume/Lume-iOS.entitlements"
+expect "Lume's container left fails" 1 "$L" "Lume's container still in Lume/Lume-iOS.entitlements"
+L=$(patched nocloud)
+/usr/libexec/PlistBuddy -c "Delete :com.apple.developer.icloud-container-identifiers" "$L/Lume/Lume.entitlements"
+expect "our container missing fails" 1 "$L" "our iCloud container missing in Lume/Lume.entitlements"
+L=$(patched widgetpush)
+/usr/libexec/PlistBuddy -c "Add :aps-environment string development" "$L/LumeWidgets/LumeWidgets.entitlements"
+expect "iCloud or push in the widgets fails" 1 "$L" "iCloud entitlement in the widgets"
+L=$(patched nobgmode); /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$L/Lume/Info.plist"
+expect "no remote-notification mode fails" 1 "$L" "remote-notification background mode missing"
 
 L=$(fixture moved); printf 'let g = "group.com.bilipp.lume"\n' > "$L/Lume/AppGroup.swift"
 (cd "$L" && sh "$CI/gf-patch.sh" "$TEAM" >/dev/null)
@@ -85,17 +104,13 @@ grep -q "group.lv.georgefeder.lume" "$L/Lume/AppGroup.swift" && echo "ok   new S
 L=$(patched leftover); printf 'let g = "group.com.bilipp.lume"\n' > "$L/Lume/Late.swift"
 expect "upstream app group left anywhere fails" 1 "$L" "Lume/Late.swift"
 
-L=$(fixture tvents); plist "$L/Lume/Lume-tvOS.entitlements" com.apple.developer.icloud-services ARR:CloudKit aps-environment production
+L=$(fixture tvents); plist "$L/Lume/Lume-tvOS.entitlements" com.apple.developer.icloud-services ARR:CloudKit aps-environment production com.apple.developer.icloud-container-identifiers ARR:iCloud.bilipp.Lume
 sed -i '' 's#"CODE_SIGN_ENTITLEMENTS\[sdk=iphoneos\*\]" = "Lume/Lume-iOS.entitlements";#&\
 				"CODE_SIGN_ENTITLEMENTS[sdk=appletvos*]" = "Lume/Lume-tvOS.entitlements";#' "$L/Lume.xcodeproj/project.pbxproj"
 (cd "$L" && sh "$CI/gf-patch.sh" "$TEAM" >/dev/null)
-expect "new entitlements file named in the project is cleaned" 0 "$L" "identity OK"
-grep -qiE "icloud|aps-environment" "$L/Lume/Lume-tvOS.entitlements" \
-  && { echo "FAIL Lume-tvOS.entitlements still has iCloud/push after gf-patch"; fails=$((fails + 1)); } \
-  || echo "ok   Lume-tvOS.entitlements has no iCloud/push after gf-patch"
-L=$(patched tvleft); plist "$L/Lume/Lume-tvOS.entitlements" com.apple.developer.icloud-services ARR:CloudKit
-sed -i '' 's#CODE_SIGN_ENTITLEMENTS = Lume/Lume.entitlements;#CODE_SIGN_ENTITLEMENTS = Lume/Lume-tvOS.entitlements;#' "$L/Lume.xcodeproj/project.pbxproj"
-expect "iCloud in an entitlements file named in the project fails" 1 "$L" "iCloud entitlement still in Lume/Lume-tvOS.entitlements"
+expect "a new entitlements file named in the project gets our iCloud" 0 "$L" "identity OK"
+grep -q "iCloud.lv.georgefeder.lume" "$L/Lume/Lume-tvOS.entitlements" && ! grep -q "iCloud.bilipp.Lume" "$L/Lume/Lume-tvOS.entitlements" \
+  && echo "ok   Lume-tvOS.entitlements names our container" || { echo "FAIL Lume-tvOS.entitlements"; fails=$((fails + 1)); }
 
 L=$(patched noteam); sed -i '' '/DEVELOPMENT_TEAM/d' "$L/Lume.xcodeproj/project.pbxproj"
 expect "no DEVELOPMENT_TEAM line at all fails" 1 "$L" "no target is set to team"
