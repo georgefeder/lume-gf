@@ -118,9 +118,12 @@
         let firstStream: LiveStream?
 
         init(count: Int = GFDemo.channelCount, now: Date = .now) {
+            // every catalog model, as in Lume's own catalog store (LumeApp): a model left out here is never stored, so
+            // the films and series would be missing from Home, Movies and Series
             // swiftlint:disable:next force_try
             let container = try! ModelContainer(
-                for: Playlist.self, Category.self, LiveStream.self, EPGListing.self,
+                for: Playlist.self, Category.self, LiveStream.self, Movie.self, Series.self, Episode.self,
+                CastMember.self, EPGListing.self, EPGSource.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)
             )
             let context = container.mainContext
@@ -259,6 +262,8 @@
         @State private var section: LiveTVSection?
         @State private var layoutMode = (GFDemo.mode == "list" ? LiveTVLayoutMode.list : .guide).rawValue
         @State private var playing: PlayableMedia?
+        /// As MainTabView hands it to its tabs: the Apple TV's Home requires it.
+        @State private var router = DeepLinkRouter()
         #if os(iOS)
             /// The demo's first tab: Live TV unless `-GFDemo home`, `movies` or `series` asks for another.
             @State private var tab = ["home", "movies", "series"].contains(GFDemo.mode ?? "") ? GFDemo.mode ?? "live" : "live"
@@ -271,7 +276,9 @@
         }
 
         var body: some View {
-            content.modelContainer(store.container)
+            content
+                .environment(router)
+                .modelContainer(store.container)
         }
 
         private func play(_ stream: LiveStream) {

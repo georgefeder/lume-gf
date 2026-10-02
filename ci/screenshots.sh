@@ -86,6 +86,9 @@ shoot "$IOS" "$BID" iphone-guide-few-dark -GFDemo guide -GFDemoChannels 3
 shoot "$IOS" "$BID" iphone-guide-under-dark -GFDemo guide -GFDemoNoPanel 1
 # Lume's Home, Movies and Series over made-up films and series (posters level at the top; Home's rows)
 shoot "$IOS" "$BID" iphone-home-dark -GFDemo home
+# Home's rows below the first screen are never drawn (Lume builds them as they scroll in): Recently Watched and
+# Favorites switched off in Lume's own Home settings bring the recently added rows to the top
+shoot "$IOS" "$BID" iphone-home-added-dark -GFDemo home -home.disabledSections.v1 favorites,recentlyWatched
 shoot "$IOS" "$BID" iphone-movies-dark -GFDemo movies
 shoot "$IOS" "$BID" iphone-series-dark -GFDemo series
 # a channel opened in light mode, filmed (Georgs saw the screen flash dark): system light, then Lume's own Light setting
@@ -107,6 +110,7 @@ shoot "$TV" "$BID" tv-guide-under -GFDemo guide -GFDemoNoPanel 1
 # the second channel's six-hour programme after "No Programme", focused (Georgs' photo of build 9)
 shoot "$TV" "$BID" tv-guide-long -GFDemo guide -GFDemoMoves right,down
 shoot "$TV" "$BID" tv-home -GFDemo home
+shoot "$TV" "$BID" tv-home-added -GFDemo home -home.disabledSections.v1 favorites,recentlyWatched
 shoot "$TV" "$BID" tv-movies -GFDemo movies
 shoot "$TV" "$BID" tv-list -GFDemo list
 [ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true
