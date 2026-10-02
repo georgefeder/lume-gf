@@ -197,3 +197,55 @@ struct GFGuideFocusGlass<S: Shape>: View {
         Color.clear.glassEffectCompat(.tintedInteractive(.white), in: shape)
     }
 }
+
+/// iPhone and iPad: the box a channel sits in, as tall as the programme tiles beside it and as round (Georgs on build
+/// 17), a shade lighter than the glass. Drawn behind the channel's row, which is a row height tall.
+struct GFChannelBox: View {
+    let rowHeight: CGFloat
+    let rowSpacing: CGFloat
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        if let inset = GFGuideGlass.channelBoxInset(tv: GFGuideGlass.isTV) {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.fill.quaternary)
+                .frame(height: GFGuideGlass.tileHeight(rowHeight: rowHeight, rowSpacing: rowSpacing))
+                .padding(.horizontal, inset)
+        }
+    }
+}
+
+/// The ruler's times blur and fade out towards the channel column and the screen's edge (Georgs on build 18): a sharp
+/// copy fades out while a blurred copy takes over and fades too, so the times soften the closer they get to an edge.
+struct GFRulerEdgeBlur: ViewModifier {
+    let leading: CGFloat
+    let trailing: CGFloat
+
+    private static let sharpStops: [Gradient.Stop] = [.init(color: .clear, location: 0.3),
+                                                      .init(color: .black, location: 1)]
+    private static let blurStops: [Gradient.Stop] = [.init(color: .clear, location: 0),
+                                                     .init(color: .black.opacity(0.75), location: 0.4),
+                                                     .init(color: .clear, location: 1)]
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if leading <= 0, trailing <= 0 {
+            content
+        } else {
+            ZStack {
+                content.mask { edgeMask(stops: Self.sharpStops, middle: .black) }
+                content.blur(radius: 4).mask { edgeMask(stops: Self.blurStops, middle: .clear) }
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    /// Gradients measured from each edge inwards, `middle` between them.
+    private func edgeMask(stops: [Gradient.Stop], middle: Color) -> some View {
+        HStack(spacing: 0) {
+            LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing).frame(width: leading)
+            middle
+            LinearGradient(stops: stops, startPoint: .trailing, endPoint: .leading).frame(width: trailing)
+        }
+    }
+}

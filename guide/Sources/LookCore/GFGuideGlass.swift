@@ -127,6 +127,25 @@ nonisolated enum GFGuideGlass {
         tv ? 36 : 16
     }
 
+    /// iPhone and iPad: each channel sits in a box as tall as the programme tiles beside it, 2 points inside the panel
+    /// (Georgs on build 17). nil on the Apple TV, whose focused channel has its own highlight.
+    static func channelBoxInset(tv: Bool) -> CGFloat? {
+        tv ? nil : sidebarInsets(tv: tv).leading + 2
+    }
+
+    /// The jump-to-now button spans the glass panel under it, edge to edge (Georgs on build 18: it sat off the panel's
+    /// lines): its side insets are the panel's.
+    static func nowButtonInsets(tv: Bool) -> (leading: CGFloat, trailing: CGFloat) {
+        let insets = sidebarInsets(tv: tv)
+        return (insets.leading, insets.trailing)
+    }
+
+    /// How far the ruler's times blur and fade out at the channel column's edge and the screen's (Georgs on build 18).
+    /// None on the Apple TV, which was not asked about.
+    static func rulerFade(tv: Bool) -> (leading: CGFloat, trailing: CGFloat) {
+        tv ? (0, 0) : (36, 28)
+    }
+
     /// Room above the first row: the top fade, the iPhone's breathing room, then the half row gap Lume leaves above
     /// every tile, so the first row starts below the fade and rows only fade once you scroll (Georgs on build 9: the
     /// first channel and programmes sat where the fade already starts). Both panes and the scroll maths start their
