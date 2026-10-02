@@ -34,3 +34,52 @@ index e37e976..c6e3712 100644
          #else
              let environment = ProcessInfo.processInfo.environment
              let isPreview = environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+diff --git a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Content.swift b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Content.swift
+index c607ba8..c20cf88 100644
+--- a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Content.swift
++++ b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Content.swift
+@@ -132,6 +132,7 @@ extension CloudSyncEngine {
+         stream.isFavorite = values.isFavorite
+         stream.favoriteOrder = values.favoriteOrder
+         stream.isHidden = values.isHidden
++        stream.lastWatchedDate = values.lastWatchedDate // Lume GF: recently watched channels travel too
+         // `customOrder` (per-category channel order) is intentionally
+         // device-local — not pulled from the mirror.
+         return true
+@@ -170,6 +171,7 @@ extension CloudSyncEngine {
+             stream.isFavorite = false
+             stream.favoriteOrder = nil
+             stream.isHidden = false
++            stream.lastWatchedDate = nil // Lume GF: it syncs now, so it resets with the rest (profile switch too)
+         // `customOrder` is device-local (not projected per profile) — leave it.
+         case let category as Category:
+             // `isRestricted` is a parental control, not per-profile state: it
+diff --git a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
+index f62141d..cb2f9be 100644
+--- a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
++++ b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
+@@ -174,19 +174,19 @@ extension CloudSyncEngine {
+     }
+ 
+     /// Live streams sync their favorite flag/order and their Content Management
+-    /// visibility (`isHidden`) — channel-surfing "recently watched" and the
+-    /// per-category `customOrder` stay device-local to avoid mirror bloat (one
+-    /// record per channel in a reordered category).
++    /// visibility (`isHidden`) — the per-category `customOrder` stays device-local
++    /// to avoid mirror bloat (one record per channel in a reordered category).
++    /// Lume GF: "recently watched" travels too (Georgs, Part 4).
+     func liveEntries() throws -> [(String, LocalContentEntry)] {
+         let streams = try catalogContext.fetch(FetchDescriptor<LiveStream>(
+-            predicate: #Predicate { $0.isFavorite || $0.isHidden }
++            predicate: #Predicate { $0.isFavorite || $0.isHidden || $0.lastWatchedDate != nil }
+         ))
+         return streams.map { stream in
+             (stream.id, LocalContentEntry(
+                 values: ContentStateValues(
+                     watchProgress: 0,
+                     isWatched: false,
+-                    lastWatchedDate: nil,
++                    lastWatchedDate: stream.lastWatchedDate, // Lume GF: recently watched channels travel too
+                     isFavorite: stream.isFavorite,
+                     addedToWatchlistDate: nil,
+                     favoriteOrder: stream.favoriteOrder,
