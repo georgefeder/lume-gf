@@ -94,7 +94,7 @@ index 5ca6724..105215f 100644
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .vod,
 diff --git a/Lume/Views/Components/CategoryContentGrid.swift b/Lume/Views/Components/CategoryContentGrid.swift
-index 739207c..268a62f 100644
+index 739207c..a09a830 100644
 --- a/Lume/Views/Components/CategoryContentGrid.swift
 +++ b/Lume/Views/Components/CategoryContentGrid.swift
 @@ -235,12 +235,17 @@ struct CategoryPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable,
@@ -111,7 +111,7 @@ index 739207c..268a62f 100644
                                      .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
                              }
 +                            #if GF_DEMO
-+                            .gfDemoRailCard(rail: title, index: items.firstIndex(of: item) ?? 0)
++                            .gfDemoRailCard(rail: category.name, index: items.firstIndex(of: item) ?? 0)
 +                            #endif
                              .posterCardButtonStyle()
                              .mediaFavoriteMenu(
