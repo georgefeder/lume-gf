@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: ['part2/**', 'part3/**']
+    branches: ['part2/**', 'part3/**', 'part4/**']
 
 permissions:
   contents: read
@@ -36,6 +36,8 @@ jobs:
       - name: Script tests
         run: |
           sh ci/test_add_sources.sh
+          sh ci/test_patch_scripts.sh
+          sh ci/test_check_export.sh
           sh ci/test_apply_patches.sh
           sh ci/test_workflows.sh
           sh ci/test_apply_dep_patches.sh

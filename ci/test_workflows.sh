@@ -27,6 +27,10 @@ check "a change to our package patches starts a build" \
 check "no build includes the screenshot demo" 'exit(File.read(ARGV[0]).include?("GF_DEMO") ? 1 : 0)'
 check "pushes to part3 branches run the tests" \
   'y=YAML.load_file(ARGV[0]); o=y["on"] || y[true]; exit(Array(o["push"]["branches"]).include?("part3/**") ? 0 : 1)' "$WT"
+check "pushes to part4 branches run the tests" \
+  'y=YAML.load_file(ARGV[0]); o=y["on"] || y[true]; exit(Array(o["push"]["branches"]).include?("part4/**") ? 0 : 1)' "$WT"
+check "the test run checks the identity and export scripts" \
+  'y=YAML.load_file(ARGV[0]); r=y["jobs"]["core"]["steps"].map { |s| s["run"].to_s }.join; exit(r.include?("test_patch_scripts.sh") && r.include?("test_check_export.sh") ? 0 : 1)' "$WT"
 check "a screenshots job keeps its pictures" \
   'y=YAML.load_file(ARGV[0]); s=y["jobs"]["screenshots"]["steps"]; exit(s.any? { |x| x["run"].to_s.include?("screenshots.sh") } && s.any? { |x| x["uses"].to_s.start_with?("actions/upload-artifact") } ? 0 : 1)' "$WT"
 check "the screenshots job keeps the app's output with the pictures" \
