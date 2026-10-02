@@ -4,7 +4,8 @@ set -u
 CI=$(cd "$(dirname "$0")" && pwd); T=$(mktemp -d); trap 'rm -rf "$T"' EXIT; fails=0
 ok() { echo "ok   $1"; }; no() { echo "FAIL $1"; fails=$((fails + 1)); }
 mkdir -p "$T/bin" "$T/Lume/Lume.xcodeproj"; LOG="$T/log"; : > "$LOG"; DEAD="$T/dead"; FLASH="$T/flash"
-export LOG DEAD FLASH
+STUCK="$T/stuck"; STUCK_ONCE="$T/stuck-once"  # the simulator's recorder never finishing its file (always, or once)
+export LOG DEAD FLASH STUCK STUCK_ONCE
 cat > "$T/bin/xcodebuild" <<'EOF'
 #!/bin/sh
 echo "xcodebuild $*" >> "$LOG"
@@ -24,7 +25,13 @@ if [ "$1 $2 $3" = "simctl list devices" ]; then
   echo '{"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-26-0":[{"name":"iPhone 17","udid":"IPHONE-1"}],'
   echo '"com.apple.CoreSimulator.SimRuntime.tvOS-26-0":[{"name":"Apple TV 4K (3rd generation)","udid":"TV-1"}]}}'
 fi
-if [ "$1 $2 $4" = "simctl io recordVideo" ]; then for a; do f="$a"; done; touch "$f"; exit 0; fi
+if [ "$1 $2 $4" = "simctl io recordVideo" ]; then
+  for a; do f="$a"; done
+  if [ -e "$STUCK" ] || { [ -e "$STUCK_ONCE" ] && rm -f "$STUCK_ONCE"; }; then
+    : > "$f"; trap '' INT; i=0; while [ "$i" -lt 120 ]; do sleep 1; i=$((i + 1)); done; exit 0
+  fi
+  echo film > "$f"; exit 0
+fi
 [ "$1 $2" = "simctl io" ] && touch "$5"
 if [ "$1 $2" = "simctl spawn" ]; then [ -e "$DEAD" ] || echo "123 0 UIKitApplication:lv.test.lume[1234]"; fi
 exit 0
@@ -103,6 +110,29 @@ out=$(PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_FILM_SECONDS=0 GF_D
   sh "$CI/screenshots.sh" "$T/Lume" "$T/out3" 2>&1) && no "a flash must fail the job" || ok "a flash fails the job"
 [ -f "$T/out3/tv-list.png" ] && ok "every picture is still taken" || no "pictures missing after a flash"
 rm -f "$FLASH"
+# the simulator's recorder sometimes never finishes its file (run 37028529816: an empty .mp4, the job held for two
+# hours): the film is taken once more; twice empty fails the job after every picture, so no flash check is skipped
+shots() {  # $1 = output dir; runs screenshots.sh, gives up after 60 s; prints its output, exit code in $1.rc
+  rm -f "$1.rc"
+  ( PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_FILM_SECONDS=0 GF_REC_GRACE=1 GF_DERIVED_DATA="$T/dd" \
+      sh "$CI/screenshots.sh" "$T/Lume" "$1" > "$1.txt" 2>&1; echo $? > "$1.rc" ) > /dev/null 2>&1 &
+  i=0; while [ ! -e "$1.rc" ] && [ "$i" -lt 60 ]; do sleep 1; i=$((i + 1)); done
+  cat "$1.txt" 2>/dev/null
+}
+touch "$STUCK_ONCE"; out=$(shots "$T/out4")
+if [ ! -e "$T/out4.rc" ]; then no "a recorder that never finishes holds the job"
+else
+  [ "$(cat "$T/out4.rc")" -eq 0 ] && ok "a recorder stuck once: the film is taken again" || no "stuck once ($out)"
+  printf '%s' "$out" | grep -q "film-iphone-open-light: the simulator's recorder gave no film (try 1)" \
+    && [ -f "$T/out4/film-iphone-open-light/luma.csv" ] && ok "the second take is checked" || no "second take ($out)"
+fi
+touch "$STUCK"; out=$(shots "$T/out5"); rm -f "$STUCK"
+if [ ! -e "$T/out5.rc" ]; then no "a recorder that never finishes holds the job (twice)"
+else
+  [ "$(cat "$T/out5.rc")" -ne 0 ] && printf '%s' "$out" | grep -q "screenshots: no film of iphone-open-light" \
+    && ok "a recorder that gives no film twice fails the job" || no "no film twice ($out)"
+  [ -f "$T/out5/tv-list.png" ] && ok "every picture is still taken without a film" || no "pictures missing without a film"
+fi
 touch "$DEAD"; : > "$LOG"
 out=$(HOME="$T/home" PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_FILM_SECONDS=0 GF_DERIVED_DATA="$T/dd" \
   sh "$CI/screenshots.sh" "$T/Lume" "$T/out2" 2>&1)
