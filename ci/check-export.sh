@@ -18,7 +18,7 @@ APP=$(find "$T/Payload" -maxdepth 1 -name "*.app" | head -1)
   || bad "bundle id is not lv.georgefeder.lume"
 [ "$($PB -c 'Print :CFBundleDisplayName' "$APP/Info.plist" 2>/dev/null)" = "Lume GF" ] || bad "display name is not 'Lume GF'"
 ents() { codesign -d --entitlements - --xml "$1" 2>/dev/null | plutil -convert xml1 -o - - 2>/dev/null; }
-ents "$APP" | grep -q "<string>$TEAM.lv.georgefeder.lume</string>" \
+ents "$APP" | grep -A1 "<key>application-identifier</key>" | grep -q "<string>$TEAM.lv.georgefeder.lume</string>" \
   || bad "application-identifier is not $TEAM.lv.georgefeder.lume"
 for B in "$APP" "$APP"/PlugIns/*.appex; do
   [ -d "$B" ] || continue
