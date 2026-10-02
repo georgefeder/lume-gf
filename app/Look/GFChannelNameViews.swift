@@ -89,13 +89,16 @@ struct GFChannelName: View {
     /// Shown after the badges (placement `.below`).
     var badgeSymbol: GFBadgeSymbol?
     /// A narrow column (the iPhone guide): the title steps its text size down, at most twice, until every word fits
-    /// on a line, before a word would break; and shrinks a little more rather than end in "…".
+    /// on a line; where none does, each word gets a line of its own and shrinks rather than break or end in "…".
     var fitsWords = false
     @AppStorage(GFChannelNames.settingKey) private var enabled = true
     @Environment(\.dynamicTypeSize) private var typeSize
 
     /// How far a narrow name may shrink to fit its lines.
     static let shrinkLimit: CGFloat = 0.85
+
+    /// How far a word no text size fits may shrink on its own line (the last resort).
+    static let lastResortShrink: CGFloat = 0.7
 
     /// The caller's text size and up to two steps smaller.
     static func fittingTypeSizes(from size: DynamicTypeSize) -> [DynamicTypeSize] {
@@ -141,10 +144,14 @@ struct GFChannelName: View {
     private func title(_ text: String) -> some View {
         if fitsWords {
             let sizes = Self.fittingTypeSizes(from: typeSize)
+            let lastResort = GFChannelLabel.lastResortLines(text, lineLimit: titleLineLimit)
             ViewThatFits(in: .horizontal) {
                 wholeWords(text).dynamicTypeSize(sizes[0])
                 wholeWords(text).dynamicTypeSize(sizes[min(1, sizes.count - 1)])
-                Text(verbatim: text).lineLimit(titleLineLimit).minimumScaleFactor(Self.shrinkLimit)
+                wholeWords(text).dynamicTypeSize(sizes[sizes.count - 1])
+                // no size fits every word: a word too wide shrinks on its own line ("BLOOMBER / G" on build 16)
+                Text(verbatim: lastResort.text).lineLimit(lastResort.lineLimit)
+                    .minimumScaleFactor(Self.lastResortShrink)
                     .dynamicTypeSize(sizes[sizes.count - 1])
             }
         } else {

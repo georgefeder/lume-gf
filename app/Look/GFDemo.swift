@@ -198,7 +198,8 @@
                 "⏰ \(riga(now.addingTimeInterval(2 * 86400), weekday: true)) · Japanese GP · Formula 1 · 4K",
                 "Sky Sports Main Event FHD",
                 "TNT Sports 1 HD",
-                "Channel 4",
+                // one word too wide for the iPhone's channel column (Georgs on build 16: "BLOOMBER / G")
+                "BLOOMBERG HD",
                 "▪ Darts Night · HD",
                 "BBC Two FHD",
                 "⏰ \(riga(now.addingTimeInterval(3 * 3600), weekday: false)) · Rangers v Celtic · Premiership · FHD",
