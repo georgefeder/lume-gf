@@ -1,0 +1,75 @@
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+index 937a9c0..1ea6228 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+@@ -176,8 +176,13 @@ struct EPGChannelCell: View {
+             .padding(.leading, GFGuideGlass.tvHighlightLeading)
+             .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
+         #else
+-            // Lume GF: rows sit on the glass sidebar (no opaque background, no hairline)
++            // Lume GF: rows sit on the glass sidebar (no opaque background, no hairline), each in a box as tall as
++            // the programme tiles beside it
+             .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
++            .background {
++                GFChannelBox(rowHeight: metrics.rowHeight, rowSpacing: metrics.rowSpacing,
++                             cornerRadius: metrics.blockCornerRadius)
++            }
+         #endif
+     }
+ 
+diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
+index 915bd54..2849a7b 100644
+--- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
++++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
+@@ -23,15 +23,25 @@ struct EPGRulerStrip: View {
+     let sync: EPGScrollSync
+ 
+     var body: some View {
++        let fade = GFGuideGlass.rulerFade(tv: GFGuideGlass.isTV)
+         Color.clear
+             .frame(maxWidth: .infinity)
+             .frame(height: metrics.headerHeight)
++            .overlay(alignment: .leading) {
++                EPGTimeRuler(timeline: timeline, metrics: metrics)
++                    .frame(width: timeline.totalWidth, alignment: .leading)
++                    .offset(x: -sync.mirror.x)
++            }
++            .clipped()
++            // Lume GF: the times blur and fade out at the channel column's edge and the screen's; the Now pill, a
++            // layer of its own above them, stays sharp
++            .modifier(GFRulerEdgeBlur(leading: fade.leading, trailing: fade.trailing))
+             .overlay(alignment: .leading) {
+                 // Lume GF: the pill is an overlay; as a ZStack sibling its centring overhang widened the ruler and
+                 // moved every time half a pill right of the grid
+-                EPGTimeRuler(timeline: timeline, metrics: metrics)
++                Color.clear
++                    .frame(width: timeline.totalWidth, height: metrics.headerHeight)
+                     .overlay(alignment: .topLeading) { nowPill.offset(x: timeline.x(for: now)) }
+-                    .frame(width: timeline.totalWidth, alignment: .leading)
+                     .offset(x: -sync.mirror.x)
+             }
+             .clipped()
+diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+index b67b328..4661466 100644
+--- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
++++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+@@ -298,14 +298,17 @@ struct EPGGridScroller: View {
+             Button {
+                 requestScroll(to: CGPoint(x: scrollTarget(forNow: Date()), y: sync.offset.y), animated: true)
+             } label: {
+-                // Lume GF: a glass capsule button, like Lume's player buttons
++                // Lume GF: a glass capsule button, like Lume's player buttons, edge to edge with the glass panel
++                // under it (Georgs on build 18)
+                 Label("Now", systemImage: "smallcircle.filled.circle")
+                     .font(.subheadline.weight(.semibold))
+                     .labelStyle(.titleAndIcon)
+                     .foregroundStyle(Color.accentColor)
+-                    .padding(.horizontal, 12)
+                     .padding(.vertical, 6)
++                    .frame(maxWidth: .infinity)
+                     .glassEffectCompat(.regularInteractive, in: Capsule())
++                    .padding(.leading, GFGuideGlass.nowButtonInsets(tv: GFGuideGlass.isTV).leading)
++                    .padding(.trailing, GFGuideGlass.nowButtonInsets(tv: GFGuideGlass.isTV).trailing)
+                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                     .contentShape(Rectangle())
+             }

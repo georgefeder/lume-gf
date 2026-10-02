@@ -191,6 +191,25 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.maxScrollY(rows: 3, viewportHeight: 800, rowHeight: 116, rowSpacing: 14, topRoom: 14) == 0)
     }
 
+    @Test func `each iPhone channel box is as tall as its programme tiles and sits just inside the panel`() {
+        let inset = GFGuideGlass.channelBoxInset(tv: false)
+        #expect(inset == 8)
+        #expect(inset! > GFGuideGlass.sidebarInsets(tv: false).leading)
+        #expect(GFGuideGlass.tileHeight(rowHeight: 68, rowSpacing: 4) == 64) // the box's height on iPhone
+        #expect(GFGuideGlass.channelBoxInset(tv: true) == nil)
+    }
+
+    @Test func `the Now button lines up with the panel's edges`() {
+        let button = GFGuideGlass.nowButtonInsets(tv: false), panel = GFGuideGlass.sidebarInsets(tv: false)
+        #expect(button.leading == panel.leading && button.trailing == panel.trailing)
+    }
+
+    @Test func `the ruler's times fade at both ends on iPhone, not on the Apple TV`() {
+        let phone = GFGuideGlass.rulerFade(tv: false), tv = GFGuideGlass.rulerFade(tv: true)
+        #expect(phone.leading > 0 && phone.trailing > 0)
+        #expect(tv.leading == 0 && tv.trailing == 0)
+    }
+
     @Test func `the tests run on the Mac, so this is not the Apple TV`() {
         #expect(!GFGuideGlass.isTV)
     }
