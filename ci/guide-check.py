@@ -6,12 +6,16 @@
     column goes and what is left under it is measured);
   - both: the first row starts below the top fade (it sat where the fade starts);
   - Apple TV: a focused six-hour programme keeps to itself ("No Pr..." showed through the focus glass over it).
+And for Georgs' notes of 2 Oct: posters in a row line up at the top (a title on two lines lifted its poster), and Home
+shows Recently Watched and the recently added films and series (his Apple TV's Home showed only the sports row).
 Positions come from the demo build's log lines ("GFDemo guide geometry:", "GFDemo focused programme:", in points on
 screen), brightness from png-lines.swift. Exit 1 when a check fails. Usage: guide-check.py <screenshots dir>"""
 import os, statistics, subprocess, sys
 
 GEOMETRY = "GFDemo guide geometry:"
 FOCUSED = "GFDemo focused programme:"
+RAIL_CARD = "GFDemo rail card:"
+HOME_ROWS = ("Recently Watched", "Recently Added Movies", "Recently Added Series")
 
 
 def parse_fields(text):
@@ -37,6 +41,46 @@ def last_fields(log_path, prefix):
     except OSError:
         return None
     return parse_fields(found) if found is not None else None
+
+
+def rail_cards(log_path):
+    """{row title: {card index: top on screen}} from the demo's "rail card" lines (the last line per card wins)."""
+    rows = {}
+    try:
+        with open(log_path, errors="replace") as f:
+            for line in f:
+                if not line.startswith(RAIL_CARD):
+                    continue
+                parts = line[len(RAIL_CARD):].strip().split(" ", 3)
+                if len(parts) < 4:
+                    continue
+                try:
+                    index, top = int(parts[0]), float(parts[1])
+                except ValueError:
+                    continue
+                rows.setdefault(parts[3], {})[index] = top
+    except OSError:
+        return {}
+    return rows
+
+
+def rows_level_ok(rows):
+    if not rows:
+        return False, "no rows of posters logged"
+    crooked = []
+    for title, cards in sorted(rows.items()):
+        if len(cards) > 1 and max(cards.values()) - min(cards.values()) > 0.5:
+            crooked.append("%s (%.1f points apart)" % (title, max(cards.values()) - min(cards.values())))
+    if crooked:
+        return False, "posters at different heights in: " + ", ".join(crooked)
+    return True, "posters level in %d rows" % len(rows)
+
+
+def home_rows_ok(rows):
+    missing = [title for title in HOME_ROWS if not rows.get(title)]
+    if missing:
+        return False, "Home is missing: " + ", ".join(missing)
+    return True, "Home shows " + ", ".join(HOME_ROWS)
 
 
 def residual(values, half=20):
@@ -191,6 +235,11 @@ def run_checks(out, sample):
             edges.append(None if i is None else (y0 + i) / g["scale"] - g["guideY"])
         results.append(("first row (%s)" % shot,)
                        + first_row_ok(edges, g["fade"], expected=g["room"] + g["rowSpacing"] / 2))
+
+    for shot in ("iphone-movies-dark", "iphone-series-dark", "iphone-home-dark", "tv-movies", "tv-home"):
+        results.append(("posters level (%s)" % shot,) + rows_level_ok(rail_cards(os.path.join(logs, shot + ".err"))))
+    for shot in ("iphone-home-dark", "tv-home"):
+        results.append(("Home rows (%s)" % shot,) + home_rows_ok(rail_cards(os.path.join(logs, shot + ".err"))))
 
     shot = "tv-guide-long"
     g = geometry(shot)

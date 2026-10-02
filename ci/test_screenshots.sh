@@ -49,20 +49,29 @@ grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMov
   && ok "moves the Apple TV focus" || no "tv moves"
 grep -qF "launch TZ=Europe/London" "$LOG" && ok "the app runs on UK time" || no "time zone"
 # unsigned builds crash on iCloud at launch; Lume keeps iCloud off under -ui-testing (as its own UI tests do)
-[ "$(grep -c "simctl launch " "$LOG")" -eq 16 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
+[ "$(grep -c "simctl launch " "$LOG")" -eq 21 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
   && ok "every launch keeps iCloud off" || no "a launch without -ui-testing"
 n=0
 for f in iphone-guide-dark iphone-list-dark iphone-guide-light iphone-list-light iphone-guide-bottom-dark \
-         iphone-guide-few-dark iphone-guide-under-dark iphone-guide-landscape-dark tv-guide-channel tv-guide-programme \
-         tv-guide-bottom tv-guide-under tv-guide-long tv-list; do
+         iphone-guide-few-dark iphone-guide-under-dark iphone-home-dark iphone-movies-dark iphone-series-dark \
+         iphone-guide-landscape-dark tv-guide-channel tv-guide-programme tv-guide-bottom tv-guide-under tv-guide-long \
+         tv-home tv-movies tv-list; do
   if [ -f "$T/out/$f.png" ]; then n=$((n + 1)); else no "missing $f.png"; fi
 done
-[ "$n" -eq 14 ] && ok "fourteen screenshots" || no "screenshots ($n)"
+[ "$n" -eq 19 ] && ok "nineteen screenshots" || no "screenshots ($n)"
 # for guide-check.py: the guides without the channel column (what the programmes leave under the panel), and the
 # Apple TV focused on a six-hour programme after a gap (Georgs' photo of build 9)
 grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoNoPanel 1$" "$LOG" \
   && grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoNoPanel 1$" "$LOG" \
   && ok "the guides are photographed without the channel column" || no "no pictures without the column"
+# Lume's Home, Movies and Series screens over made-up films and series (Georgs, 2 Oct: posters at different heights,
+# the Apple TV's Home showing only the sports row)
+grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo home$" "$LOG" \
+  && grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo movies$" "$LOG" \
+  && grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo series$" "$LOG" \
+  && grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo home$" "$LOG" \
+  && grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo movies$" "$LOG" \
+  && ok "Home, Movies and Series are photographed" || no "no pictures of Home, Movies or Series"
 grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMoves right,down$" "$LOG" \
   && ok "the Apple TV is photographed focused on the long programme" || no "no picture of the long programme"
 grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMoves landscape" "$LOG" \

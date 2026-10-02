@@ -11,6 +11,8 @@
     /// scrolls the iPhone guide to its last row, `landscape` turns the iPhone sideways. `-GFDemoChannels 3` shows a short
     /// category. `-GFDemoNoPanel 1` hides the channel column, glass and all (ci/guide-check.py sees what the programmes
     /// leave under it: the simulator's glass is too frosted to show it, a real Apple TV's bends it into view).
+    /// `-GFDemo home`, `movies` or `series` shows Lume's own Home, Movies or Series screen over made-up films and
+    /// series (some with long titles) and a few watched channels.
     enum GFDemo {
         static var mode: String? {
             value(after: "-GFDemo")
@@ -43,6 +45,17 @@
                 ("rowSpacing", rowSpacing), ("gone", guide.minX + under.gone), ("clear", guide.minX + under.clear)
             ]
             log("guide geometry: " + fields.map { "\($0.0)=\($0.1)" }.joined(separator: " "))
+        }
+
+        /// For ci/guide-check.py: a card in a horizontal row of posters, where it sits on screen (the first six).
+        static func logRailCard(rail: String, index: Int, frame: CGRect) {
+            guard index < 6 else { return }
+            log("rail card: \(index) \(frame.minY) \(frame.height) \(rail)")
+        }
+
+        /// The text of a row title given as a localized key (demo logs only).
+        static func text(_ key: LocalizedStringKey) -> String {
+            Mirror(reflecting: key).children.first { $0.label == "key" }?.value as? String ?? "\(key)"
         }
 
         /// For ci/guide-check.py: the focused programme's frame on screen as drawn (grown by `scale`).
@@ -119,6 +132,7 @@
             }
             categories.forEach { context.insert($0) }
             let category = categories[0]
+            Self.insertFilmsAndSeries(into: context, playlist: playlist, now: now)
             var streams: [LiveStream] = []
             for (index, name) in Self.channelNames(now: now).prefix(count).enumerated() {
                 let channelId = "demo-\(index)"
@@ -128,6 +142,14 @@
                     num: index + 1, categoryId: category.id
                 ))
                 context.insert(streams[streams.count - 1])
+                // watched a little while ago (Home's Recently Watched) and one favourite
+                switch index {
+                case 0: streams[index].lastWatchedDate = now.addingTimeInterval(-10 * 60)
+                case 3: streams[index].lastWatchedDate = now.addingTimeInterval(-3600)
+                case 5: streams[index].lastWatchedDate = now.addingTimeInterval(-3 * 3600)
+                case 1: streams[index].isFavorite = true
+                default: break
+                }
                 for listing in Self.programmes(channelId: channelId, index: index, name: name, now: now) {
                     context.insert(listing)
                 }
@@ -138,6 +160,30 @@
             self.playlist = playlist
             firstStream = streams.first
             scope = .category(category.id)
+        }
+
+        /// Films and series as a server lists them, newest first; some titles run onto two lines (Georgs' photo of the
+        /// Series page, 2 Oct: their posters sat higher than the others).
+        private static func insertFilmsAndSeries(into context: ModelContext, playlist: Playlist, now: Date) {
+            let films = Category(apiId: "100", name: "New Films", parentId: 0, type: .vod, playlist: playlist)
+            let shows = Category(apiId: "200", name: "Drama", parentId: 0, type: .series, playlist: playlist)
+            context.insert(films)
+            context.insert(shows)
+            let filmNames = ["Dune: Part Two", "The Lord of the Rings: The Return of the King", "Oppenheimer",
+                             "Everything Everywhere All at Once", "Barbie", "Mission: Impossible - Dead Reckoning",
+                             "Past Lives", "Top Gun: Maverick"]
+            for (index, name) in filmNames.enumerated() {
+                let added = Int(now.timeIntervalSince1970) - index * 3600
+                context.insert(Movie(id: "\(playlist.id.uuidString)-movie-\(500 + index)", streamId: 500 + index,
+                                     name: name, added: "\(added)", categoryId: films.id))
+            }
+            let seriesNames = ["War", "The Sisters Grimm", "Agent Kim Reactivated", "Age of the Living Dead",
+                               "Break Clause", "Slow Horses"]
+            for (index, name) in seriesNames.enumerated() {
+                let modified = Int(now.timeIntervalSince1970) - index * 3600
+                context.insert(Series(id: "\(playlist.id.uuidString)-series-\(700 + index)", seriesId: 700 + index,
+                                      name: name, lastModified: "\(modified)", categoryId: shows.id))
+            }
         }
 
         static func channelNames(now: Date) -> [String] {
@@ -213,6 +259,10 @@
         @State private var section: LiveTVSection?
         @State private var layoutMode = (GFDemo.mode == "list" ? LiveTVLayoutMode.list : .guide).rawValue
         @State private var playing: PlayableMedia?
+        #if os(iOS)
+            /// The demo's first tab: Live TV unless `-GFDemo home`, `movies` or `series` asks for another.
+            @State private var tab = ["home", "movies", "series"].contains(GFDemo.mode ?? "") ? GFDemo.mode ?? "live" : "live"
+        #endif
 
         init() {
             let store = GFDemoStore()
@@ -230,6 +280,34 @@
 
         @ViewBuilder private var content: some View {
             #if os(tvOS)
+                switch GFDemo.mode ?? "" {
+                case "home": HomeView()
+                case "movies": MoviesView()
+                case "series": SeriesView()
+                default: liveTV
+                }
+            #elseif os(iOS)
+                TabView(selection: $tab) {
+                    Tab("Home", systemImage: "house", value: "home") { HomeView() }
+                    Tab("Live TV", systemImage: "tv", value: "live") { liveTV }
+                    Tab("Movies", systemImage: "film", value: "movies") { MoviesView() }
+                    Tab("Series", systemImage: "rectangle.stack", value: "series") { SeriesView() }
+                }
+                // as in the app (MainTabView): the tab bar shrinks while the guide scrolls down
+                .tabBarMinimizeOnScrollDownIfAvailable()
+                .task {
+                    if GFDemo.moves.contains("landscape") { GFDemo.turnToLandscape() }
+                    if GFDemo.moves.contains("play"), let stream = store.firstStream {
+                        // -GFDemoMoves play: the first channel opens after four seconds (filmed by ci/screenshots.sh)
+                        try? await Task.sleep(for: .seconds(4))
+                        play(stream)
+                    }
+                }
+            #endif
+        }
+
+        @ViewBuilder private var liveTV: some View {
+            #if os(tvOS)
                 TVLiveTVScreen(
                     sections: store.categories.map { LiveTVSection.category($0) },
                     selectedSection: $section,
@@ -244,40 +322,36 @@
                     sourceType: nil
                 )
             #elseif os(iOS)
-                TabView {
-                    Tab("Live TV", systemImage: "tv") {
-                        NavigationStack {
-                            Group {
-                                if GFDemo.mode == "list" {
-                                    ChannelsList(scope: store.scope, playlistPrefix: "", sort: .playlist,
-                                                 onStartMultiView: { _ in }, onPlay: play)
-                                } else {
-                                    EPGGuideView(scope: store.scope, playlistPrefix: "", sort: .playlist, onPlay: play)
-                                }
-                            }
-                            .navigationTitle("Sport")
-                            .navigationBarTitleDisplayMode(.inline)
-                            // as Lume's Live TV screen opens a channel (LiveTVView)
-                            .fullScreenCover(item: $playing) { media in
-                                FullScreenPlayerView(media: media)
-                            }
+                NavigationStack {
+                    Group {
+                        if GFDemo.mode == "list" {
+                            ChannelsList(scope: store.scope, playlistPrefix: "", sort: .playlist,
+                                         onStartMultiView: { _ in }, onPlay: play)
+                        } else {
+                            EPGGuideView(scope: store.scope, playlistPrefix: "", sort: .playlist, onPlay: play)
                         }
                     }
-                    Tab("Movies", systemImage: "film") { Color.clear }
-                    Tab("Series", systemImage: "rectangle.stack") { Color.clear }
-                    Tab("Search", systemImage: "magnifyingglass") { Color.clear }
-                }
-                // as in the app (MainTabView): the tab bar shrinks while the guide scrolls down
-                .tabBarMinimizeOnScrollDownIfAvailable()
-                .task {
-                    if GFDemo.moves.contains("landscape") { GFDemo.turnToLandscape() }
-                    if GFDemo.moves.contains("play"), let stream = store.firstStream {
-                        // -GFDemoMoves play: the first channel opens after four seconds (filmed by ci/screenshots.sh)
-                        try? await Task.sleep(for: .seconds(4))
-                        play(stream)
+                    .navigationTitle("Sport")
+                    .navigationBarTitleDisplayMode(.inline)
+                    // as Lume's Live TV screen opens a channel (LiveTVView)
+                    .fullScreenCover(item: $playing) { media in
+                        FullScreenPlayerView(media: media)
                     }
                 }
             #endif
+        }
+    }
+
+    extension View {
+        /// For ci/guide-check.py: logs where a card of a horizontal poster row sits (Lume GF screenshot build only).
+        func gfDemoRailCard(rail: String, index: Int) -> some View {
+            onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                GFDemo.logRailCard(rail: rail, index: index, frame: frame)
+            }
+        }
+
+        func gfDemoRailCard(rail: LocalizedStringKey, index: Int) -> some View {
+            gfDemoRailCard(rail: GFDemo.text(rail), index: index)
         }
     }
 #endif

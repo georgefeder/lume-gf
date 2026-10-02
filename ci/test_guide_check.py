@@ -144,6 +144,51 @@ class FocusPlanTests(unittest.TestCase):
         self.assertEqual((inside[1], inside[3]), ((300 + 10) * 2, (300 + 116 - 10) * 2))
 
 
+class RowTests(unittest.TestCase):
+    LOG = ("GFDemo rail card: 0 310.0 260.0 Recently Added\n"
+           "GFDemo rail card: 1 290.0 280.0 Recently Added\n"     # a two-line title, centred: 20 points higher
+           "GFDemo rail card: 1 310.0 280.0 Recently Added\n"     # later line wins
+           "GFDemo rail card: 0 600.0 200.0 Recently Watched\n"
+           "GFDemo rail card: 1 600.0 120.0 Recently Watched\n")
+
+    def write(self, text):
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, "shot.err")
+        with open(path, "w") as f:
+            f.write(text)
+        return path
+
+    def test_cards_are_read_per_row_with_the_last_position_winning(self):
+        rows = gc.rail_cards(self.write(self.LOG))
+        self.assertEqual(sorted(rows), ["Recently Added", "Recently Watched"])
+        self.assertEqual(rows["Recently Added"][1], 310.0)
+
+    def test_posters_level_at_the_top_pass(self):
+        ok, _ = gc.rows_level_ok(gc.rail_cards(self.write(self.LOG)))
+        self.assertTrue(ok)
+
+    def test_a_poster_higher_than_its_neighbours_fails(self):
+        # Georgs' photo of the Series page (2 Oct): the two-line titles' posters sat higher
+        ok, detail = gc.rows_level_ok(gc.rail_cards(self.write(self.LOG + "GFDemo rail card: 2 290.0 280.0 Recently Added\n")))
+        self.assertFalse(ok)
+        self.assertIn("Recently Added", detail)
+
+    def test_no_rows_logged_fails(self):
+        ok, _ = gc.rows_level_ok({})
+        self.assertFalse(ok)
+
+    def test_home_shows_the_rows_it_should(self):
+        rows = {"Recently Watched": {0: 1.0}, "Recently Added Movies": {0: 1.0}, "Recently Added Series": {0: 1.0}}
+        ok, _ = gc.home_rows_ok(rows)
+        self.assertTrue(ok)
+
+    def test_a_home_without_recently_added_fails(self):
+        # Georgs' Apple TV (2 Oct): Home showed only the sports row
+        ok, detail = gc.home_rows_ok({"Recently Watched": {0: 1.0}})
+        self.assertFalse(ok)
+        self.assertIn("Recently Added Movies", detail)
+
+
 class MainTests(unittest.TestCase):
     def test_a_missing_screen_scale_is_a_failure(self):
         d = tempfile.mkdtemp()

@@ -24,7 +24,7 @@ index 6591386..6ccbdcb 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 5595641..a6b742d 100644
+index 73a583f..cfa8945 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -32,11 +32,15 @@ struct LumeApp: App {
@@ -43,7 +43,7 @@ index 5595641..a6b742d 100644
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -325,6 +329,8 @@ struct LumeApp: App {
+@@ -328,6 +332,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
@@ -52,14 +52,14 @@ index 5595641..a6b742d 100644
                  }
                  .onChange(of: cloudSync.status.lastReconcile) {
                      // A reconcile may have pulled a PIN this device didn't have
-@@ -337,6 +343,7 @@ struct LumeApp: App {
+@@ -340,6 +346,7 @@ struct LumeApp: App {
                      SportsFollowService.shared.reload()
                  }
                  .onChange(of: scenePhase) { _, phase in
 +                    GuideScheduler.shared.scenePhaseChanged(to: phase)
                      DiagnosticSession.scenePhaseChanged(to: phase)
                      cloudSync.handleScenePhaseChange(to: phase)
-                     #if !os(macOS)
+                     // Keep the image disk cache inside its size limit. Rate-limited
 diff --git a/Lume/Services/Network/XMLTVParser.swift b/Lume/Services/Network/XMLTVParser.swift
 index 2a4c0c0..f4a9e4d 100644
 --- a/Lume/Services/Network/XMLTVParser.swift

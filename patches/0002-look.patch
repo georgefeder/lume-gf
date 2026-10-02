@@ -1,5 +1,5 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index a6b742d..14ebe2f 100644
+index cfa8945..e37e976 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -225,7 +225,8 @@ struct LumeApp: App {
@@ -12,6 +12,48 @@ index a6b742d..14ebe2f 100644
                  .environment(TraktService.shared)
                  .environment(PremiumManager.shared)
                  .environment(cloudSync)
+diff --git a/Lume/Services/Home/HomeLayoutSettings.swift b/Lume/Services/Home/HomeLayoutSettings.swift
+index 85b8b07..b056988 100644
+--- a/Lume/Services/Home/HomeLayoutSettings.swift
++++ b/Lume/Services/Home/HomeLayoutSettings.swift
+@@ -15,6 +15,10 @@ import SwiftUI
+ enum HomeSection: String, CaseIterable, Identifiable {
+     case recentlyWatched
+     case favorites
++    // Lume GF: the newest films and series of the playlist, so Home always has something (Georgs, 2 Oct: the Apple TV's
++    // Home showed only the sports row)
++    case recentlyAddedMovies
++    case recentlyAddedSeries
+     case forYou
+     case trendingMovies
+     case trendingSeries
+@@ -33,6 +37,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
+         switch self {
+         case .recentlyWatched: "Recently Watched"
+         case .favorites: "Favorites"
++        case .recentlyAddedMovies: "Recently Added Movies"
++        case .recentlyAddedSeries: "Recently Added Series"
+         case .forYou: "For You"
+         case .trendingMovies: "Trending Movies"
+         case .trendingSeries: "Trending Series"
+@@ -49,6 +55,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
+         switch self {
+         case .recentlyWatched: String(localized: "Recently Watched")
+         case .favorites: String(localized: "Favorites")
++        case .recentlyAddedMovies: String(localized: "Recently Added Movies")
++        case .recentlyAddedSeries: String(localized: "Recently Added Series")
+         case .forYou: String(localized: "For You")
+         case .trendingMovies: String(localized: "Trending Movies")
+         case .trendingSeries: String(localized: "Trending Series")
+@@ -62,6 +70,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
+         switch self {
+         case .recentlyWatched: "clock.arrow.circlepath"
+         case .favorites: "star"
++        case .recentlyAddedMovies: "film.stack"
++        case .recentlyAddedSeries: "sparkles.tv"
+         case .forYou: "sparkles"
+         case .trendingMovies: "film"
+         case .trendingSeries: "tv"
 diff --git a/Lume/Services/Player/NowPlayingService.swift b/Lume/Services/Player/NowPlayingService.swift
 index 2d99a3d..1564538 100644
 --- a/Lume/Services/Player/NowPlayingService.swift
@@ -51,6 +93,29 @@ index 5ca6724..105215f 100644
              subtitle: programTitle,
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .vod,
+diff --git a/Lume/Views/Components/CategoryContentGrid.swift b/Lume/Views/Components/CategoryContentGrid.swift
+index 739207c..268a62f 100644
+--- a/Lume/Views/Components/CategoryContentGrid.swift
++++ b/Lume/Views/Components/CategoryContentGrid.swift
+@@ -235,12 +235,17 @@ struct CategoryPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable,
+                     .padding(.horizontal)
+             } else {
+                 ScrollView(.horizontal, showsIndicators: false) {
+-                    LazyHStack(spacing: PosterCardMetrics.railSpacing) {
++                    // Lume GF: posters line up at the top, a title running onto two lines hangs below (Georgs, 2 Oct)
++
++                    LazyHStack(alignment: .top, spacing: PosterCardMetrics.railSpacing) {
+                         ForEach(items) { item in
+                             NavigationLink(value: item) {
+                                 card(item)
+                                     .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
+                             }
++                            #if GF_DEMO
++                            .gfDemoRailCard(rail: title, index: items.firstIndex(of: item) ?? 0)
++                            #endif
+                             .posterCardButtonStyle()
+                             .mediaFavoriteMenu(
+                                 isFavorite: { item.isFavorite },
 diff --git a/Lume/Views/Components/GlassEffectCompat.swift b/Lume/Views/Components/GlassEffectCompat.swift
 index dd50f51..92cb0c8 100644
 --- a/Lume/Views/Components/GlassEffectCompat.swift
@@ -81,6 +146,85 @@ index dd50f51..92cb0c8 100644
          }
      }
  }
+diff --git a/Lume/Views/Components/LibraryCollectionRows.swift b/Lume/Views/Components/LibraryCollectionRows.swift
+index 7cbe4c1..93539b1 100644
+--- a/Lume/Views/Components/LibraryCollectionRows.swift
++++ b/Lume/Views/Components/LibraryCollectionRows.swift
+@@ -111,12 +111,17 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
+             .padding(.horizontal)
+ 
+             ScrollView(.horizontal, showsIndicators: false) {
+-                LazyHStack(spacing: PosterCardMetrics.railSpacing) {
++                // Lume GF: posters line up at the top, a title running onto two lines hangs below (Georgs, 2 Oct)
++
++                LazyHStack(alignment: .top, spacing: PosterCardMetrics.railSpacing) {
+                     ForEach(items) { item in
+                         NavigationLink(value: item) {
+                             card(item)
+                                 .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
+                         }
++                        #if GF_DEMO
++                        .gfDemoRailCard(rail: title, index: items.firstIndex(of: item) ?? 0)
++                        #endif
+                         .posterCardButtonStyle()
+                         .mediaFavoriteMenu(
+                             isFavorite: { item.isFavorite },
+@@ -144,13 +149,17 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
+ struct MovieCollectionRow: View {
+     let kind: LibraryCollection.Kind
+     var animationNamespace: Namespace.ID?
++    /// Lume GF: Home names its row "Recently Added Movies" (beside "Recently Added Series")
++    var title: LocalizedStringKey?
+     @Environment(\.modelContext) private var modelContext
+     @Environment(\.contentRestriction) private var restriction
+     @Query private var movies: [Movie]
+ 
+-    init(kind: LibraryCollection.Kind, playlistPrefix: String, animationNamespace: Namespace.ID? = nil) {
++    init(kind: LibraryCollection.Kind, playlistPrefix: String, animationNamespace: Namespace.ID? = nil,
++         title: LocalizedStringKey? = nil) {
+         self.kind = kind
+         self.animationNamespace = animationNamespace
++        self.title = title
+         _movies = Query(MovieCollectionQuery.rowDescriptor(for: kind, playlistPrefix: playlistPrefix))
+     }
+ 
+@@ -163,7 +172,7 @@ struct MovieCollectionRow: View {
+         let items = Array(matches.prefix(collectionPreviewLimit))
+         if !items.isEmpty {
+             CollectionPreviewRow(
+-                title: kind.title,
++                title: title ?? kind.title,
+                 collection: LibraryCollection(kind: kind, type: .vod),
+                 items: items,
+                 hasMore: matches.count > items.count,
+@@ -271,13 +280,17 @@ enum MovieCollectionQuery {
+ struct SeriesCollectionRow: View {
+     let kind: LibraryCollection.Kind
+     var animationNamespace: Namespace.ID?
++    /// Lume GF: see `MovieCollectionRow.title`
++    var title: LocalizedStringKey?
+     @Environment(\.modelContext) private var modelContext
+     @Environment(\.contentRestriction) private var restriction
+     @Query private var series: [Series]
+ 
+-    init(kind: LibraryCollection.Kind, playlistPrefix: String, animationNamespace: Namespace.ID? = nil) {
++    init(kind: LibraryCollection.Kind, playlistPrefix: String, animationNamespace: Namespace.ID? = nil,
++         title: LocalizedStringKey? = nil) {
+         self.kind = kind
+         self.animationNamespace = animationNamespace
++        self.title = title
+         _series = Query(SeriesCollectionQuery.rowDescriptor(for: kind, playlistPrefix: playlistPrefix))
+     }
+ 
+@@ -290,7 +303,7 @@ struct SeriesCollectionRow: View {
+         let items = Array(matches.prefix(collectionPreviewLimit))
+         if !items.isEmpty {
+             CollectionPreviewRow(
+-                title: kind.title,
++                title: title ?? kind.title,
+                 collection: LibraryCollection(kind: kind, type: .series),
+                 items: items,
+                 hasMore: matches.count > items.count,
 diff --git a/Lume/Views/Components/LiveStreamCardView.swift b/Lume/Views/Components/LiveStreamCardView.swift
 index fa8f4f9..65ef1db 100644
 --- a/Lume/Views/Components/LiveStreamCardView.swift
@@ -112,6 +256,108 @@ index 98ede44..9a5e17a 100644
          }
      }
  
+diff --git a/Lume/Views/Home/HomeRows.swift b/Lume/Views/Home/HomeRows.swift
+index a126214..d49ec68 100644
+--- a/Lume/Views/Home/HomeRows.swift
++++ b/Lume/Views/Home/HomeRows.swift
+@@ -38,7 +38,9 @@ struct HomeRow: View {
+                 .padding(.horizontal)
+ 
+             ScrollView(.horizontal, showsIndicators: false) {
+-                LazyHStack(spacing: PosterCardMetrics.railSpacing) {
++                // Lume GF: posters line up at the top, a title running onto two lines hangs below (Georgs, 2 Oct)
++
++                LazyHStack(alignment: .top, spacing: PosterCardMetrics.railSpacing) {
+                     ForEach(items) { item in
+                         HomeItemCell(
+                             item: item,
+@@ -49,6 +51,9 @@ struct HomeRow: View {
+                             onStartMultiView: onStartMultiView,
+                             animationNamespace: animationNamespace
+                         )
++                        #if GF_DEMO
++                        .gfDemoRailCard(rail: title, index: items.firstIndex(of: item) ?? 0)
++                        #endif
+                     }
+                 }
+                 .padding(.horizontal)
+diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
+index 609aba8..4249d2e 100644
+--- a/Lume/Views/Home/HomeView.swift
++++ b/Lume/Views/Home/HomeView.swift
+@@ -35,6 +35,9 @@ struct HomeView: View {
+     @Query private var favoriteMovies: [Movie]
+     @Query private var favoriteSeries: [Series]
+     @Query private var favoriteStreams: [LiveStream]
++    /// Lume GF: one film and one series (any playlist), for `isEmpty` now that Home shows the recently added rows
++    @Query private var anyMovie: [Movie]
++    @Query private var anySeries: [Series]
+ 
+     @State var trendingMovies: [HomeMediaItem] = []
+     @State var trendingSeries: [HomeMediaItem] = []
+@@ -138,6 +141,13 @@ struct HomeView: View {
+         )
+         favStreams.fetchLimit = 30
+         _favoriteStreams = Query(favStreams)
++
++        var oneMovie = FetchDescriptor<Movie>()
++        oneMovie.fetchLimit = 1
++        _anyMovie = Query(oneMovie)
++        var oneSeries = FetchDescriptor<Series>()
++        oneSeries.fetchLimit = 1
++        _anySeries = Query(oneSeries)
+     }
+ 
+     var body: some View {
+@@ -207,6 +217,16 @@ struct HomeView: View {
+                     .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
+                 #endif
+             }
++            // Lume GF: "Show All" from the recently added rows
++            .navigationDestination(for: LibraryCollection.self) { collection in
++                if collection.type == .series {
++                    SeriesCollectionView(kind: collection.kind, playlistPrefix: playlistPrefix ?? "",
++                                         animationNamespace: animationNamespace)
++                } else {
++                    MovieCollectionView(kind: collection.kind, playlistPrefix: playlistPrefix ?? "",
++                                        animationNamespace: animationNamespace)
++                }
++            }
+             #if os(tvOS)
+             .navigationDestination(item: $selectedHero) { hero in
+                 if let movie = hero.movie {
+@@ -265,6 +285,12 @@ struct HomeView: View {
+                 rail("Recently Watched", recentlyWatched, onRemove: removeFromRecentlyWatched)
+             case .favorites:
+                 rail("Favorites", favorites)
++            case .recentlyAddedMovies:
++                MovieCollectionRow(kind: .recentlyAdded, playlistPrefix: playlistPrefix ?? "",
++                                   animationNamespace: animationNamespace, title: "Recently Added Movies")
++            case .recentlyAddedSeries:
++                SeriesCollectionRow(kind: .recentlyAdded, playlistPrefix: playlistPrefix ?? "",
++                                    animationNamespace: animationNamespace, title: "Recently Added Series")
+             case .forYou:
+                 ForYouRow(
+                     items: recommendations,
+@@ -396,11 +422,18 @@ struct HomeView: View {
+             .map(\.item)
+     }
+ 
++    /// Lume GF: the playlist has films or series, so the recently added rows show
++    private var hasFilmsOrSeries: Bool {
++        !anyMovie.isEmpty || !anySeries.isEmpty
++    }
++
+     /// Truly empty home — only show the empty state once trending has settled
+     /// so async-loaded content doesn't make the empty view flash on launch.
+     private var isEmpty: Bool {
+         recentlyWatched.isEmpty
+             && favorites.isEmpty
++            // Lume GF: the recently added rows count once the playlist has any film or series
++            && !hasFilmsOrSeries
+             && trendingMovies.isEmpty
+             && trendingSeries.isEmpty
+             && watchlist.isEmpty
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
 index 9eb3ec6..937a9c0 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
