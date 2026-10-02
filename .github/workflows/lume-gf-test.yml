@@ -8,6 +8,10 @@ on:
         description: Test plain Lume without our changes (diagnosis)
         type: boolean
         default: false
+      only_logic:
+        description: Only the logic tests (swift test) - quick, for pure-logic changes
+        type: boolean
+        default: false
   push:
     branches: ['part2/**', 'part3/**']
 
@@ -15,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: lume-gf-test-${{ github.ref }}-${{ inputs.baseline && 'baseline' || 'normal' }}
+  group: lume-gf-test-${{ github.ref }}-${{ inputs.baseline && 'baseline' || (inputs.only_logic && 'logic' || 'normal') }}
   cancel-in-progress: true
 
 jobs:
@@ -42,6 +46,7 @@ jobs:
         run: swift test
   app:
     name: App tests (iOS Simulator)
+    if: ${{ !inputs.only_logic }}
     runs-on: macos-26
     timeout-minutes: 90
     steps:
@@ -96,7 +101,7 @@ jobs:
             -clonedSourcePackagesDirPath "$GF_SPM" -disableAutomaticPackageResolution
   screenshots:
     name: Screenshots (simulators)
-    if: ${{ !inputs.baseline }}
+    if: ${{ !inputs.baseline && !inputs.only_logic }}
     runs-on: macos-26
     timeout-minutes: 120
     steps:
