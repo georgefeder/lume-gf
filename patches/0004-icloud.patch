@@ -83,3 +83,16 @@ index f62141d..cb2f9be 100644
                      isFavorite: stream.isFavorite,
                      addedToWatchlistDate: nil,
                      favoriteOrder: stream.favoriteOrder,
+diff --git a/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift b/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
+index 116b913..1638d57 100644
+--- a/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
++++ b/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
+@@ -130,6 +130,8 @@ actor CloudSyncEngine {
+             // Collapse any duplicate default profile a freshly-synced device
+             // imported before its own bootstrap-created one could converge.
+             try reconcileProfiles()
++            // Lume GF: copies of the same playlist (added by hand on several devices) become one first
++            try gfMergeDuplicatePlaylists()
+             let livePrefixes = try reconcilePlaylists(into: &result)
+             try reconcileContent(livePrefixes: livePrefixes, into: &result)
+             // Parental controls: the PIN and category restrictions. Neither is
