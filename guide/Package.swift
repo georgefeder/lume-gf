@@ -15,6 +15,7 @@ let package = Package(
         .testTarget(name: "LookCoreTests", dependencies: ["LookCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
         // Part 4: iCloud sync (docs/superpowers/specs/2026-10-02-lume-gf-4-icloud-design.md)
         .target(name: "SyncCore", swiftSettings: [.swiftLanguageMode(.v5)]),
-        .testTarget(name: "SyncCoreTests", dependencies: ["SyncCore"], swiftSettings: [.swiftLanguageMode(.v5)])
+        .testTarget(name: "SyncCoreTests", dependencies: ["SyncCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
+        .executableTarget(name: "gf-schema", dependencies: ["SyncCore"], swiftSettings: [.swiftLanguageMode(.v5)])
     ]
 )
