@@ -1,0 +1,161 @@
+diff --git a/Lume/Views/Components/TitleLogo.swift b/Lume/Views/Components/TitleLogo.swift
+index e47fa33..59d9c63 100644
+--- a/Lume/Views/Components/TitleLogo.swift
++++ b/Lume/Views/Components/TitleLogo.swift
+@@ -22,7 +22,9 @@ struct TitleLogo<Fallback: View>: View {
+ 
+     var body: some View {
+         if let url {
+-            CachedAsyncImage(url: url) { phase in
++            // Lume GF: decoded at the size it is drawn; the Apple TV asks TMDB for the original, often 3000+ pixels
++            // wide (about 12 MB in memory each, crowding posters out of the image cache)
++            CachedAsyncImage(url: url, maxPixelSize: maxWidth.isFinite ? max(maxWidth, maxHeight) : nil) { phase in
+                 switch phase {
+                 case .empty:
+                     // Reserve the logo's vertical space without flashing the
+diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+index f1e5513..5c8d359 100644
+--- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+@@ -40,12 +40,15 @@ import SwiftUI
+             ZStack {
+                 scrim
+ 
+-                VStack(spacing: 0) {
+-                    topBar
+-                    Spacer(minLength: 0)
+-                    centerTransport
+-                    Spacer(minLength: 0)
+-                    bottomControls
++                // Lume GF: the controls' glass in one container (drawn in one pass, blending where they meet)
++                GlassGroupCompat {
++                    VStack(spacing: 0) {
++                        topBar
++                        Spacer(minLength: 0)
++                        centerTransport
++                        Spacer(minLength: 0)
++                        bottomControls
++                    }
+                 }
+             }
+             .task(id: media.id) {
+diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
+index b205f86..87a4e3b 100644
+--- a/Lume/Views/Player/AVPlayerEngineView.swift
++++ b/Lume/Views/Player/AVPlayerEngineView.swift
+@@ -441,6 +441,7 @@ struct AVPlayerEngineView: View {
+     }
+ 
+     private func closePlayer() {
++        coordinator.player.pause() // Lume GF: AirPlay stops with the picture, not after the close animation
+         #if os(macOS)
+             if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
+                 window.toggleFullScreen(nil)
+diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
+index 845ee30..496c077 100644
+--- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
+@@ -65,12 +65,15 @@ import SwiftUI
+             ZStack {
+                 scrim
+ 
+-                VStack(spacing: 0) {
+-                    topBar
+-                    Spacer(minLength: 0)
+-                    centerTransport
+-                    Spacer(minLength: 0)
+-                    bottomControls
++                // Lume GF: the controls' glass in one container (drawn in one pass, blending where they meet)
++                GlassGroupCompat {
++                    VStack(spacing: 0) {
++                        topBar
++                        Spacer(minLength: 0)
++                        centerTransport
++                        Spacer(minLength: 0)
++                        bottomControls
++                    }
+                 }
+             }
+             .task(id: media.id) {
+diff --git a/Lume/Views/Player/LumeEngineControlsOverlay.swift b/Lume/Views/Player/LumeEngineControlsOverlay.swift
+index 2cf69e6..3788b39 100644
+--- a/Lume/Views/Player/LumeEngineControlsOverlay.swift
++++ b/Lume/Views/Player/LumeEngineControlsOverlay.swift
+@@ -54,12 +54,15 @@ import SwiftUI
+             ZStack {
+                 scrim
+ 
+-                VStack(spacing: 0) {
+-                    topBar
+-                    Spacer(minLength: 0)
+-                    centerTransport
+-                    Spacer(minLength: 0)
+-                    bottomControls
++                // Lume GF: the controls' glass in one container (drawn in one pass, blending where they meet)
++                GlassGroupCompat {
++                    VStack(spacing: 0) {
++                        topBar
++                        Spacer(minLength: 0)
++                        centerTransport
++                        Spacer(minLength: 0)
++                        bottomControls
++                    }
+                 }
+             }
+             .task(id: media.id) {
+diff --git a/Lume/Views/Player/LumeEngineCoordinator.swift b/Lume/Views/Player/LumeEngineCoordinator.swift
+index 0a33965..468d4ed 100644
+--- a/Lume/Views/Player/LumeEngineCoordinator.swift
++++ b/Lume/Views/Player/LumeEngineCoordinator.swift
+@@ -271,6 +271,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
+ 
+     // MARK: Transport
+ 
++    /// Lume GF: closing pauses at once, so an AirPlay speaker stops with the picture rather than after the close
++    /// animation and the session's shutdown.
++    func pauseForClose() {
++        guard isPlaying, let session else { return }
++        Task { await session.pause() }
++    }
++
+     func togglePlay() {
+         let session = session
+         let playing = isPlaying
+diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
+index a7a50c1..6882ce4 100644
+--- a/Lume/Views/Player/LumeEngineEngineView.swift
++++ b/Lume/Views/Player/LumeEngineEngineView.swift
+@@ -502,6 +502,7 @@ struct LumeEngineEngineView: View {
+     }
+ 
+     private func closePlayer() {
++        coordinator.pauseForClose() // Lume GF: AirPlay stops with the picture
+         #if os(macOS)
+             if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
+                 window.toggleFullScreen(nil)
+diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+index d0e87af..27241f9 100644
+--- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+@@ -43,12 +43,15 @@ import VLCKit
+             ZStack {
+                 scrim
+ 
+-                VStack(spacing: 0) {
+-                    topBar
+-                    Spacer(minLength: 0)
+-                    centerTransport
+-                    Spacer(minLength: 0)
+-                    bottomControls
++                // Lume GF: the controls' glass in one container (drawn in one pass, blending where they meet)
++                GlassGroupCompat {
++                    VStack(spacing: 0) {
++                        topBar
++                        Spacer(minLength: 0)
++                        centerTransport
++                        Spacer(minLength: 0)
++                        bottomControls
++                    }
+                 }
+             }
+             .task(id: media.id) {
