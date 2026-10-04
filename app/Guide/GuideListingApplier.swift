@@ -28,18 +28,18 @@ nonisolated struct GuideListingApplier {
     /// Rows per page when reading the stored guide.
     var pageSize = 5000
 
-    /// Every stored listing's comparable content, read in pages with only the compared fields. Each page starts after
-    /// the last id of the one before (an offset makes SQLite step over every earlier row again, page after page).
+    /// Every stored listing's comparable content, read in pages with only the compared fields. (Paging by "id after
+    /// the last one" skipped rows: the store sorts ids its own way, not as `>` compares them.)
     func loadStored() -> [String: GuideDiffPlanner.Stored] {
         var stored: [String: GuideDiffPlanner.Stored] = [:]
-        var after: String?
+        var offset = 0
         var fetched = pageSize
         while fetched == pageSize {
             if Task.isCancelled { break }
             fetched = autoreleasepool {
                 let context = ModelContext(container)
                 var descriptor = FetchDescriptor<EPGListing>(sortBy: [SortDescriptor(\.id)])
-                if let last = after { descriptor.predicate = #Predicate { $0.id > last } }
+                descriptor.fetchOffset = offset
                 descriptor.fetchLimit = pageSize
                 descriptor.propertiesToFetch = [\.id, \.channelId, \.start, \.end, \.title, \.subtitle, \.category,
                                                 \.listingDescription]
@@ -51,9 +51,9 @@ nonisolated struct GuideListingApplier {
                                                          category: row.category, description: row.listingDescription)
                     )
                 }
-                after = rows.last?.id
                 return rows.count
             }
+            offset += pageSize
         }
         return stored
     }
