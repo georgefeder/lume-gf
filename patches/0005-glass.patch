@@ -1,0 +1,186 @@
+diff --git a/Lume/Views/Components/PlaylistSwitchProgress.swift b/Lume/Views/Components/PlaylistSwitchProgress.swift
+index fbf636c..02ca5ad 100644
+--- a/Lume/Views/Components/PlaylistSwitchProgress.swift
++++ b/Lume/Views/Components/PlaylistSwitchProgress.swift
+@@ -122,7 +122,7 @@ private struct SwitchProgressOverlay: View {
+                     .multilineTextAlignment(.center)
+             }
+             .padding(padding)
+-            .background(.ultraThinMaterial, in: .rect(cornerRadius: 24))
++            .glassEffectCompat(.regular, in: .rect(cornerRadius: 24)) // Lume GF: was a material
+         }
+         .ignoresSafeArea()
+         .accessibilityElement(children: .combine)
+diff --git a/Lume/Views/Home/HeroPageIndicator.swift b/Lume/Views/Home/HeroPageIndicator.swift
+index 32e85ef..42ab5ed 100644
+--- a/Lume/Views/Home/HeroPageIndicator.swift
++++ b/Lume/Views/Home/HeroPageIndicator.swift
+@@ -45,7 +45,7 @@ struct HeroPageIndicator: View {
+         }
+         .padding(.horizontal, 12)
+         .padding(.vertical, 8)
+-        .background(.ultraThinMaterial, in: Capsule())
++        .glassEffectCompat(.regular, in: Capsule()) // Lume GF: was a material
+         // Scope the animation to the active-dot stretch on page change; the
+         // per-tick fill changes happen in other passes and stay unanimated.
+         .animation(.easeInOut(duration: 0.35), value: activeIndex)
+diff --git a/Lume/Views/Home/TVHomeScreen.swift b/Lume/Views/Home/TVHomeScreen.swift
+index 2287c67..734940f 100644
+--- a/Lume/Views/Home/TVHomeScreen.swift
++++ b/Lume/Views/Home/TVHomeScreen.swift
+@@ -454,12 +454,8 @@
+                 .fontWeight(.semibold)
+                 .padding(.horizontal, 28)
+                 .padding(.vertical, 14)
+-                .background(
+-                    heroFocused
+-                        ? AnyShapeStyle(.white)
+-                        : AnyShapeStyle(.ultraThinMaterial),
+-                    in: Capsule()
+-                )
++                // Lume GF: Liquid Glass, white glass on focus (was a material)
++                .glassEffectCompat(heroFocused ? .tintedInteractive(.white) : .regularInteractive, in: Capsule())
+                 .foregroundStyle(heroFocused ? .black : .white)
+                 .scaleEffect(heroFocused ? 1.04 : 1.0)
+                 .animation(.easeOut(duration: 0.18), value: heroFocused)
+diff --git a/Lume/Views/Player/MultiView/MultiViewScreen+Chrome.swift b/Lume/Views/Player/MultiView/MultiViewScreen+Chrome.swift
+index 38a20a6..8788896 100644
+--- a/Lume/Views/Player/MultiView/MultiViewScreen+Chrome.swift
++++ b/Lume/Views/Player/MultiView/MultiViewScreen+Chrome.swift
+@@ -67,7 +67,8 @@ extension MultiViewScreen {
+                 .font(.system(size: closeGlyphSize, weight: .semibold))
+                 .foregroundStyle(closeForeground)
+                 .frame(width: closeDiameter, height: closeDiameter)
+-                .background(closeFill, in: Circle())
++                // Lume GF: Liquid Glass (was a faint white fill)
++                .glassEffectCompat(closeGlass, in: Circle())
+         }
+         .accessibilityLabel("Close Multi-View")
+         #if os(tvOS)
+@@ -108,11 +109,11 @@ extension MultiViewScreen {
+         #endif
+     }
+ 
+-    var closeFill: Color {
++    var closeGlass: GlassEffectStyle {
+         #if os(tvOS)
+-            isCloseFocused ? .white : .white.opacity(0.12)
++            isCloseFocused ? .tintedInteractive(.white) : .regularInteractive
+         #else
+-            .white.opacity(0.12)
++            .regularInteractive
+         #endif
+     }
+ 
+@@ -130,10 +131,9 @@ extension MultiViewScreen {
+                             .font(.system(size: 24, weight: .semibold))
+                             .frame(width: 72, height: 52)
+                             .foregroundStyle(isItemFocused || isActive ? .black : .white)
+-                            .background(
+-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+-                                    .fill(pillFill(isFocused: isItemFocused, isActive: isActive))
+-                            )
++                            // Lume GF: Liquid Glass pills (were white fills)
++                            .glassEffectCompat(pillGlass(isFocused: isItemFocused, isActive: isActive),
++                                               in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                     }
+                     .buttonStyle(TVCardButtonStyle(focusScale: 1.06))
+                     .focused($focusedLayout, equals: layout)
+@@ -161,10 +161,10 @@ extension MultiViewScreen {
+         /// Focus wins over the active state: a focused pill is fully white, the
+         /// active-but-unfocused one keeps a dimmer white so the current layout
+         /// still reads.
+-        func pillFill(isFocused: Bool, isActive: Bool) -> AnyShapeStyle {
+-            if isFocused { return AnyShapeStyle(.white) }
+-            if isActive { return AnyShapeStyle(.white.opacity(0.6)) }
+-            return AnyShapeStyle(.white.opacity(0.12))
++        func pillGlass(isFocused: Bool, isActive: Bool) -> GlassEffectStyle {
++            if isFocused { return .tintedInteractive(.white) }
++            if isActive { return .tinted(.white.opacity(0.6)) }
++            return .regularInteractive
+         }
+     #endif
+ }
+diff --git a/Lume/Views/Player/MultiView/MultiViewTile.swift b/Lume/Views/Player/MultiView/MultiViewTile.swift
+index aa3b6eb..40d3c89 100644
+--- a/Lume/Views/Player/MultiView/MultiViewTile.swift
++++ b/Lume/Views/Player/MultiView/MultiViewTile.swift
+@@ -136,7 +136,7 @@ struct MultiViewTile: View {
+                         .font(.system(size: 13, weight: .semibold))
+                         .foregroundStyle(.white)
+                         .frame(width: 30, height: 30)
+-                        .background(.ultraThinMaterial, in: Circle())
++                        .glassEffectCompat(.regularInteractive, in: Circle()) // Lume GF: was a material
+                 }
+                 .buttonStyle(.plain)
+                 .padding(8)
+diff --git a/Lume/Views/TV/TVDetailButtons.swift b/Lume/Views/TV/TVDetailButtons.swift
+index 29189dc..81c2cc7 100644
+--- a/Lume/Views/TV/TVDetailButtons.swift
++++ b/Lume/Views/TV/TVDetailButtons.swift
+@@ -30,18 +30,14 @@
+ 
+             var body: some View {
+                 let foreground: Color = isFocused ? .black : .white
+-                let background: AnyShapeStyle = isFocused
+-                    ? AnyShapeStyle(.white)
+-                    : AnyShapeStyle(.regularMaterial)
+                 let shadowOpacity: Double = isFocused ? 0.4 : 0
+                 return configuration.label
+                     .foregroundStyle(foreground)
+                     .frame(maxWidth: .infinity)
+                     .frame(height: 76)
+-                    .background(
+-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+-                            .fill(background)
+-                    )
++                    // Lume GF: Liquid Glass (was a material fill), white glass on focus like the player's circles
++                    .glassEffectCompat(isFocused ? .tintedInteractive(.white) : .regularInteractive,
++                                       in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                     .scaleEffect(isFocused ? 1.06 : 1.0)
+                     .shadow(color: .black.opacity(shadowOpacity), radius: 18, y: 10)
+                     .animation(.easeOut(duration: 0.18), value: isFocused)
+diff --git a/Lume/Views/TV/TVQuickSwitchHint.swift b/Lume/Views/TV/TVQuickSwitchHint.swift
+index fe96621..f13b39b 100644
+--- a/Lume/Views/TV/TVQuickSwitchHint.swift
++++ b/Lume/Views/TV/TVQuickSwitchHint.swift
+@@ -98,8 +98,7 @@
+             .foregroundStyle(.white)
+             .padding(.horizontal, 36)
+             .padding(.vertical, 20)
+-            .background(Color.black.opacity(0.75), in: Capsule())
+-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
++            .glassEffectCompat(.regular, in: Capsule()) // Lume GF: was a dark capsule with a hairline
+             .padding(.bottom, 60)
+             .allowsHitTesting(false)
+         }
+diff --git a/Lume/Views/TV/TVSeriesDetailView.swift b/Lume/Views/TV/TVSeriesDetailView.swift
+index 905f7e3..0b595c5 100644
+--- a/Lume/Views/TV/TVSeriesDetailView.swift
++++ b/Lume/Views/TV/TVSeriesDetailView.swift
+@@ -568,19 +568,17 @@
+                     .foregroundStyle(highlighted ? .black : .white)
+                     .padding(.horizontal, 28)
+                     .frame(height: 60)
+-                    .background(
+-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+-                            .fill(fill)
+-                    )
++                    // Lume GF: Liquid Glass (was a material fill): white glass when focused, lighter when selected
++                    .glassEffectCompat(glass, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                     .scaleEffect(isFocused ? 1.06 : 1.0)
+                     .animation(.easeOut(duration: 0.18), value: isFocused)
+                     .animation(.easeOut(duration: 0.18), value: isSelected)
+             }
+ 
+-            private var fill: AnyShapeStyle {
+-                if isFocused { return AnyShapeStyle(.white) }
+-                if isSelected { return AnyShapeStyle(.white.opacity(0.85)) }
+-                return AnyShapeStyle(.regularMaterial)
++            private var glass: GlassEffectStyle {
++                if isFocused { return .tintedInteractive(.white) }
++                if isSelected { return .tinted(.white.opacity(0.85)) }
++                return .regularInteractive
+             }
+         }
+     }

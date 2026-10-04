@@ -1,42 +1,22 @@
 import SwiftUI
 
-extension EPGChannelCell {
-    /// Lume's badge sizes: 17 pt on Apple TV, 11 on iPhone/iPad.
-    var gfBadgeSize: CGFloat {
-        #if os(tvOS)
-            17
-        #else
+#if !os(tvOS)
+    /// The iPhone and iPad guide's channel cell (Lume 2.3 gives the Apple TV its own, `EPGTVChannelCell`).
+    extension EPGChannelCell {
+        /// Lume's badge size on iPhone and iPad.
+        var gfBadgeSize: CGFloat {
             11
-        #endif
-    }
+        }
 
-    /// Grey badges turn dark on the Apple TV's white focus highlight (the guide's focus is virtual, so the cell says
-    /// so itself).
-    var gfBadgeTint: Color? {
-        #if os(tvOS)
-            isFocused ? .black.opacity(0.55) : nil
-        #else
-            nil
-        #endif
+        /// The catch-up clock follows the badges: beside the name, the 136-point column would give it a third of
+        /// the name's width.
+        var gfCatchupSymbol: GFBadgeSymbol? {
+            guard row.catchupCapable else { return nil }
+            return GFBadgeSymbol(systemName: "clock.arrow.circlepath", color: .blue,
+                                 accessibilityLabel: Text("Catch-up available"))
+        }
     }
-
-    /// Lume's catch-up clock beside the name: on Apple TV. The iPhone's 136-point column would give it a third of the
-    /// name's width, so there it follows the badges (`gfCatchupSymbol`).
-    var gfCatchupBesideName: Bool {
-        GFGuideGlass.isTV
-    }
-
-    var gfCatchupSymbol: GFBadgeSymbol? {
-        guard row.catchupCapable, !gfCatchupBesideName else { return nil }
-        return GFBadgeSymbol(systemName: "clock.arrow.circlepath", color: .blue,
-                             accessibilityLabel: Text("Catch-up available"))
-    }
-
-    /// The iPhone's narrow column: names step their text size down before a word breaks.
-    var gfFitsWords: Bool {
-        !GFGuideGlass.isTV
-    }
-}
+#endif
 
 /// The sidebar panel's outline: inset from the column, round-cornered, running on past the bottom edge (where the
 /// guide's fade ends it). The glass is drawn in it and the channel rows are clipped to it, so a row scrolling up
