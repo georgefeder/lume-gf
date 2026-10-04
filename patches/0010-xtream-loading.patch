@@ -1,0 +1,296 @@
+diff --git a/Lume/Services/Diagnostics/PerformanceSignposts.swift b/Lume/Services/Diagnostics/PerformanceSignposts.swift
+index 32e2f0c..585c3e5 100644
+--- a/Lume/Services/Diagnostics/PerformanceSignposts.swift
++++ b/Lume/Services/Diagnostics/PerformanceSignposts.swift
+@@ -45,6 +45,8 @@ nonisolated struct PerfSignpost {
+ nonisolated extension PerfSignpost {
+     // Content sync
+     static let playlistSync = PerfSignpost("PlaylistSync")
++    /// Lume GF: an Xtream sync's live channels are stored (the time a viewer waits for).
++    static let gfLiveChannelsReady = PerfSignpost("GFLiveChannelsReady")
+     static let syncCategories = PerfSignpost("SyncCategories")
+     static let syncMovies = PerfSignpost("SyncMovies")
+     static let syncSeries = PerfSignpost("SyncSeries")
+diff --git a/Lume/Services/Sync/ContentSyncManager+Prune.swift b/Lume/Services/Sync/ContentSyncManager+Prune.swift
+index 581c6f2..3f5f09e 100644
+--- a/Lume/Services/Sync/ContentSyncManager+Prune.swift
++++ b/Lume/Services/Sync/ContentSyncManager+Prune.swift
+@@ -57,6 +57,7 @@ extension ContentSyncManager {
+         guard sweepIsAllowed(playlistId: playlistId, kind: "movie", seenCount: seenIds.count, storedMatching: scope) else {
+             return
+         }
++        guard !gfNothingStale(seenCount: seenIds.count, storedMatching: scope) else { return } // Lume GF
+         pruneStaleMovies(playlistId: playlistId, seenIds: seenIds)
+     }
+ 
+@@ -67,6 +68,7 @@ extension ContentSyncManager {
+         guard sweepIsAllowed(playlistId: playlistId, kind: "series", seenCount: seenIds.count, storedMatching: scope) else {
+             return
+         }
++        guard !gfNothingStale(seenCount: seenIds.count, storedMatching: scope) else { return } // Lume GF
+         pruneStaleSeries(playlistId: playlistId, seenIds: seenIds)
+     }
+ 
+@@ -77,9 +79,20 @@ extension ContentSyncManager {
+         guard sweepIsAllowed(playlistId: playlistId, kind: "live", seenCount: seenIds.count, storedMatching: scope) else {
+             return
+         }
++        guard !gfNothingStale(seenCount: seenIds.count, storedMatching: scope) else { return } // Lume GF
+         pruneStaleLiveStreams(playlistId: playlistId, seenIds: seenIds)
+     }
+ 
++    /// Lume GF: every id the payload carried is stored by now (the batches insert the missing ones, and a failed save
++    /// ends the phase), so as many stored rows as seen ids means none is stale: the sweep, which reads every stored row
++    /// of the kind in pages, has nothing to delete.
++    private func gfNothingStale(seenCount: Int, storedMatching descriptor: FetchDescriptor<some PersistentModel>) -> Bool {
++        let context = ModelContext(modelContainer)
++        guard let stored = try? context.fetchCount(descriptor), stored == seenCount else { return false }
++        Logger.database.info("Lume GF: prune skipped, \(stored) stored rows all in the payload")
++        return true
++    }
++
+     // MARK: - Per-kind sweeps
+ 
+     /// Deletes movies for `playlistId` whose id is absent from `seenIds`.
+diff --git a/Lume/Services/Sync/ContentSyncManager.swift b/Lume/Services/Sync/ContentSyncManager.swift
+index 9a82f0c..b29760c 100644
+--- a/Lume/Services/Sync/ContentSyncManager.swift
++++ b/Lume/Services/Sync/ContentSyncManager.swift
+@@ -20,6 +20,10 @@ actor ContentSyncManager {
+     let jellyfinClient: JellyfinClient
+     let plexClient: PlexClient
+     private var activeSyncPlaylistIDs: Set<UUID> = []
++    /// Lume GF: what an Xtream sync fetches (GFCatalogPlan), and whether nobody waits for it (films and series then
++    /// wait while video plays on this device).
++    let gfScope: GFSyncScope
++    let gfBackground: Bool
+ 
+     /// Number of items to process before saving and resetting the context.
+     let batchSize = 2000
+@@ -31,8 +35,12 @@ actor ContentSyncManager {
+         xtreamClient: XtreamClient = XtreamClient(),
+         webdavClient: WebDAVClient = WebDAVClient(),
+         jellyfinClient: JellyfinClient = JellyfinClient(),
+-        plexClient: PlexClient = PlexClient()
++        plexClient: PlexClient = PlexClient(),
++        gfScope: GFSyncScope = .all,
++        gfBackground: Bool = false
+     ) {
++        self.gfScope = gfScope
++        self.gfBackground = gfBackground
+         self.modelContainer = modelContainer
+         self.xtreamClient = xtreamClient
+         self.webdavClient = webdavClient
+@@ -61,7 +69,10 @@ actor ContentSyncManager {
+         } catch {
+             // An aborted sync isn't a failure: restore the playlist to idle so it
+             // can be retried cleanly, rather than wedging it in the error state.
+-            if Task.isCancelled {
++            if gfFilmsAndSeriesOnly {
++                // Lume GF: films and series alone never mark the playlist (its channels are fine)
++                Logger.database.info("Lume GF: films and series sync stopped for playlist \(playlistId) — \(error)")
++            } else if Task.isCancelled {
+                 Logger.database.info("Sync cancelled for playlist \(playlistId)")
+                 markPlaylistIdle(playlistId: playlistId)
+             } else {
+@@ -93,8 +104,12 @@ actor ContentSyncManager {
+             throw SyncError.playlistNotFound
+         }
+ 
+-        playlist.syncStatus = .syncing
+-        try statusContext.save()
++        // Lume GF: films and series alone leave the playlist as it is (not "syncing": the Apple TV's live preview and
++        // Sync Now stay available, and its channels' sync date keeps counting)
++        if !gfFilmsAndSeriesOnly {
++            playlist.syncStatus = .syncing
++            try statusContext.save()
++        }
+ 
+         switch playlist.sourceType {
+         case .xtream:
+@@ -116,6 +131,7 @@ actor ContentSyncManager {
+         // Every source writes the same unread history rows (see the method).
+         purgeCatalogHistory()
+ 
++        guard !gfFilmsAndSeriesOnly else { return }
+         let doneContext = ModelContext(modelContainer)
+         doneContext.autosaveEnabled = false
+         if let dpl = try doneContext.fetch(
+@@ -130,23 +146,60 @@ actor ContentSyncManager {
+     /// The Xtream pipeline: authenticate, then pull categories and content
+     /// through the provider's JSON API.
+     private func performXtreamSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, full: Bool) async throws {
+-        await progress?.start(.authenticating)
+-        let authResponse = try await xtreamClient.getInfo(playlist: playlist)
+-        updatePlaylistInfo(playlistId, with: authResponse)
+-        await progress?.complete(.authenticating)
+-
+-        try await syncAllCategories(for: playlist, playlistId: playlistId, progress: progress, full: full)
+-
+         // Serialized and spaced apart on purpose — see
+         // `spaceContentPhaseRequests` for the connection-cap reason.
+         // A manual full sync re-imports every phase; a scheduled one skips a
+         // phase whose payload is byte-identical to its last import.
+         let reuse = !full
++        // Lume GF: live channels first (Lume fetched them last, after ~115 MB of films and series), then films and
++        // series, which a background sync starts only while nothing plays here (GFCatalogPlan)
++        if gfScope.includesLive {
++            await progress?.start(.authenticating)
++            let authResponse = try await xtreamClient.getInfo(playlist: playlist)
++            updatePlaylistInfo(playlistId, with: authResponse)
++            await progress?.complete(.authenticating)
++
++            Logger.database.info("Starting Live TV category sync")
++            await progress?.start(.liveCategories)
++            try await syncLiveCategories(for: playlist, playlistId: playlistId, progress: progress)
++            await progress?.complete(.liveCategories)
++            try await syncLiveStreams(for: playlist, playlistId: playlistId, progress: progress, reuseUnchanged: reuse)
++            Perf.event(.gfLiveChannelsReady)
++        }
++        guard gfScope.includesVOD else { return }
++        if gfScope.includesLive { try await spaceContentPhaseRequests() }
++
++        try await gfWaitWhilePlaying()
++        Logger.database.info("Starting VOD category sync")
++        await progress?.start(.movieCategories)
++        try await syncVODCategories(for: playlist, playlistId: playlistId, progress: progress)
++        await progress?.complete(.movieCategories)
++
++        Logger.database.info("Starting Series category sync")
++        await progress?.start(.seriesCategories)
++        try await syncSeriesCategories(for: playlist, playlistId: playlistId, progress: progress)
++        await progress?.complete(.seriesCategories)
++
++        try await gfWaitWhilePlaying()
+         try await syncMovies(for: playlist, playlistId: playlistId, progress: progress, reuseUnchanged: reuse)
+         try await spaceContentPhaseRequests()
++        try await gfWaitWhilePlaying()
+         try await syncSeries(for: playlist, playlistId: playlistId, progress: progress, reuseUnchanged: reuse)
+-        try await spaceContentPhaseRequests()
+-        try await syncLiveStreams(for: playlist, playlistId: playlistId, progress: progress, reuseUnchanged: reuse)
++        GFCatalogStamps.markVODSynced(playlistId)
++    }
++
++    /// Lume GF: a films-and-series-only sync of an Xtream playlist (`GFSyncScope.vod`).
++    private var gfFilmsAndSeriesOnly: Bool {
++        gfScope == .vod
++    }
++
++    /// Lume GF: a background sync's films and series start only while no video plays on this device (a phase already
++    /// downloading finishes: Georgs' account allows two connections).
++    private func gfWaitWhilePlaying() async throws {
++        guard gfBackground else { return }
++        while await MainActor.run(body: { ContentIndexingService.shared.isPlaybackActive }) {
++            try await Task.sleep(for: .seconds(15))
++        }
+     }
+ 
+     func syncAllCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {
+diff --git a/Lume/Services/Sync/SyncProgress.swift b/Lume/Services/Sync/SyncProgress.swift
+index e81d463..1815c93 100644
+--- a/Lume/Services/Sync/SyncProgress.swift
++++ b/Lume/Services/Sync/SyncProgress.swift
+@@ -57,9 +57,18 @@ enum SyncStep: Int, CaseIterable, Identifiable {
+     /// Emby and Plex, whose pipelines have the same shape.
+     static let mediaServerSteps: [SyncStep] = [.authenticating, .movies, .series]
+ 
+-    static func steps(for sourceType: PlaylistSourceType, full: Bool = false) -> [SyncStep] {
++    /// Lume GF: an Xtream sync's steps for what it fetches, live first (GFSyncScope).
++    static func gfXtreamSteps(_ scope: GFSyncScope) -> [SyncStep] {
++        switch scope {
++        case .all: [.authenticating, .liveCategories, .liveStreams, .movieCategories, .seriesCategories, .movies, .series]
++        case .live: [.authenticating, .liveCategories, .liveStreams]
++        case .vod: [.movieCategories, .seriesCategories, .movies, .series]
++        }
++    }
++
++    static func steps(for sourceType: PlaylistSourceType, full: Bool = false, gfScope: GFSyncScope = .all) -> [SyncStep] {
+         switch sourceType {
+-        case .xtream: xtreamSteps
++        case .xtream: gfXtreamSteps(gfScope)
+         case .m3u: m3uSteps
+         // Stalker maps onto the same catalog kinds as Xtream, but its default
+         // sync skips the movie/series content walk (loaded on demand); only a
+diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
+index 565dcd1..84f8370 100644
+--- a/Lume/Views/MainTabView.swift
++++ b/Lume/Views/MainTabView.swift
+@@ -460,7 +460,18 @@ struct MainTabView: View {
+ 
+         for playlist in candidates where shouldAutoSync(playlist) {
+             autoSyncAttempted.insert(playlist.id)
+-            syncQueue.append(playlist)
++            // Lume GF: only a playlist's first sync shows the cover (an Xtream one only until its live channels are
++            // in); a playlist synced before refreshes out of sight, films and series once a day (GFCatalogPlan)
++            let plan = GFCatalogPlan.automatic(
++                isXtream: playlist.sourceType == .xtream, everSynced: playlist.lastSyncDate != nil,
++                vodSyncedAt: GFCatalogStamps.vodSyncedAt(playlist.id), now: Date()
++            )
++            if plan.cover != nil {
++                syncQueue.append(playlist)
++            } else if let scope = plan.background {
++                GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: scope,
++                                                       container: modelContext.container)
++            }
+         }
+         promoteNextIfIdle()
+     }
+diff --git a/Lume/Views/Sync/SyncProgressView.swift b/Lume/Views/Sync/SyncProgressView.swift
+index ccc10b0..ab6cb2c 100644
+--- a/Lume/Views/Sync/SyncProgressView.swift
++++ b/Lume/Views/Sync/SyncProgressView.swift
+@@ -40,7 +40,9 @@ struct SyncProgressView: View {
+         self.playlist = playlist
+         self.autoStart = autoStart
+         self.full = full
+-        _progress = State(initialValue: SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full)))
++        _progress = State(initialValue: SyncProgress(steps: SyncStep.steps(
++            for: playlist.sourceType, full: full, gfScope: Self.gfScope(autoStart: autoStart, playlist: playlist)
++        )))
+         // Start already in the syncing state for auto-sync so the "Ready" screen
+         // (with its Start button) never flashes before `.task` kicks off.
+         _phase = State(initialValue: autoStart ? .syncing : .ready)
+@@ -91,9 +93,21 @@ struct SyncProgressView: View {
+ 
+     // MARK: - Drive sync
+ 
++    /// Lume GF: the automatic cover (a playlist's first sync, GFCatalogPlan) waits only for an Xtream playlist's live
++    /// channels; its films and series follow in the background. Sync Now fetches everything, live first.
++    private static func gfScope(autoStart: Bool, playlist: Playlist) -> GFSyncScope {
++        autoStart && playlist.sourceType == .xtream ? .live : .all
++    }
++
++    private var gfScope: GFSyncScope {
++        Self.gfScope(autoStart: autoStart, playlist: playlist)
++    }
++
+     private func startSync() {
+         // Fresh progress for each attempt so a retry starts clean.
+-        progress = SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full))
++        progress = SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full, gfScope: gfScope))
++        // Lume GF: a background sync of this playlist makes way for this one
++        GFBackgroundCatalogSync.shared.cancel(playlistID: playlist.id)
+         syncError = nil
+         phase = .syncing
+ 
+@@ -107,7 +121,7 @@ struct SyncProgressView: View {
+             var succeeded = false
+             defer { epgSync.contentSyncDidFinish(succeeded: succeeded) }
+             do {
+-                let syncManager = ContentSyncManager(modelContainer: modelContext.container)
++                let syncManager = ContentSyncManager(modelContainer: modelContext.container, gfScope: gfScope)
+                 try await BackgroundActivity.perform("Playlist sync") {
+                     try await syncManager.syncPlaylist(playlist, progress: progress, full: full)
+                 }
+@@ -119,6 +133,11 @@ struct SyncProgressView: View {
+                     // per-chunk saves don't fight the first browse of the catalog
+                     // the user just synced.
+                     ContentIndexingService.shared.kick(after: .seconds(3))
++                    // Lume GF: the live channels are in; films and series follow out of sight
++                    if gfScope == .live {
++                        GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: .vod,
++                                                               container: modelContext.container)
++                    }
+                     phase = .finished
+                     // Auto-sync gets out of the way as soon as it succeeds so the
+                     // user can start browsing; the manual flow waits for Done.

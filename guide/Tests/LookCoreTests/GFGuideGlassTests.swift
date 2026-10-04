@@ -106,7 +106,7 @@ struct GFGuideGlassTests {
         let corner = GFGuideGlass.cornerIntrusion(radius: GFGuideGlass.sidebarCornerRadius(tv: true),
                                                   inset: GFGuideGlass.tvHighlightLeading - insets.leading)
         #expect(firstTileTop > corner)
-        #expect(GFGuideGlass.sidebarInsets(tv: false) == GFGuideGlass.Insets(leading: 6, trailing: 6, top: 4))
+        #expect(GFGuideGlass.sidebarInsets(tv: false) == GFGuideGlass.Insets(leading: 16, trailing: 6, top: 4))
     }
 
     @Test func `a rounded corner reaches down less the further in you go`() {
@@ -157,8 +157,8 @@ struct GFGuideGlassTests {
     @Test func `programmes fade out under the panel, gone by its middle`() {
         // Georgs on build 9: tiles showed on the panel's left side (the Apple TV's glass bends what is under its edge)
         #expect(GFGuideGlass.underPanelFade(columnWidth: 300, tv: true) == GFGuideGlass.UnderPanel(gone: 142, clear: 284))
-        #expect(GFGuideGlass.underPanelFade(columnWidth: 136, tv: false) == GFGuideGlass.UnderPanel(gone: 68, clear: 130))
-        #expect(GFGuideGlass.underPanelFade(columnWidth: 4, tv: false) == GFGuideGlass.UnderPanel(gone: 6, clear: 6))
+        #expect(GFGuideGlass.underPanelFade(columnWidth: 146, tv: false) == GFGuideGlass.UnderPanel(gone: 78, clear: 140))
+        #expect(GFGuideGlass.underPanelFade(columnWidth: 4, tv: false) == GFGuideGlass.UnderPanel(gone: 16, clear: 16))
     }
 
     @Test func `a focused programme grows by Lume's 4 percent, but never over the gap to its neighbour`() {
@@ -192,11 +192,21 @@ struct GFGuideGlassTests {
     }
 
     @Test func `each iPhone channel box is as tall as its programme tiles and sits just inside the panel`() {
-        let inset = GFGuideGlass.channelBoxInset(tv: false)
-        #expect(inset == 8)
-        #expect(inset! > GFGuideGlass.sidebarInsets(tv: false).leading)
+        let box = GFGuideGlass.channelBoxInset(tv: false)!, panel = GFGuideGlass.sidebarInsets(tv: false)
+        #expect(box.leading == panel.leading + 2 && box.trailing == panel.trailing + 2)
         #expect(GFGuideGlass.tileHeight(rowHeight: 68, rowSpacing: 4) == 64) // the box's height on iPhone
         #expect(GFGuideGlass.channelBoxInset(tv: true) == nil)
+        let content = GFGuideGlass.channelContentPadding(tv: false)
+        #expect(content.leading == box.leading + 4 && content.trailing == box.trailing + 4)
+    }
+
+    @Test func `the iPhone's glass column starts on the toolbar's edge and keeps the panel and names their width`() {
+        let panel = GFGuideGlass.sidebarInsets(tv: false), content = GFGuideGlass.channelContentPadding(tv: false)
+        #expect(panel.leading == 16) // the toolbar's leading margin
+        #expect(GFGuideGlass.phoneColumnWidth - panel.leading - panel.trailing == 124) // the panel as wide as before
+        let lumeNameRoom: CGFloat = 136 - 24 // Lume's column less its 12-point margins
+        #expect(GFGuideGlass.phoneColumnWidth - content.leading - content.trailing == lumeNameRoom) // the names' room
+        #expect(GFGuideGlass.headerTopGap(tv: false) == 10 && GFGuideGlass.headerTopGap(tv: true) == 0)
     }
 
     @Test func `the Now button lines up with the panel's edges`() {
@@ -204,10 +214,24 @@ struct GFGuideGlassTests {
         #expect(button.leading == panel.leading && button.trailing == panel.trailing)
     }
 
-    @Test func `the ruler's times fade at both ends on iPhone, not on the Apple TV`() {
+    @Test func `the ruler's times fade at both ends, on the Apple TV as wide as the programmes' blurred edge`() {
         let phone = GFGuideGlass.rulerFade(tv: false), tv = GFGuideGlass.rulerFade(tv: true)
         #expect(phone.leading > 0 && phone.trailing > 0)
-        #expect(tv.leading == 0 && tv.trailing == 0)
+        #expect(tv.leading == GFGuideGlass.gridEdge(tv: true) && tv.trailing > 0)
+    }
+
+    @Test func `text blurs more the further it reaches into the edge, and is sharp past it`() {
+        #expect(GFGuideGlass.edgeBlur(textMinX: 48, edge: 48) == 0)
+        #expect(GFGuideGlass.edgeBlur(textMinX: 200, edge: 48) == 0)
+        #expect(GFGuideGlass.edgeBlur(textMinX: 24, edge: 48) == 4)
+        #expect(GFGuideGlass.edgeBlur(textMinX: 0, edge: 48) == 8)
+        #expect(GFGuideGlass.edgeBlur(textMinX: -30, edge: 48) == 8)
+        #expect(GFGuideGlass.edgeBlur(textMinX: 0, edge: 0) == 0)
+    }
+
+    @Test func `only the Apple TV's programmes blur at the channel column (the iPhone's slide under its glass)`() {
+        #expect(GFGuideGlass.gridEdge(tv: true) == 48)
+        #expect(GFGuideGlass.gridEdge(tv: false) == 0)
     }
 
     @Test func `the tests run on the Mac, so this is not the Apple TV`() {

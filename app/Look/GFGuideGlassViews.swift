@@ -190,7 +190,8 @@ struct GFChannelBox: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.fill.quaternary)
                 .frame(height: GFGuideGlass.tileHeight(rowHeight: rowHeight, rowSpacing: rowSpacing))
-                .padding(.horizontal, inset)
+                .padding(.leading, inset.leading)
+                .padding(.trailing, inset.trailing)
         }
     }
 }
@@ -226,6 +227,32 @@ struct GFRulerEdgeBlur: ViewModifier {
             LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing).frame(width: leading)
             middle
             LinearGradient(stops: stops, startPoint: .trailing, endPoint: .leading).frame(width: trailing)
+        }
+    }
+}
+
+/// The Apple TV guide's edge beside the channel column (Georgs on build 21): programmes fade out over `width` points,
+/// the guide's glow showing through as they go; their text blurs on its way in (`GFGuideGlass.edgeBlur`, applied in
+/// each programme). A backdrop material here drew a darker strip with a hard edge.
+struct GFGridLeadingBlur: ViewModifier {
+    let width: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if width <= 0 {
+            content
+        } else {
+            content
+                .mask {
+                    HStack(spacing: 0) {
+                        LinearGradient(stops: [.init(color: .clear, location: 0),
+                                               .init(color: .black.opacity(0.45), location: 0.45),
+                                               .init(color: .black, location: 1)],
+                                       startPoint: .leading, endPoint: .trailing)
+                            .frame(width: width)
+                        Color.black
+                    }
+                }
         }
     }
 }

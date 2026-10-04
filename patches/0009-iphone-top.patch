@@ -1,0 +1,99 @@
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+index 3853f80..1df53fb 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+@@ -82,7 +82,8 @@ struct EPGMetrics {
+                 pointsPerMinute: 3.0,
+                 rowHeight: 68,
+                 rowSpacing: 4,
+-                channelColumnWidth: 136,
++                // Lume GF: 136 plus the 10 points the glass column moved in by (GFGuideGlass.phoneColumnWidth)
++                channelColumnWidth: GFGuideGlass.phoneColumnWidth,
+                 headerHeight: 36,
+                 blockCornerRadius: 9,
+                 blockInset: 10,
+@@ -164,7 +165,9 @@ struct EPGMetrics {
+                     .font(.subheadline.weight(.medium))
+                     .frame(maxWidth: .infinity, alignment: .leading)
+             }
+-            .padding(.horizontal, 12)
++            // Lume GF: 4 points inside the channel's box (GFGuideGlass.channelContentPadding)
++            .padding(.leading, GFGuideGlass.channelContentPadding(tv: false).leading)
++            .padding(.trailing, GFGuideGlass.channelContentPadding(tv: false).trailing)
+             // Lume GF: rows sit on the glass sidebar (no opaque background, no hairline), each in a box as tall as
+             // the programme tiles beside it
+             .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
+diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+index 1877a56..f3d9efa 100644
+--- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
++++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+@@ -106,6 +106,8 @@ struct EPGGridScroller: View {
+                 EPGRulerStrip(timeline: timeline, metrics: metrics, now: now, sync: sync)
+             }
+             .frame(height: metrics.headerHeight)
++            // Lume GF: room under the iPhone's toolbar (the category strip between them is a floating button now)
++            .padding(.top, GFGuideGlass.headerTopGap(tv: GFGuideGlass.isTV))
+ 
+             #if os(tvOS)
+                 // Body: frozen channel column + scrollable programme grid (Lume 2.3's Apple TV guide, as Lume made it)
+diff --git a/Lume/Views/LiveTV/LiveTVCategorySelectors.swift b/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
+index 41533ef..dacc9b9 100644
+--- a/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
++++ b/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
+@@ -83,22 +83,22 @@ struct CategorySidebar: View {
+                         .font(.headline)
+                         .foregroundStyle(.primary)
+                         .lineLimit(1)
+-                    Spacer()
+                     Image(systemName: "chevron.up.chevron.down")
+                         .font(.caption.weight(.semibold))
+                         .foregroundStyle(.secondary)
+                 }
+-                .padding(.horizontal)
+-                .padding(.vertical, 10)
+-                .contentShape(Rectangle())
++                // Lume GF: a floating Liquid Glass capsule (was a full-width strip on the bar material)
++                .padding(.horizontal, 20)
++                .padding(.vertical, 12)
++                .glassEffectCompat(.regularInteractive, in: Capsule())
++                .contentShape(Capsule())
++                // as wide as the name, at most 320 points (a long one is cut short)
++                .frame(maxWidth: 320)
+             }
+             .buttonStyle(.plain)
+-            .background(.bar)
+             .sheet(isPresented: $showingPicker) {
+                 CategoryPickerSheet(sections: sections, selectedSection: $selectedSection)
+             }
+-
+-            Divider()
+         }
+     }
+ 
+diff --git a/Lume/Views/LiveTV/LiveTVView.swift b/Lume/Views/LiveTV/LiveTVView.swift
+index 009f038..56108ef 100644
+--- a/Lume/Views/LiveTV/LiveTVView.swift
++++ b/Lume/Views/LiveTV/LiveTVView.swift
+@@ -252,12 +252,7 @@ struct LiveTVView: View {
+ 
+     #if os(iOS)
+         private func iOSLayout(sections: [LiveTVSection], displayed: LiveTVSection?) -> some View {
+-            VStack(spacing: 0) {
+-                CategoryBar(
+-                    sections: sections,
+-                    selectedSection: selectedSectionBinding
+-                )
+-
++            Group {
+                 if let displayed {
+                     detail(for: displayed)
+                 } else {
+@@ -268,6 +263,8 @@ struct LiveTVView: View {
+                     )
+                 }
+             }
++            // Lume GF: the category picker floats as a glass button above the tab bar (Georgs on build 21)
++            .gfCategoryButton(sections: sections, selection: selectedSectionBinding)
+         }
+     #endif
+ 

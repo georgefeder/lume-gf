@@ -1,0 +1,80 @@
+diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
+index 0b100ab..d6f8318 100644
+--- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
++++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
+@@ -31,6 +31,11 @@
+         /// Now/next EPG for the visible channels, resolved in one off-main fetch
+         /// (see `ChannelEPGSnapshot`) instead of a per-row `@Query`.
+         @State private var epgByChannel: [String: ChannelEPG] = [:]
++        /// Lume GF: the channels `epgByChannel` was resolved for, when and for which channel set, so a page step looks
++        /// up only the page it added (as Lume's iPhone list does: page n re-fetched the n × 50 channels above it).
++        @State private var resolvedChannelIds: Set<String> = []
++        @State private var resolvedAt = Date.distantPast
++        @State private var resolvedGeneration = ""
+         /// Observed so the EPG lookup refreshes when a guide import finishes.
+         @State private var epgSync = EPGSyncService.shared
+         /// How many channels are currently rendered. Grows by a page as the list
+@@ -103,7 +108,7 @@
+             // Reload when the visible window or channel set changes, or a guide
+             // import settles — EPG is resolved only for the channels on screen.
+             .task(id: "\(channels.count)-\(visible.count)-\(epgSync.isSyncing)") {
+-                await loadEPG(for: visible)
++                await loadEPG(for: visible, generation: "\(channels.count)-\(epgSync.isSyncing)")
+             }
+             .alert("Clear Recently Watched", isPresented: $confirmingClear) {
+                 Button("Clear", role: .destructive) { clearRecentlyWatched() }
+@@ -128,17 +133,33 @@
+             .buttonStyle(TVCardButtonStyle(focusScale: 1.02))
+         }
+ 
+-        private func loadEPG(for channels: [LiveStream]) async {
++        /// Lume GF: Lume's iPhone list's incremental lookup (`ChannelsList.loadEPG`).
++        private func loadEPG(for channels: [LiveStream], generation: String) async {
+             let channelIds = Array(Set(channels.compactMap(\.epgChannelId).filter { !$0.isEmpty }))
+             guard !channelIds.isEmpty else {
+                 epgByChannel = [:]
++                resolvedChannelIds = []
++                resolvedGeneration = generation
+                 return
+             }
+-            let container = modelContext.container
+             let now = Date()
+-            epgByChannel = await Task.detached(priority: .userInitiated) {
+-                ChannelEPGLoader.load(container: container, channelIds: channelIds, now: now)
++            let extending = generation == resolvedGeneration
++                && now.timeIntervalSince(resolvedAt) < ChannelEPGLoader.snapshotLifetime
++            let pending = extending ? channelIds.filter { !resolvedChannelIds.contains($0) } : channelIds
++            guard !pending.isEmpty else { return }
++            let container = modelContext.container
++            let resolved = await Task.detached(priority: .userInitiated) {
++                ChannelEPGLoader.load(container: container, channelIds: pending, now: now)
+             }.value
++            if extending {
++                epgByChannel.merge(resolved) { _, new in new }
++                resolvedChannelIds.formUnion(pending)
++            } else {
++                epgByChannel = resolved
++                resolvedChannelIds = Set(pending)
++                resolvedAt = now
++            }
++            resolvedGeneration = generation
+         }
+ 
+         /// Clears a channel's watch timestamp so it drops out of the Recently
+diff --git a/Lume/Views/Player/TVPlayerContent.swift b/Lume/Views/Player/TVPlayerContent.swift
+index d824752..761987d 100644
+--- a/Lume/Views/Player/TVPlayerContent.swift
++++ b/Lume/Views/Player/TVPlayerContent.swift
+@@ -92,9 +92,11 @@
+             let epgIds = Set(channels.compactMap(\.epgChannelId).filter { !$0.isEmpty })
+             guard !epgIds.isEmpty else { return [:] }
+             let now = Date()
+-            let descriptor = FetchDescriptor<EPGListing>(
++            var descriptor = FetchDescriptor<EPGListing>(
+                 predicate: #Predicate { epgIds.contains($0.channelId) && $0.start <= now && now < $0.end }
+             )
++            // Lume GF: only the two columns read here, not every programme's description (runs while video decodes)
++            descriptor.propertiesToFetch = [\.channelId, \.title]
+             let listings = (try? context.fetch(descriptor)) ?? []
+             return Dictionary(listings.map { ($0.channelId, $0.title) }, uniquingKeysWith: { first, _ in first })
+         }

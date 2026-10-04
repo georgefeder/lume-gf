@@ -1,0 +1,169 @@
+diff --git a/Lume/Views/Components/GlassEffectCompat.swift b/Lume/Views/Components/GlassEffectCompat.swift
+index 92cb0c8..5e97af3 100644
+--- a/Lume/Views/Components/GlassEffectCompat.swift
++++ b/Lume/Views/Components/GlassEffectCompat.swift
+@@ -21,6 +21,23 @@ enum GlassEffectStyle {
+     case tintedInteractive(Color)
+     /// Lume GF: glass tinted toward `color` that is only a label (the guide's Now pill).
+     case tinted(Color)
++    /// Lume GF: the clearer Liquid Glass: what lies behind shows through, only lensed (the Apple TV guide's panels).
++    case clear
++}
++
++/// Lume GF: neighbouring glass rendered together (`GlassEffectContainer` on OS 26+, a plain group before), so a column
++/// of glass tiles is sampled in one pass. `spacing` 0: tiles never melt into each other.
++struct GlassGroupCompat<Content: View>: View {
++    var spacing: CGFloat = 0
++    @ViewBuilder var content: Content
++
++    var body: some View {
++        if #available(iOS 26, tvOS 26, macOS 26, visionOS 26, *) {
++            GlassEffectContainer(spacing: spacing) { content }
++        } else {
++            content
++        }
++    }
+ }
+ 
+ extension View {
+@@ -37,6 +54,8 @@ extension View {
+                 background(color, in: shape)
+             case .regular, .regularInteractive:
+                 background(.regularMaterial, in: shape)
++            case .clear:
++                background(.ultraThinMaterial, in: shape)
+             }
+         }
+     }
+@@ -50,6 +69,7 @@ private extension GlassEffectStyle {
+         case .regularInteractive: .regular.interactive()
+         case let .tintedInteractive(color): .regular.tint(color).interactive()
+         case let .tinted(color): .regular.tint(color)
++        case .clear: .clear
+         }
+     }
+ }
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift b/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
+index dddc9ca..f1049a2 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
+@@ -120,14 +120,14 @@ extension EPGMetrics {
+             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+             // Keeps the text of a partially scrolled block readable; see
+             // `EPGStickyText` for why this is a `visualEffect`.
+-            .visualEffect { [inset] content, proxy in
+-                content.offset(
+-                    x: EPGStickyText.shift(
+-                        blockMinX: proxy.frame(in: .scrollView).minX,
+-                        blockWidth: proxy.size.width,
+-                        inset: inset
+-                    )
+-                )
++            // Lume GF: titles park just past the blurred edge beside the channel column; text that still reaches into
++            // it (a programme ending there) blurs the further in it is (Georgs on build 21)
++            .visualEffect { [inset, edge = GFGuideGlass.gridEdge(tv: true)] content, proxy in
++                let minX = proxy.frame(in: .scrollView).minX
++                let shift = EPGStickyText.shift(blockMinX: minX - edge, blockWidth: proxy.size.width, inset: inset)
++                return content
++                    .offset(x: shift)
++                    .blur(radius: GFGuideGlass.edgeBlur(textMinX: minX + shift, edge: edge))
+             }
+         }
+ 
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift
+index 7274242..1e37edf 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift
+@@ -66,12 +66,25 @@ import SwiftUI
+             }
+             .padding(.horizontal, 16)
+             .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
+-            .background(fill, in: shape)
++            // Lume GF: Liquid Glass tiles (Georgs on build 21); the focused channel stays Lume's white card over it
++            .background {
++                if isHub { shape.fill(fill) }
++            }
++            .glassEffectCompat(gfGlass, in: shape)
+             .overlay {
+                 shape.strokeBorder(border, lineWidth: 1)
+             }
+         }
+ 
++        /// Lume GF: clear glass at rest, lighter while a programme in the row is focused.
++        private var gfGlass: GlassEffectStyle {
++            switch highlight {
++            case .hub: .regular
++            case .row: .tinted(.white.opacity(0.18))
++            case .none: .clear
++            }
++        }
++
+         private var fill: Color {
+             switch highlight {
+             case .hub: EPGColors.cardFill
+diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
+index a6d4df4..2a7eb57 100644
+--- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
++++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
+@@ -28,10 +28,14 @@ struct EPGRulerStrip: View {
+             // the mirror: offsetting a ruler as wide as the whole day (tens of
+             // thousands of points) left its animated moves uncommitted until
+             // the next one, so it trailed the grid by a step.
++            let tvFade = GFGuideGlass.rulerFade(tv: true)
+             EPGTVTimeRuler(timeline: timeline, metrics: metrics, sync: sync)
+                 .frame(maxWidth: .infinity, alignment: .leading)
+                 .frame(height: metrics.headerHeight)
+                 .clipped()
++                // Lume GF: the times blur and fade out beside the channel column and at the screen's edge (Georgs on
++                // build 21)
++                .modifier(GFRulerEdgeBlur(leading: tvFade.leading, trailing: tvFade.trailing))
+         #else
+             let fade = GFGuideGlass.rulerFade(tv: false)
+             Color.clear
+@@ -172,10 +176,13 @@ struct EPGColumnCells: View, Equatable {
+     }
+ 
+     var body: some View {
+-        ZStack(alignment: .topLeading) {
+-            ForEach(realizedRows) { entry in
+-                cell(for: entry)
+-                    .offset(y: metrics.rowOriginY(entry.index))
++        // Lume GF: the Apple TV's glass channel tiles rendered together
++        GlassGroupCompat {
++            ZStack(alignment: .topLeading) {
++                ForEach(realizedRows) { entry in
++                    cell(for: entry)
++                        .offset(y: metrics.rowOriginY(entry.index))
++                }
+             }
+         }
+         .frame(
+diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+index aae1c3e..1877a56 100644
+--- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
++++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+@@ -120,6 +120,8 @@ struct EPGGridScroller: View {
+                     )
+ 
+                     grid(bottomRoom: 0, guideHeight: 0)
++                        // Lume GF: programmes blur and fade out as they reach the channel column (Georgs on build 21)
++                        .modifier(GFGridLeadingBlur(width: GFGuideGlass.gridEdge(tv: true)))
+                 }
+                 // On tvOS the focus strip overlays the channel column — the
+                 // guide's leftmost band, directly beside the rail. Being adjacent
+diff --git a/Lume/Views/LiveTV/TVCategoryRail.swift b/Lume/Views/LiveTV/TVCategoryRail.swift
+index 8c05254..20a09cf 100644
+--- a/Lume/Views/LiveTV/TVCategoryRail.swift
++++ b/Lume/Views/LiveTV/TVCategoryRail.swift
+@@ -65,9 +65,8 @@
+             }
+             .frame(width: TVLiveTVLayout.railWidth, alignment: .leading)
+             .frame(maxHeight: .infinity, alignment: .top)
+-            .background(panelShape.fill(.white.opacity(0.06)))
+-            .glassEffectCompat(.regular, in: panelShape)
+-            .overlay(panelShape.strokeBorder(.white.opacity(0.12), lineWidth: 1))
++            // Lume GF: clear Liquid Glass, the Live TV glow showing through (was frosted glass over a grey fill)
++            .glassEffectCompat(.clear, in: panelShape)
+             .onChange(of: focused) { _, newValue in
+                 guard let newValue else {
+                     // A move onto a row the lazy list only just built passes
