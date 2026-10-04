@@ -204,7 +204,8 @@ struct GFGuideGlassTests {
         let panel = GFGuideGlass.sidebarInsets(tv: false), content = GFGuideGlass.channelContentPadding(tv: false)
         #expect(panel.leading == 16) // the toolbar's leading margin
         #expect(GFGuideGlass.phoneColumnWidth - panel.leading - panel.trailing == 124) // the panel as wide as before
-        #expect(GFGuideGlass.phoneColumnWidth - content.leading - content.trailing == 136 - 24) // the names' room
+        let lumeNameRoom: CGFloat = 136 - 24 // Lume's column less its 12-point margins
+        #expect(GFGuideGlass.phoneColumnWidth - content.leading - content.trailing == lumeNameRoom) // the names' room
         #expect(GFGuideGlass.headerTopGap(tv: false) == 10 && GFGuideGlass.headerTopGap(tv: true) == 0)
     }
 
