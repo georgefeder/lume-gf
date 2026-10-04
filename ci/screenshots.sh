@@ -106,6 +106,8 @@ shoot "$IOS" "$BID" iphone-home-dark -GFDemo home
 shoot "$IOS" "$BID" iphone-home-added-dark -GFDemo home -home.disabledSections.v1 favorites,recentlyWatched
 shoot "$IOS" "$BID" iphone-movies-dark -GFDemo movies
 shoot "$IOS" "$BID" iphone-series-dark -GFDemo series
+# the continue banner over Home (another device played BBC One three minutes ago): at the top, centred
+shoot "$IOS" "$BID" iphone-banner-dark -GFDemo banner
 # a channel opened in light mode, filmed (Georgs saw the screen flash dark): system light, then Lume's own Light setting
 xcrun simctl ui "$IOS" appearance light
 film "$IOS" "$BID" iphone-open-light -GFDemo list -GFDemoMoves play
@@ -127,6 +129,7 @@ shoot "$TV" "$BID" tv-guide-long -GFDemo guide -GFDemoMoves right,down
 shoot "$TV" "$BID" tv-home -GFDemo home
 shoot "$TV" "$BID" tv-home-added -GFDemo home -home.disabledSections.v1 favorites,recentlyWatched
 shoot "$TV" "$BID" tv-movies -GFDemo movies
+shoot "$TV" "$BID" tv-banner -GFDemo banner  # top right, never focusable
 shoot "$TV" "$BID" tv-list -GFDemo list
 [ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true
 echo "screenshots: done"

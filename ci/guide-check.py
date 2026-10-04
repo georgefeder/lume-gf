@@ -9,7 +9,8 @@ Since Lume 2.3 the Apple TV's guide is Lume's own redesign (live preview above i
 And for Georgs' notes of 2 Oct: posters in a row line up at the top (a title on two lines lifted its poster), and Home
 shows Recently Watched and the recently added films and series (his Apple TV's Home showed only the sports row). Rows
 below the first screen are never drawn, so the recently added rows are checked on a second picture of Home with
-Recently Watched and Favorites switched off.
+Recently Watched and Favorites switched off. The continue banner sits at the top of the screen, whole, centred on the
+iPhone and in the right half on the Apple TV.
 Positions come from the demo build's log lines ("GFDemo guide geometry:", "GFDemo focused programme:", in points on
 screen), brightness from png-lines.swift. Exit 1 when a check fails. Usage: guide-check.py <screenshots dir>"""
 import os, statistics, subprocess, sys
@@ -17,6 +18,8 @@ import os, statistics, subprocess, sys
 GEOMETRY = "GFDemo guide geometry:"
 FOCUSED = "GFDemo focused programme:"
 RAIL_CARD = "GFDemo rail card:"
+BANNER = "GFDemo banner:"
+BANNER_SHOTS = ("iphone-banner-dark", "tv-banner")
 HOME_TOP = ("Recently Watched",)
 HOME_ADDED = ("Recently Added Movies", "Recently Added Series")
 HOME_SHOTS = {"iphone-home-dark": HOME_TOP, "tv-home": HOME_TOP,
@@ -88,6 +91,25 @@ def home_rows_ok(rows, expected):
     if missing:
         return False, "Home is missing: " + ", ".join(missing)
     return True, "Home shows " + ", ".join(expected)
+
+
+def banner_ok(b):
+    """The continue banner from its log line: whole on screen in the top 30%, centred on the iPhone (equal gaps), in the
+    right half on the Apple TV."""
+    if not b or b.get("w", 0) <= 0 or b.get("screenW", 0) <= 0:
+        return False, "no banner logged"
+    left, right = b["x"], b["screenW"] - b["x"] - b["w"]
+    detail = "x=%g y=%g w=%g h=%g on %gx%g" % (b["x"], b["y"], b["w"], b["h"], b["screenW"], b["screenH"])
+    if left < 0 or right < 0 or b["y"] < 0:
+        return False, "off the screen: " + detail
+    if b["y"] + b["h"] > b["screenH"] * 0.3:
+        return False, "not at the top: " + detail
+    if b.get("tv"):
+        if b["x"] < b["screenW"] / 2:
+            return False, "not on the right: " + detail
+    elif abs(left - right) > 2:
+        return False, "not centred: " + detail
+    return True, detail
 
 
 def residual(values, half=20):
@@ -248,6 +270,9 @@ def run_checks(out, sample):
     for shot, expected in HOME_SHOTS.items():
         results.append(("Home rows (%s)" % shot,)
                        + home_rows_ok(rail_cards(os.path.join(logs, shot + ".err")), expected))
+    for shot in BANNER_SHOTS:
+        results.append(("continue banner (%s)" % shot,)
+                       + banner_ok(last_fields(os.path.join(logs, shot + ".err"), BANNER)))
 
     return results
 

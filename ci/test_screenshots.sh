@@ -56,16 +56,19 @@ grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMov
   && ok "moves the Apple TV focus" || no "tv moves"
 grep -qF "launch TZ=Europe/London" "$LOG" && ok "the app runs on UK time" || no "time zone"
 # unsigned builds crash on iCloud at launch; Lume keeps iCloud off under -ui-testing (as its own UI tests do)
-[ "$(grep -c "simctl launch " "$LOG")" -eq 23 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
+[ "$(grep -c "simctl launch " "$LOG")" -eq 25 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
   && ok "every launch keeps iCloud off" || no "a launch without -ui-testing"
 n=0
 for f in iphone-guide-dark iphone-list-dark iphone-guide-light iphone-list-light iphone-guide-bottom-dark \
          iphone-guide-few-dark iphone-guide-under-dark iphone-home-dark iphone-home-added-dark iphone-movies-dark \
-         iphone-series-dark iphone-guide-landscape-dark tv-guide-channel tv-guide-programme tv-guide-bottom \
-         tv-guide-under tv-guide-long tv-home tv-home-added tv-movies tv-list; do
+         iphone-series-dark iphone-banner-dark iphone-guide-landscape-dark tv-guide-channel tv-guide-programme \
+         tv-guide-bottom tv-guide-under tv-guide-long tv-home tv-home-added tv-movies tv-banner tv-list; do
   if [ -f "$T/out/$f.png" ]; then n=$((n + 1)); else no "missing $f.png"; fi
 done
-[ "$n" -eq 21 ] && ok "twenty-one screenshots" || no "screenshots ($n)"
+[ "$n" -eq 23 ] && ok "twenty-three screenshots" || no "screenshots ($n)"
+grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo banner$" "$LOG" \
+  && grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo banner$" "$LOG" \
+  && ok "the continue banner is photographed on the iPhone and the Apple TV" || no "no picture of the banner"
 # for guide-check.py: the guides without the channel column (what the programmes leave under the panel), and the
 # Apple TV focused on a six-hour programme after a gap (Georgs' photo of build 9)
 grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoNoPanel 1$" "$LOG" \

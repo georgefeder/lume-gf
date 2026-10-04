@@ -12,7 +12,8 @@
     /// category. `-GFDemoNoPanel 1` hides the channel column, glass and all (ci/guide-check.py sees what the programmes
     /// leave under it: the simulator's glass is too frosted to show it, a real Apple TV's bends it into view).
     /// `-GFDemo home`, `movies` or `series` shows Lume's own Home, Movies or Series screen over made-up films and
-    /// series (some with long titles) and a few watched channels.
+    /// series (some with long titles) and a few watched channels. `-GFDemo banner` shows Home with the continue banner
+    /// over it, as when another device played BBC One three minutes ago.
     enum GFDemo {
         static var mode: String? {
             value(after: "-GFDemo")
@@ -61,6 +62,22 @@
         /// For ci/guide-check.py: the focused programme's frame on screen as drawn (grown by `scale`).
         static func logFocusedProgramme(_ frame: CGRect, scale: CGFloat) {
             log("focused programme: x=\(frame.minX) y=\(frame.minY) w=\(frame.width) h=\(frame.height) scale=\(scale)")
+        }
+
+        /// For ci/guide-check.py: where the continue banner sits on screen.
+        static func logBanner(_ frame: CGRect) {
+            let screen = screenSize
+            log("banner: x=\(frame.minX) y=\(frame.minY) w=\(frame.width) h=\(frame.height) "
+                + "screenW=\(screen.width) screenH=\(screen.height) tv=\(GFGuideGlass.isTV ? 1 : 0)")
+        }
+
+        private static var screenSize: CGSize {
+            #if canImport(UIKit)
+                UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.screen.bounds.size
+                    ?? .zero
+            #else
+                .zero
+            #endif
         }
 
         private static var screenScale: CGFloat {
@@ -266,8 +283,18 @@
         /// As MainTabView hands it to its tabs: the Apple TV's Home requires it.
         @State private var router = DeepLinkRouter()
         #if os(iOS)
-            /// The demo's first tab: Live TV unless `-GFDemo home`, `movies` or `series` asks for another.
-            @State private var tab = ["home", "movies", "series"].contains(GFDemo.mode ?? "") ? GFDemo.mode ?? "live" : "live"
+            /// The demo's first tab: Live TV unless `-GFDemo home`, `movies` or `series` asks for another
+            /// (`banner`: Home).
+            @State private var tab = Self.firstTab
+
+            private static var firstTab: String {
+                switch GFDemo.mode {
+                case "home", "banner": "home"
+                case "movies": "movies"
+                case "series": "series"
+                default: "live"
+                }
+            }
         #endif
 
         init() {
@@ -278,8 +305,25 @@
 
         var body: some View {
             content
+                .overlay(alignment: GFContinueBannerLayout.alignment) {
+                    if GFDemo.mode == "banner" { banner }
+                }
                 .environment(router)
                 .modelContainer(store.container)
+        }
+
+        /// `-GFDemo banner`: the continue banner as the app shows it (GFContinueBannerHost), for a channel another
+        /// device played three minutes ago.
+        private var banner: some View {
+            let now = Date()
+            let note = GFLastPlayedNote(
+                deviceID: "demo-other-device", deviceKind: GFGuideGlass.isTV ? "iPhone" : "Apple TV", kind: .channel,
+                contentId: store.firstStream?.id ?? "", title: "BBC One", artworkURL: nil, position: 0, duration: 0,
+                playing: true, updatedAt: now.addingTimeInterval(-180)
+            )
+            return GFContinueBannerView(note: note, now: now)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { GFDemo.logBanner($0) }
+                .padding(GFContinueBannerLayout.padding)
         }
 
         private func play(_ stream: LiveStream) {
@@ -289,7 +333,7 @@
         @ViewBuilder private var content: some View {
             #if os(tvOS)
                 switch GFDemo.mode ?? "" {
-                case "home": HomeView()
+                case "home", "banner": HomeView()
                 case "movies": MoviesView()
                 case "series": SeriesView()
                 default: liveTV
