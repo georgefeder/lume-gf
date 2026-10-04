@@ -260,6 +260,14 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.tileContent(width: 50) == .full)
     }
 
+    @Test func `a title parked at the column fades as its tile slides under it`() {
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 120) == 1)
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 56) == 1)
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 44) == 0.5)
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 32) == 0)
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 13) == 0) // the "E" beside BLOOMBERG in build 22's screenshot
+    }
+
     @Test func `a time label under the Now pill fades out, its neighbours stay`() {
         let width = GFGuideGlass.rulerLabelWidth(text: "23:00", isHour: true)
         #expect(GFGuideGlass.rulerLabelHidden(labelMinX: 7, labelWidth: width, nowX: 15)) // 23:05, label at 23:00

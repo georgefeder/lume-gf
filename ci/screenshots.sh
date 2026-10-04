@@ -52,7 +52,7 @@ film() {  # $1 = simulator id, $2 = bundle id, $3 = name, rest = launch argument
     xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
     SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
       "$SIM" "$BID" -ui-testing "$@" >/dev/null
-    xcrun simctl io "$SIM" recordVideo --codec=h264 --force "$LOGS/$NAME.mp4" >/dev/null 2>&1 &
+    xcrun simctl io "$SIM" recordVideo --codec=h264 --force "$LOGS/$NAME.mp4" >/dev/null 2>"$LOGS/$NAME.rec.txt" &
     REC=$!
     sleep "$FILM"
     kill -INT "$REC" 2>/dev/null || true
@@ -63,7 +63,8 @@ film() {  # $1 = simulator id, $2 = bundle id, $3 = name, rest = launch argument
     kill -KILL "$REC" 2>/dev/null || true
     wait "$REC" 2>/dev/null || true
     [ -s "$LOGS/$NAME.mp4" ] && break
-    echo "screenshots: film-$NAME: the simulator's recorder gave no film (try $TRY)"
+    WHY=$(tail -n 1 "$LOGS/$NAME.rec.txt" 2>/dev/null)
+    echo "screenshots: film-$NAME: the simulator's recorder gave no film (try $TRY): $WHY"
   done
   if [ ! -s "$LOGS/$NAME.mp4" ]; then
     echo "screenshots: no film of $NAME"; NOFILM=1; return 0

@@ -13,6 +13,43 @@ index e47fa33..59d9c63 100644
                  switch phase {
                  case .empty:
                      // Reserve the logo's vertical space without flashing the
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+index b637d74..b8b7537 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+@@ -274,15 +274,24 @@ struct EPGMetrics {
+                     // Lume GF: the grid runs under the glass sidebar, so titles stick at the sidebar's edge — measured in
+                     // the guide's own space, whatever the scroll view's frame and insets (iPhone landscape)
+                     .visualEffect { [inset = metrics.blockInset, pad = metrics.channelColumnWidth] content, proxy in
+-                        content.offset(
+-                            x: EPGStickyText.shift(
+-                                blockMinX: GFGuideGlass.stickyMinX(
+-                                    blockMinX: proxy.frame(in: .named(GFGuideGlass.spaceName)).minX, pad: pad
+-                                ),
+-                                blockWidth: proxy.size.width,
+-                                inset: inset
+-                            )
++                        let shift = EPGStickyText.shift(
++                            blockMinX: GFGuideGlass.stickyMinX(
++                                blockMinX: proxy.frame(in: .named(GFGuideGlass.spaceName)).minX, pad: pad
++                            ),
++                            blockWidth: proxy.size.width,
++                            inset: inset
+                         )
++                        // Lume GF: a parked title fades as its tile slides under the column (no "Arse" or "E" stubs)
++                        return content.offset(x: shift)
++                            .opacity(shift > 0 ? GFGuideGlass.parkedTitleOpacity(room: proxy.size.width - shift) : 1)
++                    }
++                    // Lume GF: text running into the tile's end fades out instead of being cut mid-letter ("Arsena")
++                    .mask {
++                        HStack(spacing: 0) {
++                            Color.black
++                            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
++                                .frame(width: GFGuideGlass.tileTextFade)
++                        }
+                     }
+                 }
+ 
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
 index f1e5513..5c8d359 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift

@@ -167,6 +167,17 @@ nonisolated enum GFGuideGlass {
         return .full
     }
 
+    /// A programme running on under the iPhone's channel column keeps its title at the column's edge; as the tile's
+    /// `room` right of that edge shrinks, the title fades: whole from 56 points, gone at 32 (Georgs on build 22: stubs
+    /// like "Arse" and "E" beside the column).
+    static func parkedTitleOpacity(room: CGFloat) -> Double {
+        Double(min(1, max(0, (room - 32) / 24)))
+    }
+
+    /// The last points of an iPhone programme tile, where text running into its end fades out instead of being cut
+    /// mid-letter ("Arsena").
+    static let tileTextFade: CGFloat = 12
+
     /// iPhone ruler: whether the time label starting at `labelMinX` (`labelWidth` wide) sits where the red Now pill
     /// is (centred on `nowX`); it fades out instead of the pill covering it (Georgs on build 22).
     static func rulerLabelHidden(labelMinX: CGFloat, labelWidth: CGFloat, nowX: CGFloat,
