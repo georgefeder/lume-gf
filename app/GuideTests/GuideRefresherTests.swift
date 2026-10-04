@@ -96,4 +96,33 @@ struct GuideRefresherTests {
         #expect(states.state(for: id).etag == "\"a\"")
         #expect(try count(container) >= 2)
     }
+
+    @Test func `the same file again for the same channels is not imported again`() async throws {
+        let (container, states, refresher) = try setUp()
+        let (url, path) = guideTestURL(), id = UUID()
+        // a server that sends no ETag or Last-Modified: the whole guide every time
+        GuideStubProtocol.answer(path, .init(status: 200, body: try guide(3)))
+        _ = try await refresher.refresh(sourceID: id, url: url, knownChannelIDs: ["c1"], force: false)
+        let context = ModelContext(container)
+        try context.delete(model: EPGListing.self, where: #Predicate { $0.title == "Show 0" })
+        try context.save()
+        let outcome = try await refresher.refresh(sourceID: id, url: url, knownChannelIDs: ["c1"], force: false)
+        #expect(outcome.summary == "same file" && outcome.claimedChannelIDs == ["c1"])
+        #expect(try count(container) == 2) // not imported again
+        #expect(states.state(for: id).lastCheck == now && states.state(for: id).lastError == nil)
+    }
+
+    @Test func `new channels download the guide in full and import it`() async throws {
+        let (container, _, refresher) = try setUp()
+        let (url, path) = guideTestURL(), id = UUID()
+        GuideStubProtocol.answer(path, .init(status: 200, headers: ["ETag": "\"a\""], body: try guide(2)))
+        _ = try await refresher.refresh(sourceID: id, url: url, knownChannelIDs: ["c1"], force: false)
+        let both = try Data(contentsOf: writeGuideFile(hourly("c1", from: now, count: 2) + hourly("c2", from: now,
+                                                                                               count: 2)))
+        GuideStubProtocol.answer(path, .init(status: 200, headers: ["ETag": "\"a\""], body: both))
+        let outcome = try await refresher.refresh(sourceID: id, url: url, knownChannelIDs: ["c1", "c2"], force: false)
+        #expect(GuideStubProtocol.lastRequest(path)?.value(forHTTPHeaderField: "If-None-Match") == nil)
+        #expect(outcome.claimedChannelIDs == ["c1", "c2"])
+        #expect(try count(container) == 4)
+    }
 }

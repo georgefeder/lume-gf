@@ -21,6 +21,21 @@ nonisolated enum GuideFingerprint {
         return hash
     }
 
+    /// A stable fingerprint of a set of channel ids, whatever their order: whether a source's channels changed since
+    /// its last import.
+    static func ofSet(_ ids: Set<String>) -> UInt64 {
+        var hash = offset
+        for id in ids.sorted() {
+            for byte in id.utf8 {
+                hash ^= UInt64(byte)
+                hash = hash &* prime
+            }
+            hash ^= 0x1F
+            hash = hash &* prime
+        }
+        return hash
+    }
+
     /// Lume stores a programme's categories joined like this (`EPGSyncManager`); both sides of a comparison use it.
     static func category(_ categories: [String]) -> String? {
         categories.isEmpty ? nil : categories.joined(separator: ", ")

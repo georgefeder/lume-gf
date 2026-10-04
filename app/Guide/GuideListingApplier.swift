@@ -22,22 +22,25 @@ nonisolated struct GuideListingApplier {
 
     /// Like Lume's own import: every save re-runs each active `@Query`, so saves are coalesced.
     static let saveThreshold = 10000
-    static let pageSize = 5000
     static let deleteChunk = 500
 
     let container: ModelContainer
+    /// Rows per page when reading the stored guide.
+    var pageSize = 5000
 
-    /// Every stored listing's comparable content, read in pages with only the compared fields.
+    /// Every stored listing's comparable content, read in pages with only the compared fields. Each page starts after
+    /// the last id of the one before (an offset makes SQLite step over every earlier row again, page after page).
     func loadStored() -> [String: GuideDiffPlanner.Stored] {
         var stored: [String: GuideDiffPlanner.Stored] = [:]
-        var offset = 0
-        var fetched = Self.pageSize
-        while fetched == Self.pageSize {
+        var after: String?
+        var fetched = pageSize
+        while fetched == pageSize {
+            if Task.isCancelled { break }
             fetched = autoreleasepool {
                 let context = ModelContext(container)
                 var descriptor = FetchDescriptor<EPGListing>(sortBy: [SortDescriptor(\.id)])
-                descriptor.fetchOffset = offset
-                descriptor.fetchLimit = Self.pageSize
+                if let last = after { descriptor.predicate = #Predicate { $0.id > last } }
+                descriptor.fetchLimit = pageSize
                 descriptor.propertiesToFetch = [\.id, \.channelId, \.start, \.end, \.title, \.subtitle, \.category,
                                                 \.listingDescription]
                 let rows = (try? context.fetch(descriptor)) ?? []
@@ -48,20 +51,26 @@ nonisolated struct GuideListingApplier {
                                                          category: row.category, description: row.listingDescription)
                     )
                 }
+                after = rows.last?.id
                 return rows.count
             }
-            offset += Self.pageSize
         }
         return stored
     }
 
     /// Reads `fileURL` and applies it: inserts and updates batch by batch; deletions (and dropping old programmes)
     /// only when the file was read completely. `shouldStop` is asked after each batch (a background task's time).
+    /// `allChannels`: every channel of every playlist; old programmes of channels outside it are dropped too.
     func apply(fileURL: URL, claimableChannels: Set<String>, index: GuideStoredIndex, now: Date,
-               shouldStop: @escaping () -> Bool = { Task.isCancelled }) -> Result {
+               allChannels: Set<String>? = nil, shouldStop: @escaping () -> Bool = { Task.isCancelled }) -> Result {
+        // the planner takes the rows over while the file is read (a shared dictionary is copied whole on its first
+        // change); they come back, with this file's changes, at the end
+        let rows = index.rows
+        index.rows = [:]
         let run = Run(
-            planner: GuideDiffPlanner(stored: index.rows, claimableChannels: claimableChannels, now: now),
-            context: ModelContext(container), index: index
+            planner: GuideDiffPlanner(stored: rows, claimableChannels: claimableChannels, now: now,
+                                      allChannels: allChannels),
+            context: ModelContext(container)
         )
         let parse = XMLTVParser.parseChecked(fileURL: fileURL, batchSize: 2000, shouldStop: shouldStop) { batch in
             autoreleasepool { run.apply(batch) }
@@ -76,9 +85,14 @@ nonisolated struct GuideListingApplier {
             try? run.context.delete(model: EPGListing.self, where: #Predicate { chunk.contains($0.id) })
             start += Self.deleteChunk
         }
-        for id in deletions {
-            index.rows[id] = nil
+        var stored = run.planner.releaseStored()
+        for (id, row) in run.changed {
+            stored[id] = row
         }
+        for id in deletions {
+            stored[id] = nil
+        }
+        index.rows = stored
         result.deleted = deletions.count
         try? run.context.save()
         return result
@@ -97,14 +111,14 @@ nonisolated struct GuideListingApplier {
     private nonisolated final class Run {
         var planner: GuideDiffPlanner
         let context: ModelContext
-        let index: GuideStoredIndex
+        /// What this file inserted or changed, merged into the stored rows at the end.
+        var changed: [String: GuideDiffPlanner.Stored] = [:]
         var result = Result()
         var pending = 0
 
-        init(planner: GuideDiffPlanner, context: ModelContext, index: GuideStoredIndex) {
+        init(planner: GuideDiffPlanner, context: ModelContext) {
             self.planner = planner
             self.context = context
-            self.index = index
             context.autosaveEnabled = false
         }
 
@@ -123,19 +137,25 @@ nonisolated struct GuideListingApplier {
                     id: id, channelId: p.channelId, title: p.title, listingDescription: p.description,
                     start: p.start, end: p.end, subtitle: p.subtitle, category: GuideFingerprint.category(p.categories)
                 ))
-                index.rows[id] = GuideListingApplier.stored(p)
+                changed[id] = GuideListingApplier.stored(p)
+            }
+            // the batch's changed programmes in one fetch, not one each
+            let updateIDs = plan.updates
+            let rows = updateIDs.isEmpty ? [] : (try? context.fetch(FetchDescriptor<EPGListing>(
+                predicate: #Predicate { updateIDs.contains($0.id) }
+            ))) ?? []
+            var rowByID: [String: EPGListing] = [:]
+            for row in rows {
+                rowByID[row.id] = row
             }
             for id in plan.updates {
-                guard let p = byID[id] else { continue }
-                var descriptor = FetchDescriptor<EPGListing>(predicate: #Predicate { $0.id == id })
-                descriptor.fetchLimit = 1
-                guard let row = try? context.fetch(descriptor).first else { continue }
+                guard let p = byID[id], let row = rowByID[id] else { continue }
                 row.title = p.title
                 row.listingDescription = p.description
                 row.end = p.end
                 row.subtitle = p.subtitle
                 row.category = GuideFingerprint.category(p.categories)
-                index.rows[id] = GuideListingApplier.stored(p)
+                changed[id] = GuideListingApplier.stored(p)
             }
             result.inserted += plan.inserts.count
             result.updated += plan.updates.count

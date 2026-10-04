@@ -92,4 +92,23 @@ struct GuideListingApplierTests {
         let fresh = GuideListingApplier(container: container).loadStored()
         #expect(fresh.count == 15000 && fresh == index.rows)
     }
+
+    @Test func `the stored guide is read whole in small pages`() throws {
+        let container = try makeTestContainer()
+        _ = apply(try writeGuideFile(hourly("c1", from: now, count: 5)), container, GuideStoredIndex(rows: [:]))
+        var applier = GuideListingApplier(container: container)
+        applier.pageSize = 2
+        let stored = applier.loadStored()
+        #expect(stored.count == 5)
+        #expect(Set(stored.keys) == Set(try rows(container).map(\.id)))
+    }
+
+    @Test func `the index keeps up with a file's changes and deletions`() throws {
+        let container = try makeTestContainer()
+        let index = GuideStoredIndex(rows: [:])
+        _ = apply(try writeGuideFile(hourly("c1", from: now, count: 3)), container, index)
+        _ = apply(try writeGuideFile(hourly("c1", from: now, count: 2, title: "New")), container, index)
+        #expect(index.rows.count == 2)
+        #expect(index.rows == GuideListingApplier(container: container).loadStored())
+    }
 }

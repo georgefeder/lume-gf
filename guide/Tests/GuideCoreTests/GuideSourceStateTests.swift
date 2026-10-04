@@ -54,4 +54,35 @@ struct GuideSourceStateTests {
         try Data("not json".utf8).write(to: file)
         #expect(GuideSourceStateStore(fileURL: file).all().isEmpty)
     }
+
+    @Test func `the same file for the same channels is recognised, other channels are not`() {
+        var s = GuideSourceState()
+        s.recordImported(etag: nil, lastModified: nil, serverBuild: nil, channelIDs: ["1"], at: t0, fileHash: "h",
+                         channelsKey: 7)
+        #expect(s.isSameFile(hash: "h", channelsKey: 7))
+        #expect(!s.isSameFile(hash: "h", channelsKey: 8))
+        #expect(!s.isSameFile(hash: "other", channelsKey: 7))
+        #expect(!s.isSameFile(hash: nil, channelsKey: 7))
+        #expect(s.mayAskUnchanged(channelsKey: 7) && !s.mayAskUnchanged(channelsKey: 8))
+    }
+
+    @Test func `the same file again counts as a good check and keeps the new validators`() {
+        var s = GuideSourceState()
+        s.recordFailure("x", at: t0)
+        s.recordSameFile(etag: "\"e\"", lastModified: nil, serverBuild: nil, at: t0.addingTimeInterval(60))
+        #expect(s.lastCheck == t0.addingTimeInterval(60) && s.lastError == nil && s.etag == "\"e\"")
+        #expect(s.lastUpdate == nil)
+    }
+
+    @Test func `forgetting the files makes every source download and import in full`() {
+        let store = GuideSourceStateStore(fileURL: tempFile()), id = UUID()
+        store.update(id) {
+            $0.recordImported(etag: "\"a\"", lastModified: "x", serverBuild: nil, channelIDs: ["1"], at: t0,
+                              fileHash: "h", channelsKey: 7)
+        }
+        store.forgetFiles()
+        let s = store.state(for: id)
+        #expect(s.fileHash == nil && s.channelsKey == nil && s.etag == nil && s.lastModified == nil)
+        #expect(s.channelIDs == ["1"])
+    }
 }

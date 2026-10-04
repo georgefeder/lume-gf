@@ -7,8 +7,9 @@ import Foundation
 /// stored, old programmes included (the server's catch-up days feed the Apple TV player's replay list), like Lume's own
 /// import. The new file is authoritative only for the span it covers on each channel it guides: a stored programme is
 /// deleted when its channel is in the file, it starts at or after that channel's first programme in the file, and the
-/// file no longer has it. A stored programme that ended more than 12 hours ago and is no longer in the file is dropped.
-/// A file that was not read completely deletes nothing.
+/// file no longer has it. A stored programme that ended more than 12 hours ago and is no longer in the file is dropped
+/// when the file guides its channel, or when no playlist has that channel any more (`allChannels`); another source's
+/// programmes are that source's to drop. A file that was not read completely deletes nothing.
 nonisolated struct GuideDiffPlanner {
     struct Stored: Equatable {
         var channelId: String
@@ -36,15 +37,18 @@ nonisolated struct GuideDiffPlanner {
         "\(channelId)-\(Int(start.timeIntervalSince1970))"
     }
 
-    private let stored: [String: Stored]
+    private var stored: [String: Stored]
     private let claimable: Set<String>
+    /// Every channel of every playlist (nil: unknown, so no programme counts as orphaned).
+    private let allChannels: Set<String>?
     private let cutoff: Date
     private var seen: Set<String> = []
     private var firstStart: [String: Date] = [:]
 
-    init(stored: [String: Stored], claimableChannels: Set<String>, now: Date) {
+    init(stored: [String: Stored], claimableChannels: Set<String>, now: Date, allChannels: Set<String>? = nil) {
         self.stored = stored
         claimable = claimableChannels
+        self.allChannels = allChannels
         cutoff = now.addingTimeInterval(-Self.keepPast)
     }
 
@@ -73,12 +77,20 @@ nonisolated struct GuideDiffPlanner {
         guard fileCompleted else { return [] }
         var out: [String] = []
         for (id, row) in stored where !seen.contains(id) {
-            if row.end < cutoff {
-                out.append(id) // ended long ago and no longer in the file
+            if row.end < cutoff,
+               firstStart[row.channelId] != nil || allChannels.map({ !$0.contains(row.channelId) }) == true {
+                out.append(id) // ended long ago and no longer in the file (of a channel it guides, or of none)
             } else if let first = firstStart[row.channelId], row.start >= first {
                 out.append(id) // inside the span the file covers, but gone from it
             }
         }
         return out.sorted()
+    }
+
+    /// Hands the stored rows back and lets go of them, so the caller can change them without copying them all.
+    mutating func releaseStored() -> [String: Stored] {
+        let rows = stored
+        stored = [:]
+        return rows
     }
 }

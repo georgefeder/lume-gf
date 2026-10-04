@@ -17,6 +17,8 @@ nonisolated final class GuideRefresher {
     let fetcher: GuideFetcher
     let states: GuideSourceStateStore
     let now: () -> Date
+    /// Every channel of every playlist this run (EPGSyncManager): old programmes of other channels are orphans.
+    var allChannelIDs: Set<String>?
     private var index: GuideStoredIndex?
 
     init(container: ModelContainer, fetcher: GuideFetcher = GuideFetcher(), states: GuideSourceStateStore = .shared,
@@ -30,8 +32,14 @@ nonisolated final class GuideRefresher {
     func refresh(sourceID: UUID, url: String, knownChannelIDs: Set<String>, force: Bool) async throws -> Outcome {
         let state = states.state(for: sourceID)
         // A cleared store (storage cleanup, reinstall) must not trust "unchanged" for a guide that is gone.
-        let hasGuide = ((try? ModelContext(container).fetchCount(FetchDescriptor<EPGListing>())) ?? 0) > 0
-        let conditional = !force && hasGuide
+        var probe = FetchDescriptor<EPGListing>()
+        probe.fetchLimit = 1
+        probe.propertiesToFetch = [\.id]
+        let hasGuide = !((try? ModelContext(container).fetch(probe)) ?? []).isEmpty
+        // Channels added since the last import may have programmes in a file the server calls unchanged: ask only
+        // for the same channels.
+        let channelsKey = GuideFingerprint.ofSet(knownChannelIDs)
+        let conditional = !force && hasGuide && state.mayAskUnchanged(channelsKey: channelsKey)
         let answer: GuideFetcher.Result
         do {
             answer = try await fetcher.fetch(urlString: url, etag: conditional ? state.etag : nil,
@@ -47,11 +55,20 @@ nonisolated final class GuideRefresher {
             return Outcome(claimedChannelIDs: state.channelIDs.intersection(knownChannelIDs), summary: "unchanged")
         case let .file(file, etag, lastModified, serverBuild, isTemporary):
             defer { if isTemporary { try? FileManager.default.removeItem(at: file) } }
+            // the same file for the same channels: nothing to import (servers without ETag or Last-Modified)
+            let fileHash = M3UClient.sha256Hex(ofFileAt: file)
+            if hasGuide, state.isSameFile(hash: fileHash, channelsKey: channelsKey) {
+                states.update(sourceID) {
+                    $0.recordSameFile(etag: etag, lastModified: lastModified, serverBuild: serverBuild, at: now())
+                }
+                return Outcome(claimedChannelIDs: state.channelIDs.intersection(knownChannelIDs), summary: "same file")
+            }
             let started = Date()
             let applier = GuideListingApplier(container: container)
             let index = index ?? GuideStoredIndex(rows: applier.loadStored())
             self.index = index
-            let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: now())
+            let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: now(),
+                                       allChannels: allChannelIDs)
             if Task.isCancelled { throw CancellationError() }
             guard result.completed else {
                 states.update(sourceID) { $0.recordFailure("guide file incomplete", at: now()) }
@@ -59,7 +76,8 @@ nonisolated final class GuideRefresher {
             }
             states.update(sourceID) {
                 $0.recordImported(etag: etag, lastModified: lastModified, serverBuild: serverBuild,
-                                  channelIDs: result.claimedChannels, at: now())
+                                  channelIDs: result.claimedChannels, at: now(), fileHash: fileHash,
+                                  channelsKey: channelsKey)
             }
             let seconds = String(format: "%.1f", Date().timeIntervalSince(started))
             return Outcome(claimedChannelIDs: result.claimedChannels,
