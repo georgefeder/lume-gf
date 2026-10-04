@@ -1,3 +1,4 @@
 # LumeTests suites run on their own after the rest (one per line, the reason after a "#"): tests that time something
 # to the second, which the parallel run starves (hundreds of tests share the simulator and its main thread).
 GFZapTests  # times a channel change (1.5 s); the parallel run held the switch ~30 s (runs 37028529816, 37037167206)
+CloudSyncPrunedStateTests  # Lume's own iCloud test; failed in the parallel run only (runs 37065462190, 37225679324)

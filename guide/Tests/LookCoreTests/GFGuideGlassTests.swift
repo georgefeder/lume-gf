@@ -210,6 +210,15 @@ struct GFGuideGlassTests {
         #expect(tv.leading == GFGuideGlass.gridEdge(tv: true) && tv.trailing > 0)
     }
 
+    @Test func `text blurs more the further it reaches into the edge, and is sharp past it`() {
+        #expect(GFGuideGlass.edgeBlur(textMinX: 48, edge: 48) == 0)
+        #expect(GFGuideGlass.edgeBlur(textMinX: 200, edge: 48) == 0)
+        #expect(GFGuideGlass.edgeBlur(textMinX: 24, edge: 48) == 4)
+        #expect(GFGuideGlass.edgeBlur(textMinX: 0, edge: 48) == 8)
+        #expect(GFGuideGlass.edgeBlur(textMinX: -30, edge: 48) == 8)
+        #expect(GFGuideGlass.edgeBlur(textMinX: 0, edge: 0) == 0)
+    }
+
     @Test func `only the Apple TV's programmes blur at the channel column (the iPhone's slide under its glass)`() {
         #expect(GFGuideGlass.gridEdge(tv: true) == 48)
         #expect(GFGuideGlass.gridEdge(tv: false) == 0)

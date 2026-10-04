@@ -44,23 +44,32 @@ index 92cb0c8..5e97af3 100644
      }
  }
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift b/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
-index dddc9ca..9e30686 100644
+index dddc9ca..f1049a2 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
-@@ -120,10 +120,11 @@ extension EPGMetrics {
+@@ -120,14 +120,14 @@ extension EPGMetrics {
              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
              // Keeps the text of a partially scrolled block readable; see
              // `EPGStickyText` for why this is a `visualEffect`.
 -            .visualEffect { [inset] content, proxy in
-+            // Lume GF: titles park just past the blurred edge beside the channel column, never under it
-+            .visualEffect { [inset, edge = GFGuideGlass.gridEdge(tv: true)] content, proxy in
-                 content.offset(
-                     x: EPGStickyText.shift(
+-                content.offset(
+-                    x: EPGStickyText.shift(
 -                        blockMinX: proxy.frame(in: .scrollView).minX,
-+                        blockMinX: proxy.frame(in: .scrollView).minX - edge,
-                         blockWidth: proxy.size.width,
-                         inset: inset
-                     )
+-                        blockWidth: proxy.size.width,
+-                        inset: inset
+-                    )
+-                )
++            // Lume GF: titles park just past the blurred edge beside the channel column; text that still reaches into
++            // it (a programme ending there) blurs the further in it is (Georgs on build 21)
++            .visualEffect { [inset, edge = GFGuideGlass.gridEdge(tv: true)] content, proxy in
++                let minX = proxy.frame(in: .scrollView).minX
++                let shift = EPGStickyText.shift(blockMinX: minX - edge, blockWidth: proxy.size.width, inset: inset)
++                return content
++                    .offset(x: shift)
++                    .blur(radius: GFGuideGlass.edgeBlur(textMinX: minX + shift, edge: edge))
+             }
+         }
+ 
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift
 index 7274242..1e37edf 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift

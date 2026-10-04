@@ -230,8 +230,9 @@ struct GFRulerEdgeBlur: ViewModifier {
     }
 }
 
-/// The Apple TV guide's edge beside the channel column (Georgs on build 21): programmes fade out over `width` points
-/// while a soft backdrop blur, strongest at the edge, takes them; the guide's glow shows through as they go.
+/// The Apple TV guide's edge beside the channel column (Georgs on build 21): programmes fade out over `width` points,
+/// the guide's glow showing through as they go; their text blurs on its way in (`GFGuideGlass.edgeBlur`, applied in
+/// each programme). A backdrop material here drew a darker strip with a hard edge.
 struct GFGridLeadingBlur: ViewModifier {
     let width: CGFloat
 
@@ -250,14 +251,6 @@ struct GFGridLeadingBlur: ViewModifier {
                             .frame(width: width)
                         Color.black
                     }
-                }
-                .overlay(alignment: .leading) {
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .mask(LinearGradient(colors: [.black, .black.opacity(0.5), .clear],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .frame(width: width)
-                        .allowsHitTesting(false)
                 }
         }
     }
