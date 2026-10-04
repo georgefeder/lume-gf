@@ -1,0 +1,153 @@
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+index 1df53fb..b637d74 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+@@ -82,7 +82,7 @@ struct EPGMetrics {
+                 pointsPerMinute: 3.0,
+                 rowHeight: 68,
+                 rowSpacing: 4,
+-                // Lume GF: 136 plus the 10 points the glass column moved in by (GFGuideGlass.phoneColumnWidth)
++                // Lume GF: 136 plus the panel's edge and the gaps around the boxes (GFGuideGlass.phoneColumnWidth)
+                 channelColumnWidth: GFGuideGlass.phoneColumnWidth,
+                 headerHeight: 36,
+                 blockCornerRadius: 9,
+@@ -104,6 +104,8 @@ struct EPGMetrics {
+     struct EPGTimeRuler: View {
+         let timeline: EPGTimeline
+         let metrics: EPGMetrics
++        /// Lume GF: where the red Now pill sits; the time label under it fades out (Georgs on build 22)
++        var gfNowX: CGFloat?
+ 
+         private var slotWidth: CGFloat {
+             metrics.pointsPerMinute * 30
+@@ -139,9 +141,19 @@ struct EPGMetrics {
+                             .foregroundStyle(.tertiary)
+                     }
+                 }
++                .opacity(gfUnderNowPill(date, isHour: isHour) ? 0 : 1)
+                 Spacer(minLength: 0)
+             }
+         }
++
++        /// Lume GF: the label starts 7 points after its tick (the tick's point and the 6-point spacing).
++        private func gfUnderNowPill(_ date: Date, isHour: Bool) -> Bool {
++            guard let gfNowX else { return false }
++            let text = date.formatted(.dateTime.hour().minute())
++            return GFGuideGlass.rulerLabelHidden(labelMinX: timeline.x(for: date) + 7,
++                                                 labelWidth: GFGuideGlass.rulerLabelWidth(text: text, isHour: isHour),
++                                                 nowX: gfNowX)
++        }
+     }
+ #endif
+ 
+@@ -235,43 +247,46 @@ struct EPGMetrics {
+ 
+         var body: some View {
+             ZStack(alignment: .bottomLeading) {
+-                VStack(alignment: .leading, spacing: 2) {
+-                    Text(cell.isGap ? "No Programme" : cell.title)
+-                        .font(.subheadline.weight(.semibold))
+-                        .foregroundStyle(titleColor)
+-                        .lineLimit(lineLimit)
+-
+-                    if showsTime {
+-                        HStack(spacing: 4) {
+-                            if canReplay {
+-                                Image(systemName: "clock.arrow.circlepath")
++                // Lume GF: a tile too narrow for a word shows no "…" (Georgs on build 22)
++                if gfTile == .full {
++                    VStack(alignment: .leading, spacing: 2) {
++                        Text(cell.isGap ? "No Programme" : cell.title)
++                            .font(.subheadline.weight(.semibold))
++                            .foregroundStyle(titleColor)
++                            .lineLimit(lineLimit)
++
++                        if showsTime {
++                            HStack(spacing: 4) {
++                                if canReplay {
++                                    Image(systemName: "clock.arrow.circlepath")
++                                }
++                                Text(cell.start, format: .dateTime.hour().minute())
+                             }
+-                            Text(cell.start, format: .dateTime.hour().minute())
++                            .font(.caption2)
++                            .foregroundStyle(.secondary)
+                         }
+-                        .font(.caption2)
+-                        .foregroundStyle(.secondary)
+                     }
+-                }
+-                .padding(.horizontal, metrics.blockInset)
+-                .padding(.vertical, metrics.blockInset * 0.55)
+-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+-                // Keeps the text of a partially scrolled block readable; see
+-                // `EPGStickyText` for why this is a `visualEffect`.
+-                // Lume GF: the grid runs under the glass sidebar, so titles stick at the sidebar's edge — measured in
+-                // the guide's own space, whatever the scroll view's frame and insets (iPhone landscape)
+-                .visualEffect { [inset = metrics.blockInset, pad = metrics.channelColumnWidth] content, proxy in
+-                    content.offset(
+-                        x: EPGStickyText.shift(
+-                            blockMinX: GFGuideGlass.stickyMinX(
+-                                blockMinX: proxy.frame(in: .named(GFGuideGlass.spaceName)).minX, pad: pad
+-                            ),
+-                            blockWidth: proxy.size.width,
+-                            inset: inset
++                    .padding(.horizontal, metrics.blockInset)
++                    .padding(.vertical, metrics.blockInset * 0.55)
++                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
++                    // Keeps the text of a partially scrolled block readable; see
++                    // `EPGStickyText` for why this is a `visualEffect`.
++                    // Lume GF: the grid runs under the glass sidebar, so titles stick at the sidebar's edge — measured in
++                    // the guide's own space, whatever the scroll view's frame and insets (iPhone landscape)
++                    .visualEffect { [inset = metrics.blockInset, pad = metrics.channelColumnWidth] content, proxy in
++                        content.offset(
++                            x: EPGStickyText.shift(
++                                blockMinX: GFGuideGlass.stickyMinX(
++                                    blockMinX: proxy.frame(in: .named(GFGuideGlass.spaceName)).minX, pad: pad
++                                ),
++                                blockWidth: proxy.size.width,
++                                inset: inset
++                            )
+                         )
+-                    )
++                    }
+                 }
+ 
+-                if isLive {
++                if isLive, gfTile != .sliver {
+                     liveProgressBar
+                 }
+             }
+@@ -294,10 +309,18 @@ struct EPGMetrics {
+             cell.width > metrics.channelColumnWidth ? 2 : 1
+         }
+ 
++        /// Lume GF: what the tile has room for (GFGuideGlass.tileContent)
++        private var gfTile: GFGuideGlass.TileContent {
++            GFGuideGlass.tileContent(width: cell.width - gap)
++        }
++
+         @ViewBuilder
+         private var background: some View {
+             let shape = RoundedRectangle(cornerRadius: metrics.blockCornerRadius, style: .continuous)
+-            if cell.isGap {
++            if gfTile == .sliver, !isFocused {
++                // Lume GF: a programme of a few minutes is a quiet sliver, no border (Georgs on build 22)
++                shape.fill(.fill.quaternary)
++            } else if cell.isGap {
+                 shape.fill(.fill.quaternary)
+             } else {
+                 if isFocused {
+diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
+index 2a7eb57..294ce1b 100644
+--- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
++++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
+@@ -42,7 +42,7 @@ struct EPGRulerStrip: View {
+                 .frame(maxWidth: .infinity)
+                 .frame(height: metrics.headerHeight)
+                 .overlay(alignment: .leading) {
+-                    EPGTimeRuler(timeline: timeline, metrics: metrics)
++                    EPGTimeRuler(timeline: timeline, metrics: metrics, gfNowX: timeline.x(for: now))
+                         .frame(width: timeline.totalWidth, alignment: .leading)
+                         .offset(x: -sync.mirror.x)
+                 }
