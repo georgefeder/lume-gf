@@ -8,6 +8,7 @@ LUME="${1:?usage: screenshots.sh LUME_DIR OUT_DIR}"; OUT="${2:?usage: screenshot
 CI=$(cd "$(dirname "$0")" && pwd); LUME=$(cd "$LUME" && pwd); mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_SHOT_WAIT:-15}"
 SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"; REC_GRACE="${GF_REC_GRACE:-20}"
+REC_PAUSE="${GF_REC_PAUSE:-5}"
 LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0  # the app's own output, kept with the pictures
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
@@ -45,7 +46,9 @@ shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch ar
 
 film() {  # $1 = simulator id, $2 = bundle id, $3 = name, rest = launch arguments; films the screen, keeps frames
   SIM="$1"; BID="$2"; NAME="$3"; shift 3
-  for TRY in 1 2; do
+  for TRY in 1 2 3; do
+    # the recorder right after the last one gave empty films (Lume 2.3 runs 37217369514, 37221326443): a pause first
+    sleep "$REC_PAUSE"
     xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
     SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
       "$SIM" "$BID" -ui-testing "$@" >/dev/null

@@ -114,7 +114,7 @@ rm -f "$FLASH"
 # hours): the film is taken once more; twice empty fails the job after every picture, so no flash check is skipped
 shots() {  # $1 = output dir; runs screenshots.sh, gives up after 60 s; prints its output, exit code in $1.rc
   rm -f "$1.rc"
-  ( PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_FILM_SECONDS=0 GF_REC_GRACE=1 GF_DERIVED_DATA="$T/dd" \
+  ( PATH="$T/bin:$PATH" GF_SHOT_WAIT=0 GF_BOOT_SETTLE=0 GF_FILM_SECONDS=0 GF_REC_GRACE=1 GF_REC_PAUSE=0 GF_DERIVED_DATA="$T/dd" \
       sh "$CI/screenshots.sh" "$T/Lume" "$1" > "$1.txt" 2>&1; echo $? > "$1.rc" ) > /dev/null 2>&1 &
   i=0; while [ ! -e "$1.rc" ] && [ "$i" -lt 60 ]; do sleep 1; i=$((i + 1)); done
   cat "$1.txt" 2>/dev/null
