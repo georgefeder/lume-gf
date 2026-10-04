@@ -190,7 +190,8 @@ struct GFChannelBox: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.fill.quaternary)
                 .frame(height: GFGuideGlass.tileHeight(rowHeight: rowHeight, rowSpacing: rowSpacing))
-                .padding(.horizontal, inset)
+                .padding(.leading, inset.leading)
+                .padding(.trailing, inset.trailing)
         }
     }
 }

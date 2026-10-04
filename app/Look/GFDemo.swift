@@ -339,8 +339,32 @@
                             EPGGuideView(scope: store.scope, playlistPrefix: "", sort: .playlist, onPlay: play)
                         }
                     }
+                    // as Lume's Live TV screen: the floating category button and its toolbar (layout switch,
+                    // Multi-View, sort, sync, settings), so the screenshots show the real top and bottom
+                    .gfCategoryButton(sections: store.categories.map { LiveTVSection.category($0) },
+                                      selection: $section)
                     .navigationTitle("Sport")
                     .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .principal) {
+                            Picker("Layout", selection: .constant(layoutMode)) {
+                                ForEach(LiveTVLayoutMode.allCases) { mode in
+                                    Label(mode.displayName, systemImage: mode.systemImage).tag(mode.rawValue)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .frame(maxWidth: 240)
+                        }
+                        ToolbarItem(placement: .automatic) {
+                            Button {} label: { Label("Multi-View", systemImage: "rectangle.split.2x2") }
+                        }
+                    }
+                    .libraryToolbar(config: LibraryToolbarConfiguration(
+                        playlists: [], selectedPlaylistID: .constant(""), categorySortRaw: .constant(""),
+                        contentSortRaw: .constant(""), showingSync: .constant(false),
+                        showingSettings: .constant(false), activePlaylist: nil
+                    ))
                     // as Lume's Live TV screen opens a channel (LiveTVView)
                     .fullScreenCover(item: $playing) { media in
                         FullScreenPlayerView(media: media)

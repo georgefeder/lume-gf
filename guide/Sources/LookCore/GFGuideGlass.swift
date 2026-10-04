@@ -122,7 +122,9 @@ nonisolated enum GFGuideGlass {
     static func sidebarInsets(tv: Bool) -> Insets {
         // Apple TV: the panel reaches 16 points above the first channel, which then sits in the glass like the
         // programme tiles beside it (not on its edge)
-        tv ? Insets(leading: 0, trailing: 16, top: -16) : Insets(leading: 6, trailing: 6, top: 4)
+        // iPhone: the panel's leading edge on the toolbar's (16 points in), so the Now button and the glass column
+        // line up with the buttons above them (Georgs on build 21)
+        tv ? Insets(leading: 0, trailing: 16, top: -16) : Insets(leading: 16, trailing: 6, top: 4)
     }
 
     /// Lume's own panel sizes: 36 for its big Apple TV panels, 16 for its glass cards.
@@ -132,8 +134,25 @@ nonisolated enum GFGuideGlass {
 
     /// iPhone and iPad: each channel sits in a box as tall as the programme tiles beside it, 2 points inside the panel
     /// (Georgs on build 17). nil on the Apple TV, whose focused channel has its own highlight.
-    static func channelBoxInset(tv: Bool) -> CGFloat? {
-        tv ? nil : sidebarInsets(tv: tv).leading + 2
+    static func channelBoxInset(tv: Bool) -> (leading: CGFloat, trailing: CGFloat)? {
+        guard !tv else { return nil }
+        let insets = sidebarInsets(tv: tv)
+        return (insets.leading + 2, insets.trailing + 2)
+    }
+
+    /// The iPhone's channel column: as wide as Lume's 136 plus the 10 points the panel moved in by, so names keep their
+    /// room.
+    static let phoneColumnWidth: CGFloat = 146
+
+    /// A channel's logo and name inside its box: 4 points from the box on each side.
+    static func channelContentPadding(tv: Bool) -> (leading: CGFloat, trailing: CGFloat) {
+        guard let box = channelBoxInset(tv: tv) else { return (12, 12) }
+        return (box.leading + 4, box.trailing + 4)
+    }
+
+    /// iPhone: room between the toolbar and the Now button (the category strip that sat between them is gone).
+    static func headerTopGap(tv: Bool) -> CGFloat {
+        tv ? 0 : 10
     }
 
     /// The jump-to-now button spans the glass panel under it, edge to edge (Georgs on build 18: it sat off the panel's
