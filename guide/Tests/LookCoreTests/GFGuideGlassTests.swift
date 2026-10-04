@@ -204,10 +204,15 @@ struct GFGuideGlassTests {
         #expect(button.leading == panel.leading && button.trailing == panel.trailing)
     }
 
-    @Test func `the ruler's times fade at both ends on iPhone, not on the Apple TV`() {
+    @Test func `the ruler's times fade at both ends, on the Apple TV as wide as the programmes' blurred edge`() {
         let phone = GFGuideGlass.rulerFade(tv: false), tv = GFGuideGlass.rulerFade(tv: true)
         #expect(phone.leading > 0 && phone.trailing > 0)
-        #expect(tv.leading == 0 && tv.trailing == 0)
+        #expect(tv.leading == GFGuideGlass.gridEdge(tv: true) && tv.trailing > 0)
+    }
+
+    @Test func `only the Apple TV's programmes blur at the channel column (the iPhone's slide under its glass)`() {
+        #expect(GFGuideGlass.gridEdge(tv: true) == 48)
+        #expect(GFGuideGlass.gridEdge(tv: false) == 0)
     }
 
     @Test func `the tests run on the Mac, so this is not the Apple TV`() {

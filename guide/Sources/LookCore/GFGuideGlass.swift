@@ -143,10 +143,16 @@ nonisolated enum GFGuideGlass {
         return (insets.leading, insets.trailing)
     }
 
-    /// How far the ruler's times blur and fade out at the channel column's edge and the screen's (Georgs on build 18).
-    /// None on the Apple TV, which was not asked about.
+    /// How far the ruler's times blur and fade out at the channel column's edge and the screen's (Georgs on builds 18
+    /// and 21); on the Apple TV as wide as the programmes' blurred edge below them.
     static func rulerFade(tv: Bool) -> (leading: CGFloat, trailing: CGFloat) {
-        tv ? (0, 0) : (36, 28)
+        tv ? (gridEdge(tv: true), 40) : (36, 28)
+    }
+
+    /// The Apple TV guide: programmes blur and fade out over this many points as they reach the channel column, and
+    /// their titles park just past it (Georgs on build 21). The iPhone's programmes slide under its glass column.
+    static func gridEdge(tv: Bool) -> CGFloat {
+        tv ? 48 : 0
     }
 
     /// Room above the first row: the top fade, the iPhone's breathing room, then the half row gap Lume leaves above

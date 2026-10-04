@@ -229,3 +229,36 @@ struct GFRulerEdgeBlur: ViewModifier {
         }
     }
 }
+
+/// The Apple TV guide's edge beside the channel column (Georgs on build 21): programmes fade out over `width` points
+/// while a soft backdrop blur, strongest at the edge, takes them; the guide's glow shows through as they go.
+struct GFGridLeadingBlur: ViewModifier {
+    let width: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if width <= 0 {
+            content
+        } else {
+            content
+                .mask {
+                    HStack(spacing: 0) {
+                        LinearGradient(stops: [.init(color: .clear, location: 0),
+                                               .init(color: .black.opacity(0.45), location: 0.45),
+                                               .init(color: .black, location: 1)],
+                                       startPoint: .leading, endPoint: .trailing)
+                            .frame(width: width)
+                        Color.black
+                    }
+                }
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .mask(LinearGradient(colors: [.black, .black.opacity(0.5), .clear],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: width)
+                        .allowsHitTesting(false)
+                }
+        }
+    }
+}
