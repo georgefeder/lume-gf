@@ -320,14 +320,14 @@
                     sections: store.categories.map { LiveTVSection.category($0) },
                     selectedSection: $section,
                     displayedSection: section,
-                    layoutModeRaw: $layoutMode,
                     contentSort: .playlist,
                     onPlay: { _ in },
                     onPlayCatchup: { _, _ in },
-                    onOpenMultiView: {},
                     onStartMultiView: { _ in },
                     playlistPrefix: "",
-                    sourceType: nil
+                    sourceType: nil,
+                    // Lume 2.3: List or Guide comes from Settings, no longer from a switch on the rail
+                    layoutMode: LiveTVLayoutMode(rawValue: layoutMode) ?? .guide
                 )
             #elseif os(iOS)
                 NavigationStack {

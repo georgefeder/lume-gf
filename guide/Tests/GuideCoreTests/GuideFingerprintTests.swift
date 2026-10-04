@@ -41,4 +41,10 @@ struct GuideFingerprintTests {
         #expect(GuideFingerprint.category(["News", "Sport"]) == "News, Sport")
         #expect(GuideFingerprint.category([]) == nil)
     }
+
+    @Test func `a channel set has one fingerprint whatever its order, and another set another`() {
+        #expect(GuideFingerprint.ofSet(["a", "b"]) == GuideFingerprint.ofSet(["b", "a"]))
+        #expect(GuideFingerprint.ofSet(["a", "b"]) != GuideFingerprint.ofSet(["ab"]))
+        #expect(GuideFingerprint.ofSet(["a"]) != GuideFingerprint.ofSet(["a", "b"]))
+    }
 }

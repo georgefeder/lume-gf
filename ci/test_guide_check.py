@@ -225,6 +225,14 @@ class MainTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("scale", detail)
 
+    def test_the_apple_tv_guide_is_lumes_own_so_its_pictures_are_not_measured(self):
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "logs"))
+        checks = [check for check, _, _ in gc.run_checks(d, sample=lambda png, lines: [[] for _ in lines])]
+        self.assertFalse([c for c in checks if "tv-guide" in c])
+        self.assertIn("under the panel (iphone-guide-under-dark)", checks)
+        self.assertIn("first row (iphone-guide-dark)", checks)
+
     def test_missing_pictures_and_logs_are_failures_not_passes(self):
         d = tempfile.mkdtemp()
         os.makedirs(os.path.join(d, "logs"))

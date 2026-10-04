@@ -84,10 +84,25 @@ struct GuideDiffPlannerTests {
         #expect(p.deletions(fileCompleted: true).isEmpty)
     }
 
-    @Test func `old programmes the file dropped are cleared`() {
-        var p = GuideDiffPlanner(stored: stored([item("a", -14), item("b", -20)]), claimableChannels: ["a"], now: now)
+    @Test func `old programmes the file dropped are cleared, and those of channels no playlist has`() {
+        var p = GuideDiffPlanner(stored: stored([item("a", -14), item("b", -20)]), claimableChannels: ["a"], now: now,
+                                 allChannels: ["a"])
         _ = p.plan([item("a", 0)])
         #expect(p.deletions(fileCompleted: true) == [item("a", -14).id, item("b", -20).id].sorted())
+    }
+
+    @Test func `another source's old programmes stay (its catch-up is its own)`() {
+        // source 1 may claim b too, but its file does not guide b: source 2's file does
+        var p = GuideDiffPlanner(stored: stored([item("a", -14), item("b", -20)]), claimableChannels: ["a", "b"],
+                                 now: now, allChannels: ["a", "b"])
+        _ = p.plan([item("a", 0)])
+        #expect(p.deletions(fileCompleted: true) == [item("a", -14).id])
+    }
+
+    @Test func `the stored rows are handed back once`() {
+        var p = GuideDiffPlanner(stored: stored([item("a", 0)]), claimableChannels: ["a"], now: now)
+        #expect(p.releaseStored().count == 1)
+        #expect(p.releaseStored().isEmpty)
     }
 
     @Test func `channels this source may not claim are ignored`() {

@@ -213,4 +213,9 @@ struct GFGuideGlassTests {
     @Test func `the tests run on the Mac, so this is not the Apple TV`() {
         #expect(!GFGuideGlass.isTV)
     }
+
+    @Test func `the guide as drawn keeps the iPhone's top room (the tests run on the Mac, not the Apple TV)`() {
+        #expect(GFGuideGlass.topRoom(rowSpacing: 4) == GFGuideGlass.gridTopRoom(tv: false, rowSpacing: 4))
+        #expect(GFGuideGlass.slidesUnderSidebar)
+    }
 }

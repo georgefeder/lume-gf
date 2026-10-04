@@ -9,8 +9,11 @@ import CoreGraphics
 /// size the viewer can read (`visibleSize`), which the Apple TV's keep-the-focus-visible uses — the bottom fade counts
 /// as outside.
 nonisolated enum GFGuideGlass {
-    /// false puts the grid beside the sidebar again: nothing slides under the glass (if the Apple TV stutters).
-    static let slidesUnderSidebar = true
+    /// false puts the grid beside the sidebar again: nothing slides under the glass. Off on the Apple TV, whose guide
+    /// is Lume 2.3's own design (Georgs' look applies to iPhone and iPad).
+    static var slidesUnderSidebar: Bool {
+        !isTV
+    }
 
     static var isTV: Bool {
         #if os(tvOS)
@@ -152,6 +155,12 @@ nonisolated enum GFGuideGlass {
     /// rows this far down.
     static func gridTopRoom(tv: Bool, rowSpacing: CGFloat) -> CGFloat {
         topFade(tv: tv) + topBreathingRoom(tv: tv) + rowSpacing / 2
+    }
+
+    /// The room above the first row in the guide as drawn: `gridTopRoom` on iPhone and iPad, none on the Apple TV (Lume
+    /// 2.3's own guide lays its rows out itself).
+    static func topRoom(rowSpacing: CGFloat) -> CGFloat {
+        isTV ? 0 : gridTopRoom(tv: false, rowSpacing: rowSpacing)
     }
 
     /// The iPhone's first row starts 24 points under the ruler, not 14 (Georgs on build 16: the first channel still

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Checks the guide screenshots for what Georgs saw on build 9, so it cannot come back unnoticed:
   - iPhone: nothing but background in the strip left of the glass panel (bits of programmes showed there);
-  - both: with the channel column hidden (-GFDemoNoPanel), no programmes under the panel's left half (a real Apple
-    TV's glass bent them into view along its left edge; the simulator's glass is too frosted to show it, so the
+  - iPhone: with the channel column hidden (-GFDemoNoPanel), no programmes under the panel's left half (a real
+    Apple TV's glass bent them into view along its left edge; the simulator's glass is too frosted to show it, so the
     column goes and what is left under it is measured);
-  - both: the first row starts below the top fade (it sat where the fade starts);
-  - Apple TV: a focused six-hour programme keeps to itself ("No Pr..." showed through the focus glass over it).
+  - iPhone: the first row starts below the top fade (it sat where the fade starts).
+Since Lume 2.3 the Apple TV's guide is Lume's own redesign (live preview above it), so none of these apply there.
 And for Georgs' notes of 2 Oct: posters in a row line up at the top (a title on two lines lifted its poster), and Home
 shows Recently Watched and the recently added films and series (his Apple TV's Home showed only the sports row). Rows
 below the first screen are never drawn, so the recently added rows are checked on a second picture of Home with
@@ -221,7 +221,7 @@ def run_checks(out, sample):
         results.append(("beside the panel (%s)" % shot,) + (strip_ok(sample(png(shot), lines)) if lines
                                                              else (False, "no strip left of the panel")))
 
-    for shot in ("iphone-guide-under-dark", "tv-guide-under"):
+    for shot in ("iphone-guide-under-dark",):
         g = geometry(shot)
         if g is None:
             results.append(("under the panel (%s)" % shot, False, "no guide geometry or screen scale logged"))
@@ -230,7 +230,7 @@ def run_checks(out, sample):
         measured = sample(png(shot), left + control)
         results.append(("under the panel (%s)" % shot,) + under_ok(measured[:len(left)], measured[len(left):]))
 
-    for shot in ("iphone-guide-dark", "tv-guide-channel"):
+    for shot in ("iphone-guide-dark",):
         g = geometry(shot)
         if g is None:
             results.append(("first row (%s)" % shot, False, "no guide geometry or screen scale logged"))
@@ -249,18 +249,6 @@ def run_checks(out, sample):
         results.append(("Home rows (%s)" % shot,)
                        + home_rows_ok(rail_cards(os.path.join(logs, shot + ".err")), expected))
 
-    shot = "tv-guide-long"
-    g = geometry(shot)
-    f = last_fields(os.path.join(logs, shot + ".err"), FOCUSED)
-    if g is None or f is None:
-        results.append(("focused long programme (%s)" % shot, False, "no geometry or focus logged"))
-    else:
-        measured = sample(png(shot), list(focus_lines(f, g["scale"])))
-        if not all(measured):
-            results.append(("focused long programme (%s)" % shot, False, "no pixels measured"))
-        else:
-            results.append(("focused long programme (%s)" % shot,)
-                           + focus_ok(max(measured[0]), max(measured[1]), f["w"]))
     return results
 
 

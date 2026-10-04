@@ -1,0 +1,102 @@
+diff --git a/Lume/Services/Indexing/ContentIndexingService.swift b/Lume/Services/Indexing/ContentIndexingService.swift
+index 714668d..32a6cd5 100644
+--- a/Lume/Services/Indexing/ContentIndexingService.swift
++++ b/Lume/Services/Indexing/ContentIndexingService.swift
+@@ -50,10 +50,13 @@ final class ContentIndexingService {
+ 
+     func suspend(for owner: String) {
+         playbackHolders.insert(owner)
++        EPGSyncService.shared.playbackDidStart() // Lume GF: no guide refresh while video plays
+     }
+ 
+     func resume(for owner: String) {
+         playbackHolders.remove(owner)
++        // Lume GF: a guide refresh held back while video played runs once nothing plays any more
++        if !playbackHolders.isActive { EPGSyncService.shared.playbackDidEnd() }
+     }
+ 
+     /// Set by `CloudSyncCoordinator` while `NSPersistentCloudKitContainer` is
+diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
+index cfb9d73..3b30c8c 100644
+--- a/Lume/Services/Sync/EPGSyncManager.swift
++++ b/Lume/Services/Sync/EPGSyncManager.swift
+@@ -51,6 +51,7 @@ actor EPGSyncManager {
+             return false
+         }
+ 
++        refresher.allChannelIDs = knownChannelIDs // Lume GF: old programmes of channels outside it are orphans
+         // Lume GF: no clearListings(). Each source's new guide is applied as only-what-changed on top of the stored
+         // one (GuideRefresher), so a failed or cut-off download never empties the guide.
+ 
+diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
+index 4498429..14e3aba 100644
+--- a/Lume/Services/Sync/EPGSyncService.swift
++++ b/Lume/Services/Sync/EPGSyncService.swift
+@@ -106,9 +106,32 @@ final class EPGSyncService {
+     /// the EPG frequency setting — and never alongside a pending playlist sync
+     /// (see `EPGRefreshGate`). A deferred refresh runs once the sync is done.
+     func syncIfDue() {
+-        guard isDue, gate.request() else { return }
+-        // Lume GF: a guide-schema bump downloads in full (an "unchanged" answer would skip the back-fill).
+-        kick(background: true, force: EPGSyncSchedule.schemaVersion < SyncFrequency.epgCurrentSchemaVersion)
++        guard isDue else { return }
++        // Lume GF: never while video plays (its saves hitch the player, as the indexer's do); owed until it stops
++        if ContentIndexingService.shared.isPlaybackActive {
++            gate.owe()
++            return
++        }
++        guard gate.request() else { return }
++        // Lume GF: a guide-schema bump downloads and imports in full (an "unchanged" answer, or the same file as
++        // last time, would skip the back-fill).
++        let schemaBump = EPGSyncSchedule.schemaVersion < SyncFrequency.epgCurrentSchemaVersion
++        if schemaBump { GuideSourceStateStore.shared.forgetFiles() }
++        kick(background: true, force: schemaBump)
++    }
++
++    /// Lume GF: the player opened. A background refresh in flight stops and is owed; nothing new starts until
++    /// `playbackDidEnd`.
++    func playbackDidStart() {
++        if let task, isBackgroundRefresh {
++            task.cancel()
++            gate.owe()
++        }
++    }
++
++    /// Lume GF: the player closed: a refresh held back while it played runs now.
++    func playbackDidEnd() {
++        runOwedRefresh()
+     }
+ 
+     /// The Sports Hub matches fixtures against programme sub-titles; a guide
+@@ -173,10 +196,11 @@ final class EPGSyncService {
+ 
+     private func runOwedRefresh() {
+         // `container` first: taking the debt before `configure` would drop it.
+-        guard container != nil, task == nil, gate.takeOwedRefresh() else { return }
+-        // Lume GF: in full — a playlist sync may have added channels whose programmes sit in a guide
+-        // file the server reports as unchanged.
+-        kick(background: true, force: true)
++        guard container != nil, task == nil, !ContentIndexingService.shared.isPlaybackActive,
++              gate.takeOwedRefresh() else { return }
++        // Lume GF: not forced: a source whose channels changed since its last import downloads in full anyway
++        // (GuideRefresher), and an unchanged one answers "unchanged" instead of a whole new guide every time
++        kick(background: true)
+     }
+ 
+     private var isDue: Bool {
+diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
+index 523fc9b..565dcd1 100644
+--- a/Lume/Views/MainTabView.swift
++++ b/Lume/Views/MainTabView.swift
+@@ -180,6 +180,11 @@ struct MainTabView: View {
+                 // Returning to the foreground re-checks staleness — for a long-lived
+                 // app this is the practical equivalent of "on launch".
+                 if phase == .active {
++                    // Lume GF: a playlist tried earlier in this run may be due again (an Apple TV keeps the app
++                    // for days); only what is queued or syncing now stays marked
++                    autoSyncAttempted = autoSyncAttempted.filter { id in
++                        activeSyncPlaylist?.id == id || syncQueue.contains { $0.id == id }
++                    }
+                     enqueueDueSyncs(playlists)
+                 }
+                 // Coming back to `.active` also refreshes stale sports data.
