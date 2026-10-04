@@ -18,7 +18,8 @@ final class GFContinueBannerModel {
         self.dismissedDefaults = dismissedDefaults
     }
 
-    func refresh(now: Date, playingHere: Bool = ContentIndexingService.shared.isPlaybackActive) async {
+    /// `playingHere`: whether video plays on this device (nil: ask Lume; tests pass it).
+    func refresh(now: Date, playingHere: Bool? = nil) async {
         guard let store else {
             offered = nil
             return
@@ -27,7 +28,7 @@ final class GFContinueBannerModel {
         let dismissed = Set(dismissedDefaults.stringArray(forKey: Self.dismissedKey) ?? [])
         offered = GFContinueOffer.offer(note, myDeviceID: GFLastPlayed.deviceID, now: now, dismissed: dismissed,
                                         inCatalog: note.map { inCatalog($0) } ?? false,
-                                        playingHere: playingHere)
+                                        playingHere: playingHere ?? ContentIndexingService.shared.isPlaybackActive)
     }
 
     func dismiss() {
@@ -174,25 +175,9 @@ private struct GFContinueBannerHost: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: GFContinueBannerLayout.alignment) {
-                if let note = model?.offered {
-                    GFContinueBannerView(note: note, now: shownAt, onPlay: play)
-                        .padding(GFContinueBannerLayout.padding)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    #if !os(tvOS)
-                        .onTapGesture(perform: play)
-                        .gesture(DragGesture(minimumDistance: 10).onEnded {
-                            if $0.translation.height < 0 { dismiss() }
-                        })
-                    #endif
-                        .task(id: note.updatedAt) {
-                            try? await Task.sleep(for: .seconds(10))
-                            if model?.offered == note { dismiss() }
-                        }
-                }
-            }
+            .overlay(alignment: GFContinueBannerLayout.alignment) { banner }
         #if os(tvOS)
-            .onPlayPauseCommand(perform: model?.offered == nil ? nil : play)
+            .onPlayPauseCommand(perform: playPauseAction)
         #endif
         #if !os(macOS)
             // above MainTabView, so the player gets the child lock the way the macOS player window does
@@ -200,13 +185,34 @@ private struct GFContinueBannerHost: ViewModifier {
                 ContentRestrictionProvider { FullScreenPlayerView(media: media) }
             }
         #endif
-            .task(id: scenePhase) {
-                guard scenePhase == .active, profileManager?.activeProfileIsChild != true else { return }
-                if model == nil { model = GFContinueBannerModel(store: GFLastPlayed.store, context: context) }
-                shownAt = Date()
-                await model?.refresh(now: shownAt)
-            }
+            .task(id: scenePhase) { await refresh() }
             .animation(.smooth, value: model?.offered)
+    }
+
+    @ViewBuilder private var banner: some View {
+        if let note = model?.offered {
+            GFContinueBannerView(note: note, now: shownAt, onPlay: play)
+                .padding(GFContinueBannerLayout.padding)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .gfBannerGestures(onTap: play, onSwipeUp: dismiss)
+                .task(id: note.updatedAt) {
+                    try? await Task.sleep(for: .seconds(10))
+                    if model?.offered == note { dismiss() }
+                }
+        }
+    }
+
+    /// Apple TV: Play/Pause plays the banner's item while it shows; with no banner the press goes on as usual.
+    private var playPauseAction: (() -> Void)? {
+        guard model?.offered != nil else { return nil }
+        return { play() }
+    }
+
+    private func refresh() async {
+        guard scenePhase == .active, profileManager?.activeProfileIsChild != true else { return }
+        if model == nil { model = GFContinueBannerModel(store: GFLastPlayed.store, context: context) }
+        shownAt = Date()
+        await model?.refresh(now: shownAt)
     }
 
     private func play() {
@@ -220,6 +226,18 @@ private struct GFContinueBannerHost: ViewModifier {
 
     private func dismiss() {
         model?.dismiss()
+    }
+}
+
+private extension View {
+    /// iPhone and iPad: tap to play, swipe up to dismiss (the Apple TV uses Play/Pause).
+    @ViewBuilder func gfBannerGestures(onTap: @escaping () -> Void, onSwipeUp: @escaping () -> Void) -> some View {
+        #if os(tvOS)
+            self
+        #else
+            onTapGesture(perform: onTap)
+                .gesture(DragGesture(minimumDistance: 10).onEnded { if $0.translation.height < 0 { onSwipeUp() } })
+        #endif
     }
 }
 
