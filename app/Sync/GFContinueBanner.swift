@@ -124,8 +124,9 @@ struct GFContinueBannerView: View {
             }
             Spacer(minLength: 8)
             #if os(tvOS)
-                Image(systemName: "playpause.fill").font(.title3)
-                    .frame(width: 56, height: 56).glassEffectCompat(.regular, in: Circle())
+                // a fixed size: the TV's title3 drew the wide play-pause glyph past its circle
+                Image(systemName: "playpause.fill").font(.system(size: 24, weight: .semibold))
+                    .frame(width: 64, height: 64).glassEffectCompat(.regular, in: Circle())
             #else
                 Button(action: onPlay) {
                     Image(systemName: "play.fill").font(.title3).frame(width: 44, height: 44)
