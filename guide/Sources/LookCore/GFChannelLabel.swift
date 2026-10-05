@@ -29,13 +29,36 @@ nonisolated struct GFChannelLabel: Equatable, Sendable {
         return parseEvent(raw, kind: kind, now: now, serverTimeZone: serverTimeZone) ?? unchanged(raw)
     }
 
-    /// A narrow column's last resort, once no text size fits every word on a line (the iPhone guide): one word per
-    /// line, so a word too wide shrinks instead of breaking (Georgs on build 16: "BLOOMBER / G"). More words than
-    /// lines stay as written.
+    /// A narrow column's last resort, once no text size fits the title on its lines (the iPhone guide): one word per
+    /// line, so a word too wide shrinks instead of breaking (Georgs on build 16: "BLOOMBER / G"); more words than lines
+    /// are split where the lines come out most even, to shrink together (before build 23: "Sky / Sports…").
     static func lastResortLines(_ title: String, lineLimit: Int) -> (text: String, lineLimit: Int) {
         let words = title.split(separator: " ").map(String.init)
-        guard !words.isEmpty, words.count <= lineLimit else { return (title, lineLimit) }
-        return (words.joined(separator: "\n"), words.count)
+        guard !words.isEmpty, lineLimit > 0 else { return (title, lineLimit) }
+        guard words.count > lineLimit else { return (words.joined(separator: "\n"), words.count) }
+        let longest = { (lines: [String]) in lines.map(\.count).max() ?? 0 }
+        let even = splits(words[...], into: lineLimit).min { longest($0) < longest($1) } ?? [title]
+        return (even.joined(separator: "\n"), lineLimit)
+    }
+
+    /// The ways a narrow column tries to set a title, in order: on 1 to `lineLimit` lines, fewer lines first, then the
+    /// longest first line (where natural wrapping fits, it comes first). At most 24.
+    static func lineSplits(_ title: String, lineLimit: Int) -> [[String]] {
+        let words = title.split(separator: " ").map(String.init)
+        guard !words.isEmpty, lineLimit > 0 else { return [[title.trimmingCharacters(in: .whitespaces)]] }
+        let all = (1 ... min(lineLimit, words.count)).flatMap { splits(words[...], into: $0) }
+        return Array(all.prefix(24))
+    }
+
+    /// `words` in order on exactly `lines` lines, the longest first line first.
+    private static func splits(_ words: ArraySlice<String>, into lines: Int) -> [[String]] {
+        guard lines > 1 else { return [[words.joined(separator: " ")]] }
+        var result: [[String]] = []
+        for count in stride(from: words.count - lines + 1, through: 1, by: -1) {
+            let first = words.prefix(count).joined(separator: " ")
+            result += splits(words.dropFirst(count), into: lines - 1).map { [first] + $0 }
+        }
+        return result
     }
 
     /// "BBC One FHD" → "BBC One" + FHD. Nothing else is touched (a provider prefix like "AR| " stays).

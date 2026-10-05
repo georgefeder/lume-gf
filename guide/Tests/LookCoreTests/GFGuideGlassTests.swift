@@ -106,7 +106,7 @@ struct GFGuideGlassTests {
         let corner = GFGuideGlass.cornerIntrusion(radius: GFGuideGlass.sidebarCornerRadius(tv: true),
                                                   inset: GFGuideGlass.tvHighlightLeading - insets.leading)
         #expect(firstTileTop > corner)
-        #expect(GFGuideGlass.sidebarInsets(tv: false) == GFGuideGlass.Insets(leading: 16, trailing: 6, top: 4))
+        #expect(GFGuideGlass.sidebarInsets(tv: false) == GFGuideGlass.Insets(leading: 16, trailing: 6, top: -4))
     }
 
     @Test func `a rounded corner reaches down less the further in you go`() {
@@ -115,9 +115,19 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.cornerIntrusion(radius: 36, inset: 40) == 0)
     }
 
-    @Test func `Lume's panel corners: 36 on Apple TV, 16 on iPhone`() {
+    @Test func `panel corners: Lume's 36 on Apple TV; on iPhone parallel to the channel boxes'`() {
         #expect(GFGuideGlass.sidebarCornerRadius(tv: true) == 36)
-        #expect(GFGuideGlass.sidebarCornerRadius(tv: false) == 16)
+        #expect(GFGuideGlass.sidebarCornerRadius(tv: false) == GFGuideGlass.phoneTileRadius + GFGuideGlass.phoneBoxGap)
+    }
+
+    @Test func `the iPhone's panel leaves the same gap above the first channel as beside every channel`() {
+        // Georgs on build 22: the first channel sat on the panel's top edge
+        let firstTileTop = GFGuideGlass.gridTopRoom(tv: false, rowSpacing: 4) + 4 / 2
+        let gapAbove = firstTileTop - GFGuideGlass.panelTop(tv: false, rowSpacing: 4)
+        let box = GFGuideGlass.channelBoxInset(tv: false)!, panel = GFGuideGlass.sidebarInsets(tv: false)
+        #expect(gapAbove == GFGuideGlass.phoneBoxGap)
+        #expect(box.leading - panel.leading == GFGuideGlass.phoneBoxGap)
+        #expect(box.trailing - panel.trailing == GFGuideGlass.phoneBoxGap)
     }
 
     @Test func `the Apple TV focus highlight fits inside the sidebar`() {
@@ -147,7 +157,7 @@ struct GFGuideGlassTests {
 
     @Test func `the panel's top moves down with the first row`() {
         #expect(GFGuideGlass.panelTop(tv: true, rowSpacing: 14) == -2) // still reaching above the first channel
-        #expect(GFGuideGlass.panelTop(tv: false, rowSpacing: 4) == 26)
+        #expect(GFGuideGlass.panelTop(tv: false, rowSpacing: 4) == 18)
         let firstTileTop = GFGuideGlass.gridTopRoom(tv: true, rowSpacing: 14) + 7
         let corner = GFGuideGlass.cornerIntrusion(radius: GFGuideGlass.sidebarCornerRadius(tv: true),
                                                   inset: GFGuideGlass.tvHighlightLeading)
@@ -157,7 +167,7 @@ struct GFGuideGlassTests {
     @Test func `programmes fade out under the panel, gone by its middle`() {
         // Georgs on build 9: tiles showed on the panel's left side (the Apple TV's glass bends what is under its edge)
         #expect(GFGuideGlass.underPanelFade(columnWidth: 300, tv: true) == GFGuideGlass.UnderPanel(gone: 142, clear: 284))
-        #expect(GFGuideGlass.underPanelFade(columnWidth: 146, tv: false) == GFGuideGlass.UnderPanel(gone: 78, clear: 140))
+        #expect(GFGuideGlass.underPanelFade(columnWidth: 154, tv: false) == GFGuideGlass.UnderPanel(gone: 82, clear: 148))
         #expect(GFGuideGlass.underPanelFade(columnWidth: 4, tv: false) == GFGuideGlass.UnderPanel(gone: 16, clear: 16))
     }
 
@@ -193,7 +203,7 @@ struct GFGuideGlassTests {
 
     @Test func `each iPhone channel box is as tall as its programme tiles and sits just inside the panel`() {
         let box = GFGuideGlass.channelBoxInset(tv: false)!, panel = GFGuideGlass.sidebarInsets(tv: false)
-        #expect(box.leading == panel.leading + 2 && box.trailing == panel.trailing + 2)
+        #expect(box.leading == panel.leading + 6 && box.trailing == panel.trailing + 6)
         #expect(GFGuideGlass.tileHeight(rowHeight: 68, rowSpacing: 4) == 64) // the box's height on iPhone
         #expect(GFGuideGlass.channelBoxInset(tv: true) == nil)
         let content = GFGuideGlass.channelContentPadding(tv: false)
@@ -203,7 +213,7 @@ struct GFGuideGlassTests {
     @Test func `the iPhone's glass column starts on the toolbar's edge and keeps the panel and names their width`() {
         let panel = GFGuideGlass.sidebarInsets(tv: false), content = GFGuideGlass.channelContentPadding(tv: false)
         #expect(panel.leading == 16) // the toolbar's leading margin
-        #expect(GFGuideGlass.phoneColumnWidth - panel.leading - panel.trailing == 124) // the panel as wide as before
+        #expect(GFGuideGlass.phoneColumnWidth - panel.leading - panel.trailing == 132)
         let lumeNameRoom: CGFloat = 136 - 24 // Lume's column less its 12-point margins
         #expect(GFGuideGlass.phoneColumnWidth - content.leading - content.trailing == lumeNameRoom) // the names' room
         #expect(GFGuideGlass.headerTopGap(tv: false) == 10 && GFGuideGlass.headerTopGap(tv: true) == 0)
@@ -241,5 +251,29 @@ struct GFGuideGlassTests {
     @Test func `the guide as drawn keeps the iPhone's top room (the tests run on the Mac, not the Apple TV)`() {
         #expect(GFGuideGlass.topRoom(rowSpacing: 4) == GFGuideGlass.gridTopRoom(tv: false, rowSpacing: 4))
         #expect(GFGuideGlass.slidesUnderSidebar)
+    }
+
+    @Test func `short programmes: a title when one fits, else a plain tile, a sliver for minutes`() {
+        #expect(GFGuideGlass.tileContent(width: 90) == .full) // half an hour on iPhone
+        #expect(GFGuideGlass.tileContent(width: 45) == .blank) // a quarter of an hour: only "…" would fit
+        #expect(GFGuideGlass.tileContent(width: 9) == .sliver) // three minutes
+        #expect(GFGuideGlass.tileContent(width: 50) == .full)
+    }
+
+    @Test func `a title parked at the column fades as its tile slides under it`() {
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 120) == 1)
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 56) == 1)
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 44) == 0.5)
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 32) == 0)
+        #expect(GFGuideGlass.parkedTitleOpacity(room: 13) == 0) // the "E" beside BLOOMBERG in build 22's screenshot
+    }
+
+    @Test func `a time label under the Now pill fades out, its neighbours stay`() {
+        let width = GFGuideGlass.rulerLabelWidth(text: "23:00", isHour: true)
+        #expect(GFGuideGlass.rulerLabelHidden(labelMinX: 7, labelWidth: width, nowX: 15)) // 23:05, label at 23:00
+        #expect(!GFGuideGlass.rulerLabelHidden(labelMinX: 97, labelWidth: width, nowX: 15)) // 23:30
+        #expect(!GFGuideGlass.rulerLabelHidden(labelMinX: -83, labelWidth: width, nowX: 15)) // 22:30
+        #expect(GFGuideGlass.rulerLabelWidth(text: "11:00 PM", isHour: true)
+            > GFGuideGlass.rulerLabelWidth(text: "23:00", isHour: true))
     }
 }

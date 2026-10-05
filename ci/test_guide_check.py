@@ -144,6 +144,51 @@ class FocusPlanTests(unittest.TestCase):
         self.assertEqual((inside[1], inside[3]), ((300 + 10) * 2, (300 + 116 - 10) * 2))
 
 
+class BannerTests(unittest.TestCase):
+    PHONE = "GFDemo banner: x=10.0 y=63.0 w=373.0 h=62.0 screenW=393.0 screenH=852.0 tv=0\n"
+    TV = "GFDemo banner: x=1140.0 y=100.0 w=640.0 h=88.0 screenW=1920.0 screenH=1080.0 tv=1\n"
+
+    def fields(self, line):
+        d = tempfile.mkdtemp()
+        path = os.path.join(d, "shot.err")
+        with open(path, "w") as f:
+            f.write("other line\n" + line)
+        return gc.last_fields(path, gc.BANNER)
+
+    def test_the_iphones_banner_at_the_top_and_centred_passes(self):
+        ok, _ = gc.banner_ok(self.fields(self.PHONE))
+        self.assertTrue(ok)
+
+    def test_the_apple_tvs_banner_top_right_passes(self):
+        ok, _ = gc.banner_ok(self.fields(self.TV))
+        self.assertTrue(ok)
+
+    def test_no_banner_logged_fails(self):
+        ok, detail = gc.banner_ok(None)
+        self.assertFalse(ok)
+        self.assertIn("no banner", detail)
+
+    def test_an_iphone_banner_off_centre_fails(self):
+        ok, detail = gc.banner_ok(self.fields(self.PHONE.replace("x=10.0", "x=0.0")))
+        self.assertFalse(ok)
+        self.assertIn("not centred", detail)
+
+    def test_a_banner_low_on_the_screen_fails(self):
+        ok, detail = gc.banner_ok(self.fields(self.PHONE.replace("y=63.0", "y=700.0")))
+        self.assertFalse(ok)
+        self.assertIn("not at the top", detail)
+
+    def test_a_banner_past_the_edge_fails(self):
+        ok, detail = gc.banner_ok(self.fields(self.TV.replace("x=1140.0", "x=1400.0")))
+        self.assertFalse(ok)
+        self.assertIn("off the screen", detail)
+
+    def test_an_apple_tv_banner_on_the_left_fails(self):
+        ok, detail = gc.banner_ok(self.fields(self.TV.replace("x=1140.0", "x=80.0")))
+        self.assertFalse(ok)
+        self.assertIn("not on the right", detail)
+
+
 class RowTests(unittest.TestCase):
     LOG = ("GFDemo rail card: 0 310.0 260.0 Recently Added\n"
            "GFDemo rail card: 1 290.0 280.0 Recently Added\n"     # a two-line title, centred: 20 points higher
@@ -232,6 +277,8 @@ class MainTests(unittest.TestCase):
         self.assertFalse([c for c in checks if "tv-guide" in c])
         self.assertIn("under the panel (iphone-guide-under-dark)", checks)
         self.assertIn("first row (iphone-guide-dark)", checks)
+        self.assertIn("continue banner (iphone-banner-dark)", checks)
+        self.assertIn("continue banner (tv-banner)", checks)
 
     def test_missing_pictures_and_logs_are_failures_not_passes(self):
         d = tempfile.mkdtemp()

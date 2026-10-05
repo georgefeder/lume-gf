@@ -123,31 +123,72 @@ nonisolated enum GFGuideGlass {
         // Apple TV: the panel reaches 16 points above the first channel, which then sits in the glass like the
         // programme tiles beside it (not on its edge)
         // iPhone: the panel's leading edge on the toolbar's (16 points in), so the Now button and the glass column
-        // line up with the buttons above them (Georgs on build 21)
-        tv ? Insets(leading: 0, trailing: 16, top: -16) : Insets(leading: 16, trailing: 6, top: 4)
+        // line up with the buttons above them (Georgs on build 21); its top `phoneBoxGap` above the first channel's
+        // box, which starts half a row gap (2) below the row (Georgs on build 22: the first channel sat on the edge)
+        tv ? Insets(leading: 0, trailing: 16, top: -16) : Insets(leading: 16, trailing: 6, top: 2 - phoneBoxGap)
     }
 
-    /// Lume's own panel sizes: 36 for its big Apple TV panels, 16 for its glass cards.
+    /// Lume's 36 for its big Apple TV panels; on iPhone the channel boxes' 9 plus the gap around them, so the panel's
+    /// corners run parallel to the boxes' (Georgs on build 22: "geometrical").
     static func sidebarCornerRadius(tv: Bool) -> CGFloat {
-        tv ? 36 : 16
+        tv ? 36 : phoneTileRadius + phoneBoxGap
     }
+
+    /// iPhone: the gap between the glass panel and the channel boxes, the same on every side.
+    static let phoneBoxGap: CGFloat = 6
+    /// Lume's corner radius of the iPhone guide's tiles (EPGMetrics.blockCornerRadius).
+    static let phoneTileRadius: CGFloat = 9
 
     /// iPhone and iPad: each channel sits in a box as tall as the programme tiles beside it, 2 points inside the panel
     /// (Georgs on build 17). nil on the Apple TV, whose focused channel has its own highlight.
     static func channelBoxInset(tv: Bool) -> (leading: CGFloat, trailing: CGFloat)? {
         guard !tv else { return nil }
         let insets = sidebarInsets(tv: tv)
-        return (insets.leading + 2, insets.trailing + 2)
+        return (insets.leading + phoneBoxGap, insets.trailing + phoneBoxGap)
     }
 
-    /// The iPhone's channel column: as wide as Lume's 136 plus the 10 points the panel moved in by, so names keep their
-    /// room.
-    static let phoneColumnWidth: CGFloat = 146
+    /// The iPhone's channel column: Lume's 136 plus the room the panel's edge and the gaps around the boxes take, so
+    /// names keep their room.
+    static let phoneColumnWidth: CGFloat = 154
 
     /// A channel's logo and name inside its box: 4 points from the box on each side.
     static func channelContentPadding(tv: Bool) -> (leading: CGFloat, trailing: CGFloat) {
         guard let box = channelBoxInset(tv: tv) else { return (12, 12) }
         return (box.leading + 4, box.trailing + 4)
+    }
+
+    /// What an iPhone programme tile shows at `width` points (Georgs on build 22: short programmes showed "…" and
+    /// slivers): a title when one fits, a plain tile when only "…" would, a quiet sliver for a programme of minutes.
+    enum TileContent: Equatable { case full, blank, sliver }
+
+    static func tileContent(width: CGFloat) -> TileContent {
+        if width < 14 { return .sliver }
+        if width < 50 { return .blank }
+        return .full
+    }
+
+    /// A programme running on under the iPhone's channel column keeps its title at the column's edge; as the tile's
+    /// `room` right of that edge shrinks, the title fades: whole from 56 points, gone at 32 (Georgs on build 22: stubs
+    /// like "Arse" and "E" beside the column).
+    static func parkedTitleOpacity(room: CGFloat) -> Double {
+        Double(min(1, max(0, (room - 32) / 24)))
+    }
+
+    /// The last points of an iPhone programme tile, where text running into its end fades out instead of being cut
+    /// mid-letter ("Arsena").
+    static let tileTextFade: CGFloat = 12
+
+    /// iPhone ruler: whether the time label starting at `labelMinX` (`labelWidth` wide) sits where the red Now pill
+    /// is (centred on `nowX`); it fades out instead of the pill covering it (Georgs on build 22).
+    static func rulerLabelHidden(labelMinX: CGFloat, labelWidth: CGFloat, nowX: CGFloat,
+                                 pillHalfWidth: CGFloat = 24) -> Bool {
+        let margin: CGFloat = 4
+        return labelMinX < nowX + pillHalfWidth + margin && labelMinX + labelWidth > nowX - pillHalfWidth - margin
+    }
+
+    /// A ruler label's width, estimated from its text (the label is laid out in a fixed slot, so it is not measured).
+    static func rulerLabelWidth(text: String, isHour: Bool) -> CGFloat {
+        CGFloat(text.count) * (isHour ? 8.5 : 6.5)
     }
 
     /// iPhone: room between the toolbar and the Now button (the category strip that sat between them is gone).

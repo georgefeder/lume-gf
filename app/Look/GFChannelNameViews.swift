@@ -88,8 +88,8 @@ struct GFChannelName: View {
     var darkensOnFocus = false
     /// Shown after the badges (placement `.below`).
     var badgeSymbol: GFBadgeSymbol?
-    /// A narrow column (the iPhone guide): the title steps its text size down, at most twice, until every word fits
-    /// on a line; where none does, each word gets a line of its own and shrinks rather than break or end in "…".
+    /// A narrow column (the iPhone guide): the title steps its text size down, at most twice, until it fits its lines
+    /// with no word broken; where none does, it shrinks on the most even lines rather than break or end in "…".
     var fitsWords = false
     @AppStorage(GFChannelNames.settingKey) private var enabled = true
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -144,12 +144,16 @@ struct GFChannelName: View {
     private func title(_ text: String) -> some View {
         if fitsWords {
             let sizes = Self.fittingTypeSizes(from: typeSize)
+            let splits = GFChannelLabel.lineSplits(text, lineLimit: titleLineLimit)
+            // the largest text size first; at each, the fewest lines, then the longest first line
+            let tries = sizes.flatMap { size in splits.map { (size: size, lines: $0) } }
             let lastResort = GFChannelLabel.lastResortLines(text, lineLimit: titleLineLimit)
             ViewThatFits(in: .horizontal) {
-                wholeWords(text).dynamicTypeSize(sizes[0])
-                wholeWords(text).dynamicTypeSize(sizes[min(1, sizes.count - 1)])
-                wholeWords(text).dynamicTypeSize(sizes[sizes.count - 1])
-                // no size fits every word: a word too wide shrinks on its own line ("BLOOMBER / G" on build 16)
+                ForEach(tries.indices, id: \.self) { index in
+                    lines(tries[index].lines).dynamicTypeSize(tries[index].size)
+                }
+                // nothing fits: a word too wide shrinks on its own line ("BLOOMBER / G" on build 16), more words than
+                // lines shrink on the most even split ("Sky / Sports…" before build 23)
                 Text(verbatim: lastResort.text).lineLimit(lastResort.lineLimit)
                     .minimumScaleFactor(Self.lastResortShrink)
                     .dynamicTypeSize(sizes[sizes.count - 1])
@@ -159,18 +163,19 @@ struct GFChannelName: View {
         }
     }
 
-    /// The title, measured by its widest word: `ViewThatFits` takes it only where every word fits on a line.
-    private func wholeWords(_ text: String) -> some View {
+    /// The title on the given lines, measured line by line: `ViewThatFits` takes it only where every line fits (the
+    /// widest word alone let four words onto two lines and end in "…").
+    private func lines(_ lines: [String]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .leading) {
-                ForEach(Array(text.split(separator: " ").enumerated()), id: \.offset) { word in
-                    Text(verbatim: String(word.element)).fixedSize()
+                ForEach(lines.indices, id: \.self) { index in
+                    Text(verbatim: lines[index]).fixedSize()
                 }
             }
             .frame(height: 0)
             .hidden()
-            Text(verbatim: text)
-                .lineLimit(titleLineLimit)
+            Text(verbatim: lines.joined(separator: "\n"))
+                .lineLimit(lines.count)
                 .minimumScaleFactor(Self.shrinkLimit)
                 .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
