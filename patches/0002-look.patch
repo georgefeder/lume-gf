@@ -93,33 +93,27 @@ index 5ca6724..105215f 100644
              subtitle: programTitle,
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .vod,
-diff --git a/Lume/Views/Components/CategoryContentGrid.swift b/Lume/Views/Components/CategoryContentGrid.swift
-index 739207c..a09a830 100644
---- a/Lume/Views/Components/CategoryContentGrid.swift
-+++ b/Lume/Views/Components/CategoryContentGrid.swift
-@@ -235,12 +235,17 @@ struct CategoryPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable,
-                     .padding(.horizontal)
-             } else {
-                 ScrollView(.horizontal, showsIndicators: false) {
--                    LazyHStack(spacing: PosterCardMetrics.railSpacing) {
-+                    // Lume GF: posters line up at the top, a title running onto two lines hangs below (Georgs, 2 Oct)
-+
-+                    LazyHStack(alignment: .top, spacing: PosterCardMetrics.railSpacing) {
-                         ForEach(items) { item in
-                             NavigationLink(value: item) {
-                                 card(item)
-                                     .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
-                             }
-+                            #if GF_DEMO
-+                            .gfDemoRailCard(rail: category.name, index: items.firstIndex(of: item) ?? 0)
-+                            #endif
-                             .posterCardButtonStyle()
-                             .mediaFavoriteMenu(
-                                 isFavorite: { item.isFavorite },
-diff --git a/Lume/Views/Components/GlassEffectCompat.swift b/Lume/Views/Components/GlassEffectCompat.swift
+diff --git a/Lume/Views/Components/Cards/LiveStreamCardView.swift b/Lume/Views/Components/Cards/LiveStreamCardView.swift
+index fa8f4f9..65ef1db 100644
+--- a/Lume/Views/Components/Cards/LiveStreamCardView.swift
++++ b/Lume/Views/Components/Cards/LiveStreamCardView.swift
+@@ -51,9 +51,10 @@ struct LiveStreamCardView: View {
+             .clipShape(RoundedRectangle(cornerRadius: 8))
+ 
+             VStack(alignment: .leading, spacing: 4) {
+-                Text(stream.name)
++                // Lume GF: clean name with badges (Settings → TV Guide → Clean Channel Names)
++                GFChannelName(raw: stream.name, badgeSize: 11, placement: .trailing, showsSecondLine: true,
++                              secondLineFont: .subheadline)
+                     .font(.headline)
+-                    .lineLimit(1)
+ 
+                 if let current = currentEPG {
+                     Text(current.title)
+diff --git a/Lume/Views/Components/Compat/GlassEffectCompat.swift b/Lume/Views/Components/Compat/GlassEffectCompat.swift
 index dd50f51..92cb0c8 100644
---- a/Lume/Views/Components/GlassEffectCompat.swift
-+++ b/Lume/Views/Components/GlassEffectCompat.swift
+--- a/Lume/Views/Components/Compat/GlassEffectCompat.swift
++++ b/Lume/Views/Components/Compat/GlassEffectCompat.swift
 @@ -19,6 +19,8 @@ enum GlassEffectStyle {
      case regularInteractive
      /// Interactive glass tinted toward `color` (e.g. the tvOS focus state).
@@ -146,10 +140,33 @@ index dd50f51..92cb0c8 100644
          }
      }
  }
-diff --git a/Lume/Views/Components/LibraryCollectionRows.swift b/Lume/Views/Components/LibraryCollectionRows.swift
+diff --git a/Lume/Views/Components/Library/CategoryContentGrid.swift b/Lume/Views/Components/Library/CategoryContentGrid.swift
+index 739207c..a09a830 100644
+--- a/Lume/Views/Components/Library/CategoryContentGrid.swift
++++ b/Lume/Views/Components/Library/CategoryContentGrid.swift
+@@ -235,12 +235,17 @@ struct CategoryPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable,
+                     .padding(.horizontal)
+             } else {
+                 ScrollView(.horizontal, showsIndicators: false) {
+-                    LazyHStack(spacing: PosterCardMetrics.railSpacing) {
++                    // Lume GF: posters line up at the top, a title running onto two lines hangs below (Georgs, 2 Oct)
++
++                    LazyHStack(alignment: .top, spacing: PosterCardMetrics.railSpacing) {
+                         ForEach(items) { item in
+                             NavigationLink(value: item) {
+                                 card(item)
+                                     .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
+                             }
++                            #if GF_DEMO
++                            .gfDemoRailCard(rail: category.name, index: items.firstIndex(of: item) ?? 0)
++                            #endif
+                             .posterCardButtonStyle()
+                             .mediaFavoriteMenu(
+                                 isFavorite: { item.isFavorite },
+diff --git a/Lume/Views/Components/Library/LibraryCollectionRows.swift b/Lume/Views/Components/Library/LibraryCollectionRows.swift
 index 7cbe4c1..93539b1 100644
---- a/Lume/Views/Components/LibraryCollectionRows.swift
-+++ b/Lume/Views/Components/LibraryCollectionRows.swift
+--- a/Lume/Views/Components/Library/LibraryCollectionRows.swift
++++ b/Lume/Views/Components/Library/LibraryCollectionRows.swift
 @@ -111,12 +111,17 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
              .padding(.horizontal)
  
@@ -225,23 +242,20 @@ index 7cbe4c1..93539b1 100644
                  collection: LibraryCollection(kind: kind, type: .series),
                  items: items,
                  hasMore: matches.count > items.count,
-diff --git a/Lume/Views/Components/LiveStreamCardView.swift b/Lume/Views/Components/LiveStreamCardView.swift
-index fa8f4f9..65ef1db 100644
---- a/Lume/Views/Components/LiveStreamCardView.swift
-+++ b/Lume/Views/Components/LiveStreamCardView.swift
-@@ -51,9 +51,10 @@ struct LiveStreamCardView: View {
-             .clipShape(RoundedRectangle(cornerRadius: 8))
+diff --git a/Lume/Views/Components/Status/StatusBadges.swift b/Lume/Views/Components/Status/StatusBadges.swift
+index 5772025..8e6ddb1 100644
+--- a/Lume/Views/Components/Status/StatusBadges.swift
++++ b/Lume/Views/Components/Status/StatusBadges.swift
+@@ -43,7 +43,8 @@ struct EndedBadge: View {
  
-             VStack(alignment: .leading, spacing: 4) {
--                Text(stream.name)
-+                // Lume GF: clean name with badges (Settings → TV Guide → Clean Channel Names)
-+                GFChannelName(raw: stream.name, badgeSize: 11, placement: .trailing, showsSecondLine: true,
-+                              secondLineFont: .subheadline)
-                     .font(.headline)
--                    .lineLimit(1)
- 
-                 if let current = currentEPG {
-                     Text(current.title)
+ /// The capsule both badges share: tinted text over a faint wash of the same
+ /// tint, with the glyph, padding and kerning all scaled from `fontSize`.
+-private struct StatusCapsule<Content: View>: View {
++// Lume GF: internal (was private) so the channel-name badges use exactly this recipe.
++struct StatusCapsule<Content: View>: View {
+     let fontSize: CGFloat
+     let tint: Color
+     @ViewBuilder var content: () -> Content
 diff --git a/Lume/Views/Home/HomeMediaItem.swift b/Lume/Views/Home/HomeMediaItem.swift
 index 98ede44..9a5e17a 100644
 --- a/Lume/Views/Home/HomeMediaItem.swift
@@ -1120,20 +1134,6 @@ index 64f9038..788cc77 100644
                  .font(.subheadline.weight(.medium))
                  .lineLimit(1)
              if let badge = sportsQualityBadge(from: channel.stream.name) {
-diff --git a/Lume/Views/Sports/SportsBadges.swift b/Lume/Views/Sports/SportsBadges.swift
-index 2f235e8..e844f1e 100644
---- a/Lume/Views/Sports/SportsBadges.swift
-+++ b/Lume/Views/Sports/SportsBadges.swift
-@@ -44,7 +44,8 @@ struct EndedBadge: View {
- 
- /// The capsule both badges share: tinted text over a faint wash of the same
- /// tint, with the glyph, padding and kerning all scaled from `fontSize`.
--private struct StatusCapsule<Content: View>: View {
-+// Lume GF: internal (was private) so the channel-name badges use exactly this recipe.
-+struct StatusCapsule<Content: View>: View {
-     let fontSize: CGFloat
-     let tint: Color
-     @ViewBuilder var content: () -> Content
 diff --git a/Lume/Views/Sports/TVGameDetailSections.swift b/Lume/Views/Sports/TVGameDetailSections.swift
 index 218c4ed..10e00d3 100644
 --- a/Lume/Views/Sports/TVGameDetailSections.swift

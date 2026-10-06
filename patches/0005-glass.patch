@@ -1,7 +1,7 @@
-diff --git a/Lume/Views/Components/PlaylistSwitchProgress.swift b/Lume/Views/Components/PlaylistSwitchProgress.swift
+diff --git a/Lume/Views/Components/Playlists/PlaylistSwitchProgress.swift b/Lume/Views/Components/Playlists/PlaylistSwitchProgress.swift
 index fbf636c..02ca5ad 100644
---- a/Lume/Views/Components/PlaylistSwitchProgress.swift
-+++ b/Lume/Views/Components/PlaylistSwitchProgress.swift
+--- a/Lume/Views/Components/Playlists/PlaylistSwitchProgress.swift
++++ b/Lume/Views/Components/Playlists/PlaylistSwitchProgress.swift
 @@ -122,7 +122,7 @@ private struct SwitchProgressOverlay: View {
                      .multilineTextAlignment(.center)
              }

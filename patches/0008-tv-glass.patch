@@ -1,7 +1,7 @@
-diff --git a/Lume/Views/Components/GlassEffectCompat.swift b/Lume/Views/Components/GlassEffectCompat.swift
+diff --git a/Lume/Views/Components/Compat/GlassEffectCompat.swift b/Lume/Views/Components/Compat/GlassEffectCompat.swift
 index 92cb0c8..5e97af3 100644
---- a/Lume/Views/Components/GlassEffectCompat.swift
-+++ b/Lume/Views/Components/GlassEffectCompat.swift
+--- a/Lume/Views/Components/Compat/GlassEffectCompat.swift
++++ b/Lume/Views/Components/Compat/GlassEffectCompat.swift
 @@ -21,6 +21,23 @@ enum GlassEffectStyle {
      case tintedInteractive(Color)
      /// Lume GF: glass tinted toward `color` that is only a label (the guide's Now pill).
