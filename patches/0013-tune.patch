@@ -1,7 +1,7 @@
-diff --git a/Lume/Views/Components/TitleLogo.swift b/Lume/Views/Components/TitleLogo.swift
+diff --git a/Lume/Views/Components/Images/TitleLogo.swift b/Lume/Views/Components/Images/TitleLogo.swift
 index e47fa33..59d9c63 100644
---- a/Lume/Views/Components/TitleLogo.swift
-+++ b/Lume/Views/Components/TitleLogo.swift
+--- a/Lume/Views/Components/Images/TitleLogo.swift
++++ b/Lume/Views/Components/Images/TitleLogo.swift
 @@ -22,7 +22,9 @@ struct TitleLogo<Fallback: View>: View {
  
      var body: some View {
