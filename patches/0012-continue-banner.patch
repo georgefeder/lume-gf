@@ -1,8 +1,8 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 2d8c39f..11c06ac 100644
+index 06d98af..a166c61 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -227,6 +227,7 @@ struct LumeApp: App {
+@@ -230,6 +230,7 @@ struct LumeApp: App {
          WindowGroup {
              // Lume GF: the screenshot build's demo (-D GF_DEMO only); every other build shows ContentView
              GFDemoSwitch { ContentView() }
@@ -11,7 +11,7 @@ index 2d8c39f..11c06ac 100644
                  .environment(PremiumManager.shared)
                  .environment(cloudSync)
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index 23d2281..50b637c 100644
+index 5473c54..5290ecd 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
 @@ -255,6 +255,8 @@ struct FullScreenPlayerView: View {
@@ -21,5 +21,5 @@ index 23d2281..50b637c 100644
 +        // Lume GF: tell the other devices what plays, for their continue banner (Part 4)
 +        .gfReportsLastPlayed(media: activeMedia, position: { clock.current }, duration: { clock.duration })
          .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }
+         .playerRecording(for: activeMedia)
          // Synchronous on purpose, and ahead of the `.task` below: the engine
-         // coordinators report `beginStartup` / `noteEngineFallback` from their

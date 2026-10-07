@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""Checks the guide screenshots for what Georgs saw on build 9, so it cannot come back unnoticed:
-  - iPhone: nothing but background in the strip left of the glass panel (bits of programmes showed there);
-  - iPhone: with the channel column hidden (-GFDemoNoPanel), no programmes under the panel's left half (a real
-    Apple TV's glass bent them into view along its left edge; the simulator's glass is too frosted to show it, so the
-    column goes and what is left under it is measured);
-  - iPhone: the first row starts below the top fade (it sat where the fade starts).
-Since Lume 2.3 the Apple TV's guide is Lume's own redesign (live preview above it), so none of these apply there.
-And for Georgs' notes of 2 Oct: posters in a row line up at the top (a title on two lines lifted its poster), and Home
+"""Checks the screenshots for what Georgs saw before, so it cannot come back unnoticed. (Since Lume 2.4 the guide is
+Lume's own on both devices, so the iPhone glass column's checks of build 9 are gone; their helpers stay below.)
+For Georgs' notes of 2 Oct: posters in a row line up at the top (a title on two lines lifted its poster), and Home
 shows Recently Watched and the recently added films and series (his Apple TV's Home showed only the sports row). Rows
 below the first screen are never drawn, so the recently added rows are checked on a second picture of Home with
 Recently Watched and Favorites switched off. The continue banner sits at the top of the screen, whole, centred on the
@@ -225,46 +220,6 @@ def run_checks(out, sample):
     """[(check, ok, detail)]. `sample(png, lines)` gives the brightness along each line."""
     logs = os.path.join(out, "logs")
     results = []
-
-    def geometry(shot):
-        g = last_fields(os.path.join(logs, shot + ".err"), GEOMETRY)
-        # no screen scale, no pixels: a check measured at (0, 0) would pass on anything
-        return g if g is not None and g.get("scale", 0) > 0 else None
-
-    def png(shot):
-        return os.path.join(out, shot + ".png")
-
-    shot = "iphone-guide-dark"
-    g = geometry(shot)
-    if g is None:
-        results.append(("beside the panel (%s)" % shot, False, "no guide geometry or screen scale logged"))
-    else:
-        lines = strip_lines(g)
-        results.append(("beside the panel (%s)" % shot,) + (strip_ok(sample(png(shot), lines)) if lines
-                                                             else (False, "no strip left of the panel")))
-
-    for shot in ("iphone-guide-under-dark",):
-        g = geometry(shot)
-        if g is None:
-            results.append(("under the panel (%s)" % shot, False, "no guide geometry or screen scale logged"))
-            continue
-        left, control = under_lines(g)
-        measured = sample(png(shot), left + control)
-        results.append(("under the panel (%s)" % shot,) + under_ok(measured[:len(left)], measured[len(left):]))
-
-    for shot in ("iphone-guide-dark",):
-        g = geometry(shot)
-        if g is None:
-            results.append(("first row (%s)" % shot, False, "no guide geometry or screen scale logged"))
-            continue
-        lines = first_row_lines(g)
-        edges = []
-        for (x0, y0, _, _), values in zip(lines, sample(png(shot), lines)):
-            i = first_edge(values) if values else None
-            edges.append(None if i is None else (y0 + i) / g["scale"] - g["guideY"])
-        results.append(("first row (%s)" % shot,)
-                       + first_row_ok(edges, g["fade"], expected=g["room"] + g["rowSpacing"] / 2))
-
     for shot in POSTER_SHOTS:
         results.append(("posters level (%s)" % shot,) + rows_level_ok(rail_cards(os.path.join(logs, shot + ".err"))))
     for shot, expected in HOME_SHOTS.items():

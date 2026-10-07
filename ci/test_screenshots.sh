@@ -56,24 +56,21 @@ grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMov
   && ok "moves the Apple TV focus" || no "tv moves"
 grep -qF "launch TZ=Europe/London" "$LOG" && ok "the app runs on UK time" || no "time zone"
 # unsigned builds crash on iCloud at launch; Lume keeps iCloud off under -ui-testing (as its own UI tests do)
-[ "$(grep -c "simctl launch " "$LOG")" -eq 25 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
+[ "$(grep -c "simctl launch " "$LOG")" -eq 22 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
   && ok "every launch keeps iCloud off" || no "a launch without -ui-testing"
 n=0
-for f in iphone-guide-dark iphone-list-dark iphone-guide-light iphone-list-light iphone-guide-bottom-dark \
-         iphone-guide-few-dark iphone-guide-under-dark iphone-home-dark iphone-home-added-dark iphone-movies-dark \
-         iphone-series-dark iphone-banner-dark iphone-guide-landscape-dark tv-guide-channel tv-guide-programme \
-         tv-guide-bottom tv-guide-under tv-guide-long tv-home tv-home-added tv-movies tv-banner tv-list; do
+for f in iphone-guide-dark iphone-list-dark iphone-guide-light iphone-list-light iphone-guide-few-dark \
+         iphone-home-dark iphone-home-added-dark iphone-movies-dark iphone-series-dark iphone-banner-dark \
+         iphone-guide-landscape-dark tv-guide-channel tv-guide-programme tv-guide-bottom tv-guide-long tv-home \
+         tv-home-added tv-movies tv-banner tv-list; do
   if [ -f "$T/out/$f.png" ]; then n=$((n + 1)); else no "missing $f.png"; fi
 done
-[ "$n" -eq 23 ] && ok "twenty-three screenshots" || no "screenshots ($n)"
+[ "$n" -eq 20 ] && ok "twenty screenshots" || no "screenshots ($n)"
 grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo banner$" "$LOG" \
   && grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo banner$" "$LOG" \
   && ok "the continue banner is photographed on the iPhone and the Apple TV" || no "no picture of the banner"
-# for guide-check.py: the guides without the channel column (what the programmes leave under the panel), and the
-# Apple TV focused on a six-hour programme after a gap (Georgs' photo of build 9)
-grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoNoPanel 1$" "$LOG" \
-  && grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoNoPanel 1$" "$LOG" \
-  && ok "the guides are photographed without the channel column" || no "no pictures without the column"
+# Lume 2.4's shared guide has no glass column of ours to look under: no pictures without the column
+grep -qE "GFDemoNoPanel" "$LOG" && no "a picture without the channel column" || ok "no pictures without the column"
 # Lume's Home, Movies and Series screens over made-up films and series (Georgs, 2 Oct: posters at different heights,
 # the Apple TV's Home showing only the sports row)
 grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo home$" "$LOG" \

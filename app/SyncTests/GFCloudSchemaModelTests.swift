@@ -8,7 +8,8 @@ struct GFCloudSchemaModelTests {
         // Review Focus 4: a Lume release that changes its synced models stops here, not in production
         let model = try #require(NSManagedObjectModel.makeManagedObjectModel(for: [
             SyncedPlaylist.self, UserContentState.self, UserProfile.self, SyncedEPGSource.self,
-            SyncedParentalPIN.self, SyncedCategoryRestriction.self, SyncedSportsFollow.self
+            SyncedParentalPIN.self, SyncedCategoryRestriction.self, SyncedSportsFollow.self,
+            SyncedRecordingServer.self
         ]))
         let real = model.entities.map { entity in
             GFCloudSchema.Entity(name: entity.name ?? "", attributes: entity.attributesByName.values.map { attribute in

@@ -1,5 +1,5 @@
 diff --git a/Lume/Info.plist b/Lume/Info.plist
-index 6591386..6ccbdcb 100644
+index 620dcaa..926477f 100644
 --- a/Lume/Info.plist
 +++ b/Lume/Info.plist
 @@ -2,6 +2,11 @@
@@ -14,7 +14,7 @@ index 6591386..6ccbdcb 100644
  	<key>CFBundleAllowMixedLocalizations</key>
  	<true/>
  	<key>CFBundleLocalizations</key>
-@@ -52,6 +57,8 @@
+@@ -56,6 +61,8 @@
  	<array>
  		<string>audio</string>
  		<string>remote-notification</string>
@@ -24,7 +24,7 @@ index 6591386..6ccbdcb 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 73a583f..cfa8945 100644
+index 8194b68..815d94e 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -32,11 +32,15 @@ struct LumeApp: App {
@@ -43,7 +43,7 @@ index 73a583f..cfa8945 100644
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -328,6 +332,8 @@ struct LumeApp: App {
+@@ -332,6 +336,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
@@ -52,8 +52,8 @@ index 73a583f..cfa8945 100644
                  }
                  .onChange(of: cloudSync.status.lastReconcile) {
                      // A reconcile may have pulled a PIN this device didn't have
-@@ -340,6 +346,7 @@ struct LumeApp: App {
-                     SportsFollowService.shared.reload()
+@@ -346,6 +352,7 @@ struct LumeApp: App {
+                     RecordingServerConfigService.shared.reload()
                  }
                  .onChange(of: scenePhase) { _, phase in
 +                    GuideScheduler.shared.scenePhaseChanged(to: phase)

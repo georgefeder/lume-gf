@@ -42,10 +42,11 @@ struct GFCloudSchemaTests {
         #expect(text.contains("        GRANT WRITE TO \"_creator\",\n        GRANT CREATE TO \"_icloud\",\n        GRANT READ TO \"_world\"\n    );\n"))
     }
 
-    @Test func `the full layout has Lume's seven types and the banner's record`() {
+    @Test func `the full layout has Lume's eight types and the banner's record`() {
         let text = GFCloudSchema.ckdb()
         for name in ["CD_SyncedPlaylist", "CD_UserContentState", "CD_UserProfile", "CD_SyncedEPGSource",
-                     "CD_SyncedParentalPIN", "CD_SyncedCategoryRestriction", "CD_SyncedSportsFollow"] {
+                     "CD_SyncedParentalPIN", "CD_SyncedCategoryRestriction", "CD_SyncedSportsFollow",
+                     "CD_SyncedRecordingServer"] {
             #expect(text.contains("    RECORD TYPE \(name) (\n"))
         }
         #expect(text.contains("    RECORD TYPE GFLastPlayed (\n"))
@@ -57,6 +58,7 @@ struct GFCloudSchemaTests {
         #expect(GFCloudSchema.ckdb() == GFCloudSchema.ckdb())
         #expect(GFCloudSchema.lumeEntities.map(\.name) == ["SyncedPlaylist", "UserContentState", "UserProfile",
                                                            "SyncedEPGSource", "SyncedParentalPIN",
-                                                           "SyncedCategoryRestriction", "SyncedSportsFollow"])
+                                                           "SyncedCategoryRestriction", "SyncedSportsFollow",
+                                                           "SyncedRecordingServer"])
     }
 }

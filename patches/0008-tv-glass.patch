@@ -43,84 +43,96 @@ index 92cb0c8..5e97af3 100644
          }
      }
  }
-diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift b/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
-index dddc9ca..f1049a2 100644
---- a/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
-+++ b/Lume/Views/LiveTV/EPG/EPGComponents+TV.swift
-@@ -120,14 +120,14 @@ extension EPGMetrics {
-             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-             // Keeps the text of a partially scrolled block readable; see
-             // `EPGStickyText` for why this is a `visualEffect`.
--            .visualEffect { [inset] content, proxy in
--                content.offset(
--                    x: EPGStickyText.shift(
--                        blockMinX: proxy.frame(in: .scrollView).minX,
--                        blockWidth: proxy.size.width,
--                        inset: inset
--                    )
--                )
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
+index e68d0f0..109edd5 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
+@@ -59,12 +59,25 @@ struct EPGChannelCell: View {
+         }
+         .padding(.horizontal, metrics.channelCellPadding)
+         .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
+-        .background(fill, in: shape)
++        // Lume GF: Liquid Glass tiles (Georgs on build 21); the hub stays Lume's card over it
++        .background {
++            if isHub { shape.fill(fill) }
++        }
++        .glassEffectCompat(gfGlass, in: shape)
+         .overlay {
+             shape.strokeBorder(border, lineWidth: 1)
+         }
+     }
+ 
++    /// Lume GF: clear glass at rest, lighter while a programme in the row is focused.
++    private var gfGlass: GlassEffectStyle {
++        switch highlight {
++        case .hub: .regular
++        case .row: .tinted(.white.opacity(0.18))
++        case .none: .clear
++        }
++    }
++
+     private var fill: Color {
+         switch highlight {
+         case .hub: EPGColors.cardFill
+@@ -158,6 +171,12 @@ struct EPGRulerStrip: View {
+             .frame(maxWidth: .infinity, alignment: .leading)
+             .frame(height: metrics.headerHeight)
+             .clipped()
++        #if os(tvOS)
++            // Lume GF: the times blur and fade out beside the channel column and at the screen's edge (Georgs on
++            // build 21)
++            .modifier(GFRulerEdgeBlur(leading: GFGuideGlass.rulerFade(tv: true).leading,
++                                      trailing: GFGuideGlass.rulerFade(tv: true).trailing))
++        #endif
+     }
+ }
+ 
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+index 48f4958..4224f16 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
+@@ -304,15 +304,28 @@ struct EPGProgramBlock: View {
+         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+         // Keeps the text of a partially scrolled block readable; see
+         // `EPGStickyText` for why this is a `visualEffect`.
+-        .visualEffect { [inset, sticksToLeadingEdge] content, proxy in
+-            content.offset(
+-                x: !sticksToLeadingEdge ? 0 : EPGStickyText.shift(
+-                    blockMinX: proxy.frame(in: .scrollView).minX,
+-                    blockWidth: proxy.size.width,
+-                    inset: inset
++        #if os(tvOS)
 +            // Lume GF: titles park just past the blurred edge beside the channel column; text that still reaches into
 +            // it (a programme ending there) blurs the further in it is (Georgs on build 21)
-+            .visualEffect { [inset, edge = GFGuideGlass.gridEdge(tv: true)] content, proxy in
++            .visualEffect { [inset, sticksToLeadingEdge, edge = GFGuideGlass.gridEdge(tv: true)] content, proxy in
 +                let minX = proxy.frame(in: .scrollView).minX
-+                let shift = EPGStickyText.shift(blockMinX: minX - edge, blockWidth: proxy.size.width, inset: inset)
++                let shift = !sticksToLeadingEdge ? 0
++                    : EPGStickyText.shift(blockMinX: minX - edge, blockWidth: proxy.size.width, inset: inset)
 +                return content
 +                    .offset(x: shift)
 +                    .blur(radius: GFGuideGlass.edgeBlur(textMinX: minX + shift, edge: edge))
-             }
-         }
- 
-diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift
-index 7274242..1e37edf 100644
---- a/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift
-+++ b/Lume/Views/LiveTV/EPG/EPGComponents+TVChrome.swift
-@@ -66,12 +66,25 @@ import SwiftUI
-             }
-             .padding(.horizontal, 16)
-             .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
--            .background(fill, in: shape)
-+            // Lume GF: Liquid Glass tiles (Georgs on build 21); the focused channel stays Lume's white card over it
-+            .background {
-+                if isHub { shape.fill(fill) }
 +            }
-+            .glassEffectCompat(gfGlass, in: shape)
-             .overlay {
-                 shape.strokeBorder(border, lineWidth: 1)
-             }
-         }
- 
-+        /// Lume GF: clear glass at rest, lighter while a programme in the row is focused.
-+        private var gfGlass: GlassEffectStyle {
-+            switch highlight {
-+            case .hub: .regular
-+            case .row: .tinted(.white.opacity(0.18))
-+            case .none: .clear
++        #else
++            .visualEffect { [inset, sticksToLeadingEdge] content, proxy in
++                content.offset(
++                    x: !sticksToLeadingEdge ? 0 : EPGStickyText.shift(
++                        blockMinX: proxy.frame(in: .scrollView).minX,
++                        blockWidth: proxy.size.width,
++                        inset: inset
++                    )
+                 )
+-            )
+-        }
 +            }
-+        }
-+
-         private var fill: Color {
-             switch highlight {
-             case .hub: EPGColors.cardFill
++        #endif
+     }
+ 
+     private var title: Text {
 diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-index a6d4df4..2a7eb57 100644
+index 25c42ec..706f8c4 100644
 --- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
-@@ -28,10 +28,14 @@ struct EPGRulerStrip: View {
-             // the mirror: offsetting a ruler as wide as the whole day (tens of
-             // thousands of points) left its animated moves uncommitted until
-             // the next one, so it trailed the grid by a step.
-+            let tvFade = GFGuideGlass.rulerFade(tv: true)
-             EPGTVTimeRuler(timeline: timeline, metrics: metrics, sync: sync)
-                 .frame(maxWidth: .infinity, alignment: .leading)
-                 .frame(height: metrics.headerHeight)
-                 .clipped()
-+                // Lume GF: the times blur and fade out beside the channel column and at the screen's edge (Georgs on
-+                // build 21)
-+                .modifier(GFRulerEdgeBlur(leading: tvFade.leading, trailing: tvFade.trailing))
-         #else
-             let fade = GFGuideGlass.rulerFade(tv: false)
-             Color.clear
-@@ -172,10 +176,13 @@ struct EPGColumnCells: View, Equatable {
+@@ -103,10 +103,13 @@ struct EPGColumnCells: View, Equatable {
      }
  
      var body: some View {
@@ -128,7 +140,7 @@ index a6d4df4..2a7eb57 100644
 -            ForEach(realizedRows) { entry in
 -                cell(for: entry)
 -                    .offset(y: metrics.rowOriginY(entry.index))
-+        // Lume GF: the Apple TV's glass channel tiles rendered together
++        // Lume GF: the glass channel tiles rendered together
 +        GlassGroupCompat {
 +            ZStack(alignment: .topLeading) {
 +                ForEach(realizedRows) { entry in
@@ -139,23 +151,25 @@ index a6d4df4..2a7eb57 100644
          }
          .frame(
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index aae1c3e..1877a56 100644
+index fc0ccf1..743307e 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-@@ -120,6 +120,8 @@ struct EPGGridScroller: View {
-                     )
+@@ -104,6 +104,10 @@ struct EPGGridScroller: View {
+                 )
  
-                     grid(bottomRoom: 0, guideHeight: 0)
-+                        // Lume GF: programmes blur and fade out as they reach the channel column (Georgs on build 21)
-+                        .modifier(GFGridLeadingBlur(width: GFGuideGlass.gridEdge(tv: true)))
-                 }
-                 // On tvOS the focus strip overlays the channel column — the
-                 // guide's leftmost band, directly beside the rail. Being adjacent
+                 grid
++                #if os(tvOS)
++                    // Lume GF: programmes blur and fade out as they reach the channel column (Georgs on build 21)
++                    .modifier(GFGridLeadingBlur(width: GFGuideGlass.gridEdge(tv: true)))
++                #endif
+             }
+             // On tvOS the focus strip overlays the channel column — the
+             // guide's leftmost band, directly beside the rail. Being adjacent
 diff --git a/Lume/Views/LiveTV/TVCategoryRail.swift b/Lume/Views/LiveTV/TVCategoryRail.swift
-index 8c05254..20a09cf 100644
+index ff9f065..aec93f7 100644
 --- a/Lume/Views/LiveTV/TVCategoryRail.swift
 +++ b/Lume/Views/LiveTV/TVCategoryRail.swift
-@@ -65,9 +65,8 @@
+@@ -66,9 +66,8 @@
              }
              .frame(width: TVLiveTVLayout.railWidth, alignment: .leading)
              .frame(maxHeight: .infinity, alignment: .top)
@@ -164,6 +178,6 @@ index 8c05254..20a09cf 100644
 -            .overlay(panelShape.strokeBorder(.white.opacity(0.12), lineWidth: 1))
 +            // Lume GF: clear Liquid Glass, the Live TV glow showing through (was frosted glass over a grey fill)
 +            .glassEffectCompat(.clear, in: panelShape)
-             .onChange(of: focused) { _, newValue in
-                 guard let newValue else {
-                     // A move onto a row the lazy list only just built passes
+             .onChange(of: recordings == nil) { _, isHidden in
+                 if isHidden { recordingsEntryRemoved(proxy) }
+             }

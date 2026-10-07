@@ -212,7 +212,7 @@ index e81d463..1815c93 100644
          // Stalker maps onto the same catalog kinds as Xtream, but its default
          // sync skips the movie/series content walk (loaded on demand); only a
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index 565dcd1..84f8370 100644
+index d814683..a71be97 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
 @@ -460,7 +460,18 @@ struct MainTabView: View {

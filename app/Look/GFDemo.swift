@@ -386,7 +386,7 @@
                     // as Lume's Live TV screen: the floating category button and its toolbar (layout switch,
                     // Multi-View, sort, sync, settings), so the screenshots show the real top and bottom
                     .gfCategoryButton(sections: store.categories.map { LiveTVSection.category($0) },
-                                      selection: $section)
+                                      selection: $section, guide: GFDemo.mode != "list")
                     .navigationTitle("Sport")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {

@@ -79,14 +79,17 @@ enum GFLastPlayed {
         #endif
     }
 
+    /// nil for a recording on Lume's recording server (Lume 2.4): not in any catalogue, nothing to continue.
     static func note(for media: PlayableMedia, position: Double, duration: Double, playing: Bool,
-                     now: Date = Date()) -> GFLastPlayedNote {
-        let (kind, id): (GFLastPlayedNote.Kind, String) = switch media.contentRef {
+                     now: Date = Date()) -> GFLastPlayedNote? {
+        let ref: (kind: GFLastPlayedNote.Kind, id: String)? = switch media.contentRef {
         case let .live(id): (.channel, id)
         case let .movie(id): (.film, id)
         case let .episode(id): (.episode, id)
+        case .recording: nil
         }
-        return GFLastPlayedNote(deviceID: deviceID, deviceKind: deviceKind, kind: kind, contentId: id,
+        guard let ref else { return nil }
+        return GFLastPlayedNote(deviceID: deviceID, deviceKind: deviceKind, kind: ref.kind, contentId: ref.id,
                                 title: media.title, artworkURL: media.posterURL?.absoluteString,
                                 position: media.isLive ? 0 : position, duration: media.isLive ? 0 : duration,
                                 playing: playing, updatedAt: now)
@@ -99,18 +102,22 @@ extension View {
     func gfReportsLastPlayed(media: PlayableMedia, position: @escaping () -> Double,
                              duration: @escaping () -> Double) -> some View {
         task(id: media.contentRef) {
-            guard let store = GFLastPlayed.store else { return }
-            await store.save(GFLastPlayed.note(for: media, position: position(), duration: duration(), playing: true))
+            guard let store = GFLastPlayed.store,
+                  let first = GFLastPlayed.note(for: media, position: position(), duration: duration(), playing: true)
+            else { return }
+            await store.save(first)
             while !media.isLive, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
-                guard !Task.isCancelled else { break }
-                await store.save(GFLastPlayed.note(for: media, position: position(), duration: duration(),
-                                                   playing: true))
+                guard !Task.isCancelled,
+                      let note = GFLastPlayed.note(for: media, position: position(), duration: duration(),
+                                                   playing: true) else { break }
+                await store.save(note)
             }
         }
         .onDisappear {
-            guard let store = GFLastPlayed.store else { return }
-            let note = GFLastPlayed.note(for: media, position: position(), duration: duration(), playing: false)
+            guard let store = GFLastPlayed.store,
+                  let note = GFLastPlayed.note(for: media, position: position(), duration: duration(), playing: false)
+            else { return }
             Task { await store.save(note) }
         }
     }

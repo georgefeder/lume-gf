@@ -46,11 +46,14 @@ enum GFSettingsCatalog {
         PlayerSettings.VLC.clockJitterKey, PlayerSettings.VLC.clockSynchroKey, PlayerSettings.VLC.decodeThreadsKey,
         PlayerSettings.VLC.deinterlaceModeKey, PlayerSettings.VLC.dropLateFramesKey,
         PlayerSettings.VLC.hardwareDecodeKey, PlayerSettings.VLC.httpReconnectKey, PlayerSettings.VLC.liveBufferKey,
-        PlayerSettings.VLC.skipFramesKey, PlayerSettings.VLC.vodBufferKey
+        PlayerSettings.VLC.skipFramesKey, PlayerSettings.VLC.vodBufferKey,
+        LiveTVToolbarSettings.showsRecordingsKey, LiveTVToolbarSettings.showsMultiViewKey,
+        RecordingServerSetup.showsRecordingsInLiveTVRailKey
     ]
 
     static let deviceOnly: [String] = [
         DownloadManager.autoDeleteKey, DownloadManager.maxConcurrentKey, PlaylistSelectionStore.key,
-        ProfileSettings.askOnStartupKey, DebugLogSettings.enabledKey, "tv.quickSwitch.hintShown.v1"
+        ProfileSettings.askOnStartupKey, DebugLogSettings.enabledKey, "tv.quickSwitch.hintShown.v1",
+        RecordingServerSetup.disclosureAcknowledgedKey
     ]
 }

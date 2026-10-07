@@ -173,6 +173,34 @@ DEFINE SCHEMA
         GRANT READ TO "_world"
     );
 
+    RECORD TYPE CD_SyncedRecordingServer (
+        "___createTime" TIMESTAMP,
+        "___createdBy" REFERENCE,
+        "___etag" STRING,
+        "___modTime" TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID" REFERENCE QUERYABLE,
+        CD_entityName STRING QUERYABLE,
+        CD_moveReceipt BYTES,
+        CD_moveReceipt_ckAsset ASSET,
+        CD_id STRING,
+        CD_kindRaw STRING,
+        CD_kindRaw_ckAsset ASSET,
+        CD_name STRING,
+        CD_name_ckAsset ASSET,
+        CD_baseURL STRING,
+        CD_baseURL_ckAsset ASSET,
+        CD_serverID STRING,
+        CD_deviceID STRING,
+        CD_token ENCRYPTED STRING,
+        CD_token_ckAsset ASSET,
+        CD_isEnabled INT64,
+        CD_updatedAt TIMESTAMP,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
     RECORD TYPE GFLastPlayed (
         "___createTime" TIMESTAMP,
         "___createdBy" REFERENCE,
