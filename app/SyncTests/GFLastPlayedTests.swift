@@ -11,9 +11,9 @@ struct GFLastPlayedTests {
                       contentRef: ref)
     }
 
-    @Test func `a channel becomes a channel note with its logo`() {
-        let note = GFLastPlayed.note(for: media(.live("p-live-1"), live: true), position: 0, duration: 0,
-                                     playing: true, now: now)
+    @Test func `a channel becomes a channel note with its logo`() throws {
+        let note = try #require(GFLastPlayed.note(for: media(.live("p-live-1"), live: true), position: 0, duration: 0,
+                                                  playing: true, now: now))
         #expect(note.kind == .channel)
         #expect(note.contentId == "p-live-1")
         #expect(note.artworkURL == "http://x/logo.png")
@@ -21,14 +21,20 @@ struct GFLastPlayedTests {
         #expect(note.updatedAt == now)
     }
 
-    @Test func `films and episodes keep their position`() {
-        let film = GFLastPlayed.note(for: media(.movie("p-movie-7"), live: false), position: 4323, duration: 7200,
-                                     playing: false, now: now)
+    @Test func `films and episodes keep their position`() throws {
+        let film = try #require(GFLastPlayed.note(for: media(.movie("p-movie-7"), live: false), position: 4323,
+                                                  duration: 7200, playing: false, now: now))
         #expect(film.kind == .film)
         #expect(film.position == 4323)
         #expect(!film.playing)
         #expect(GFLastPlayed.note(for: media(.episode("p-ep-3"), live: false), position: 1, duration: 2,
-                                  playing: true, now: now).kind == .episode)
+                                  playing: true, now: now)?.kind == .episode)
+    }
+
+    @Test func `a recording on the recording server is not noted`() {
+        // Lume 2.4: not in any catalogue, so no other device could continue it
+        #expect(GFLastPlayed.note(for: media(.recording("rec-1"), live: false), position: 60, duration: 3600,
+                                  playing: true, now: now) == nil)
     }
 
     @Test func `the device id stays the same`() {
