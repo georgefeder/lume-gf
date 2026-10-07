@@ -13,45 +13,8 @@ index e47fa33..59d9c63 100644
                  switch phase {
                  case .empty:
                      // Reserve the logo's vertical space without flashing the
-diff --git a/Lume/Views/LiveTV/EPG/EPGComponents.swift b/Lume/Views/LiveTV/EPG/EPGComponents.swift
-index b637d74..b8b7537 100644
---- a/Lume/Views/LiveTV/EPG/EPGComponents.swift
-+++ b/Lume/Views/LiveTV/EPG/EPGComponents.swift
-@@ -274,15 +274,24 @@ struct EPGMetrics {
-                     // Lume GF: the grid runs under the glass sidebar, so titles stick at the sidebar's edge — measured in
-                     // the guide's own space, whatever the scroll view's frame and insets (iPhone landscape)
-                     .visualEffect { [inset = metrics.blockInset, pad = metrics.channelColumnWidth] content, proxy in
--                        content.offset(
--                            x: EPGStickyText.shift(
--                                blockMinX: GFGuideGlass.stickyMinX(
--                                    blockMinX: proxy.frame(in: .named(GFGuideGlass.spaceName)).minX, pad: pad
--                                ),
--                                blockWidth: proxy.size.width,
--                                inset: inset
--                            )
-+                        let shift = EPGStickyText.shift(
-+                            blockMinX: GFGuideGlass.stickyMinX(
-+                                blockMinX: proxy.frame(in: .named(GFGuideGlass.spaceName)).minX, pad: pad
-+                            ),
-+                            blockWidth: proxy.size.width,
-+                            inset: inset
-                         )
-+                        // Lume GF: a parked title fades as its tile slides under the column (no "Arse" or "E" stubs)
-+                        return content.offset(x: shift)
-+                            .opacity(shift > 0 ? GFGuideGlass.parkedTitleOpacity(room: proxy.size.width - shift) : 1)
-+                    }
-+                    // Lume GF: text running into the tile's end fades out instead of being cut mid-letter ("Arsena")
-+                    .mask {
-+                        HStack(spacing: 0) {
-+                            Color.black
-+                            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-+                                .frame(width: GFGuideGlass.tileTextFade)
-+                        }
-                     }
-                 }
- 
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index f1e5513..5c8d359 100644
+index 89a658f..4fdac35 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
 @@ -40,12 +40,15 @@ import SwiftUI
@@ -77,10 +40,10 @@ index f1e5513..5c8d359 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index b205f86..87a4e3b 100644
+index 068ec8d..2a4483a 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
-@@ -441,6 +441,7 @@ struct AVPlayerEngineView: View {
+@@ -446,6 +446,7 @@ struct AVPlayerEngineView: View {
      }
  
      private func closePlayer() {
@@ -89,7 +52,7 @@ index b205f86..87a4e3b 100644
              if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
                  window.toggleFullScreen(nil)
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index 845ee30..496c077 100644
+index 18d6f66..307e875 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -65,12 +65,15 @@ import SwiftUI
@@ -115,7 +78,7 @@ index 845ee30..496c077 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineControlsOverlay.swift b/Lume/Views/Player/LumeEngineControlsOverlay.swift
-index 2cf69e6..3788b39 100644
+index f44f4cf..d232ceb 100644
 --- a/Lume/Views/Player/LumeEngineControlsOverlay.swift
 +++ b/Lume/Views/Player/LumeEngineControlsOverlay.swift
 @@ -54,12 +54,15 @@ import SwiftUI
@@ -141,10 +104,10 @@ index 2cf69e6..3788b39 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineCoordinator.swift b/Lume/Views/Player/LumeEngineCoordinator.swift
-index 0a33965..468d4ed 100644
+index 18061ae..16f8a1e 100644
 --- a/Lume/Views/Player/LumeEngineCoordinator.swift
 +++ b/Lume/Views/Player/LumeEngineCoordinator.swift
-@@ -271,6 +271,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
+@@ -260,6 +260,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
  
      // MARK: Transport
  
@@ -159,10 +122,10 @@ index 0a33965..468d4ed 100644
          let session = session
          let playing = isPlaying
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index a7a50c1..6882ce4 100644
+index cd1a490..3755f9c 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
-@@ -502,6 +502,7 @@ struct LumeEngineEngineView: View {
+@@ -509,6 +509,7 @@ struct LumeEngineEngineView: View {
      }
  
      private func closePlayer() {
@@ -171,7 +134,7 @@ index a7a50c1..6882ce4 100644
              if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
                  window.toggleFullScreen(nil)
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index d0e87af..27241f9 100644
+index da5c2ca..dac4326 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 @@ -43,12 +43,15 @@ import VLCKit

@@ -96,10 +96,7 @@ for LOOK in dark light; do
   shoot "$IOS" "$BID" "iphone-list-$LOOK" -GFDemo list
 done
 xcrun simctl ui "$IOS" appearance dark
-shoot "$IOS" "$BID" iphone-guide-bottom-dark -GFDemo guide -GFDemoMoves end
 shoot "$IOS" "$BID" iphone-guide-few-dark -GFDemo guide -GFDemoChannels 3
-# for guide-check.py: without the channel column, what the programmes leave under the glass panel
-shoot "$IOS" "$BID" iphone-guide-under-dark -GFDemo guide -GFDemoNoPanel 1
 # Lume's Home, Movies and Series over made-up films and series (posters level at the top; Home's rows)
 shoot "$IOS" "$BID" iphone-home-dark -GFDemo home
 # Home's rows below the first screen are never drawn (Lume builds them as they scroll in): Recently Watched and
@@ -124,7 +121,6 @@ xcrun simctl ui "$TV" appearance dark >/dev/null 2>&1 || true
 shoot "$TV" "$BID" tv-guide-channel -GFDemo guide
 shoot "$TV" "$BID" tv-guide-programme -GFDemo guide -GFDemoMoves right
 shoot "$TV" "$BID" tv-guide-bottom -GFDemo guide -GFDemoMoves down,down,down,down,down,down,down,down,down,down,down,right
-shoot "$TV" "$BID" tv-guide-under -GFDemo guide -GFDemoNoPanel 1
 # the second channel's six-hour programme after "No Programme", focused (Georgs' photo of build 9)
 shoot "$TV" "$BID" tv-guide-long -GFDemo guide -GFDemoMoves right,down
 shoot "$TV" "$BID" tv-home -GFDemo home

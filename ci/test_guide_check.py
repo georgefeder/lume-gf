@@ -259,26 +259,15 @@ class RowTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
-    def test_a_missing_screen_scale_is_a_failure(self):
-        d = tempfile.mkdtemp()
-        os.makedirs(os.path.join(d, "logs"))
-        with open(os.path.join(d, "logs", "iphone-guide-dark.err"), "w") as f:
-            f.write(GEOMETRY.replace("scale=3.0", "scale=0.0") + "\n")
-        results = dict((check, (ok, detail)) for check, ok, detail in
-                       gc.run_checks(d, sample=lambda png, lines: [[0] * 50 for _ in lines]))
-        ok, detail = results["beside the panel (iphone-guide-dark)"]
-        self.assertFalse(ok)
-        self.assertIn("scale", detail)
-
-    def test_the_apple_tv_guide_is_lumes_own_so_its_pictures_are_not_measured(self):
+    def test_the_guide_is_lumes_own_on_both_so_its_pictures_are_not_measured(self):
+        # Lume 2.4: the iPhone shares the Apple TV's guide; our glass column and its checks are gone
         d = tempfile.mkdtemp()
         os.makedirs(os.path.join(d, "logs"))
         checks = [check for check, _, _ in gc.run_checks(d, sample=lambda png, lines: [[] for _ in lines])]
-        self.assertFalse([c for c in checks if "tv-guide" in c])
-        self.assertIn("under the panel (iphone-guide-under-dark)", checks)
-        self.assertIn("first row (iphone-guide-dark)", checks)
+        self.assertFalse([c for c in checks if "guide" in c or "panel" in c or "first row" in c])
         self.assertIn("continue banner (iphone-banner-dark)", checks)
         self.assertIn("continue banner (tv-banner)", checks)
+        self.assertIn("posters level (iphone-movies-dark)", checks)
 
     def test_missing_pictures_and_logs_are_failures_not_passes(self):
         d = tempfile.mkdtemp()

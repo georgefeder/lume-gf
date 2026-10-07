@@ -60,6 +60,13 @@ public nonisolated enum GFCloudSchema {
         Entity(name: "SyncedSportsFollow", attributes: [
             .init(name: "key", type: .string), .init(name: "kindRaw", type: .string), .init(name: "profileID", type: .uuid),
             .init(name: "sortOrder", type: .integer), .init(name: "updatedAt", type: .date)
+        ]),
+        // Lume 2.4: a paired recording server (the token end-to-end encrypted)
+        Entity(name: "SyncedRecordingServer", attributes: [
+            .init(name: "id", type: .uuid), .init(name: "kindRaw", type: .string), .init(name: "name", type: .string),
+            .init(name: "baseURL", type: .string), .init(name: "serverID", type: .uuid),
+            .init(name: "deviceID", type: .uuid), .init(name: "token", type: .string, encrypted: true),
+            .init(name: "isEnabled", type: .bool), .init(name: "updatedAt", type: .date)
         ])
     ]
 

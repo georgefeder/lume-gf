@@ -85,7 +85,7 @@ index 4498429..14e3aba 100644
  
      private var isDue: Bool {
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index 523fc9b..565dcd1 100644
+index 8bbb24a..d814683 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
 @@ -180,6 +180,11 @@ struct MainTabView: View {

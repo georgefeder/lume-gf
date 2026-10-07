@@ -1,23 +1,5 @@
 import SwiftUI
 
-#if !os(tvOS)
-    /// The iPhone and iPad guide's channel cell (Lume 2.3 gives the Apple TV its own, `EPGTVChannelCell`).
-    extension EPGChannelCell {
-        /// Lume's badge size on iPhone and iPad.
-        var gfBadgeSize: CGFloat {
-            11
-        }
-
-        /// The catch-up clock follows the badges: beside the name, the 136-point column would give it a third of
-        /// the name's width.
-        var gfCatchupSymbol: GFBadgeSymbol? {
-            guard row.catchupCapable else { return nil }
-            return GFBadgeSymbol(systemName: "clock.arrow.circlepath", color: .blue,
-                                 accessibilityLabel: Text("Catch-up available"))
-        }
-    }
-#endif
-
 /// The sidebar panel's outline: inset from the column, round-cornered, running on past the bottom edge (where the
 /// guide's fade ends it). The glass is drawn in it and the channel rows are clipped to it, so a row scrolling up
 /// slides under the panel's top edge instead of showing beside its corner.

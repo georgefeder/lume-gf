@@ -1,5 +1,5 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index e37e976..2d8c39f 100644
+index 7c5a998..06d98af 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -14,7 +14,7 @@ struct LumeApp: App {
@@ -11,7 +11,7 @@ index e37e976..2d8c39f 100644
  
      /// The local-only catalog store. The app's environment container — every
      /// browse `@Query` binds to it, so CloudKit's churn (which only touches the
-@@ -182,14 +182,14 @@ struct LumeApp: App {
+@@ -185,14 +185,14 @@ struct LumeApp: App {
      /// Real, properly-signed builds get full CloudKit sync.
      static let isCloudKitEnvironment: Bool = {
          #if SIDE_LOAD
@@ -34,7 +34,7 @@ index e37e976..2d8c39f 100644
          #else
              let environment = ProcessInfo.processInfo.environment
              let isPreview = environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-@@ -249,6 +249,9 @@ struct LumeApp: App {
+@@ -252,6 +252,9 @@ struct LumeApp: App {
                      // write, and idempotent per process on the callee's side.
                      AppStoreReviewPrompt.shared.noteAppLaunched()
  
@@ -65,10 +65,10 @@ index c607ba8..c20cf88 100644
          case let category as Category:
              // `isRestricted` is a parental control, not per-profile state: it
 diff --git a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
-index f62141d..cb2f9be 100644
+index 027958d..4a96dd4 100644
 --- a/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
 +++ b/Lume/Services/Sync/CloudSync/CloudSyncEngine+Fetch.swift
-@@ -174,19 +174,19 @@ extension CloudSyncEngine {
+@@ -195,19 +195,19 @@ extension CloudSyncEngine {
      }
  
      /// Live streams sync their favorite flag/order and their Content Management
@@ -94,10 +94,10 @@ index f62141d..cb2f9be 100644
                      addedToWatchlistDate: nil,
                      favoriteOrder: stream.favoriteOrder,
 diff --git a/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift b/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
-index 116b913..1638d57 100644
+index 9323f96..9e7505f 100644
 --- a/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
 +++ b/Lume/Services/Sync/CloudSync/CloudSyncEngine.swift
-@@ -130,6 +130,8 @@ actor CloudSyncEngine {
+@@ -134,6 +134,8 @@ actor CloudSyncEngine {
              // Collapse any duplicate default profile a freshly-synced device
              // imported before its own bootstrap-created one could converge.
              try reconcileProfiles()
