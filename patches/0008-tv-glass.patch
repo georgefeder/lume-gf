@@ -44,10 +44,10 @@ index 92cb0c8..5e97af3 100644
      }
  }
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-index 0118e21..999f3b6 100644
+index e68d0f0..109edd5 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-@@ -54,12 +54,25 @@ struct EPGChannelCell: View {
+@@ -59,12 +59,25 @@ struct EPGChannelCell: View {
          }
          .padding(.horizontal, metrics.channelCellPadding)
          .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
@@ -74,7 +74,7 @@ index 0118e21..999f3b6 100644
      private var fill: Color {
          switch highlight {
          case .hub: EPGColors.cardFill
-@@ -153,6 +166,12 @@ struct EPGRulerStrip: View {
+@@ -158,6 +171,12 @@ struct EPGRulerStrip: View {
              .frame(maxWidth: .infinity, alignment: .leading)
              .frame(height: metrics.headerHeight)
              .clipped()

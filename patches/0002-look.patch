@@ -373,26 +373,34 @@ index 7b450c3..32a71f3 100644
              && trendingSeries.isEmpty
              && watchlist.isEmpty
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-index e71e81c..0118e21 100644
+index e71e81c..e68d0f0 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-@@ -36,10 +36,14 @@ struct EPGChannelCell: View {
+@@ -36,12 +36,21 @@ struct EPGChannelCell: View {
          let shape = RoundedRectangle(cornerRadius: metrics.channelCornerRadius, style: .continuous)
          HStack(spacing: metrics.channelCellSpacing) {
              logo
 -            Text(row.name)
 +            // Lume GF: clean name with its badges under it (grey badges take the card's text colour on the hub card);
-+            // in the iPhone's narrow column a name too wide shrinks on even lines instead of ending in "…"
++            // in the iPhone's narrow column a name too wide shrinks on even lines instead of ending in "…", and the
++            // catch-up clock follows the badges (beside the name it took a third of its room: "BLOOMBE…")
 +            GFChannelName(raw: row.name, badgeSize: GFGuideGlass.isTV ? 17 : 10,
 +                          titleLineLimit: metrics.channelNameLineLimit,
-+                          neutralTint: isHub ? EPGColors.cardTextSecondary : nil, badgeSymbol: nil,
++                          neutralTint: isHub ? EPGColors.cardTextSecondary : nil,
++                          badgeSymbol: GFGuideGlass.isTV || !row.catchupCapable ? nil
++                              : GFBadgeSymbol(systemName: "clock.arrow.circlepath",
++                                              color: isHub ? EPGColors.cardText : LiveTVPalette.accent,
++                                              accessibilityLabel: Text("Catch-up available")),
 +                          fitsWords: !GFGuideGlass.isTV)
                  .font(metrics.channelNameFont)
                  .foregroundStyle(isHub ? EPGColors.cardText : .primary)
 -                .lineLimit(metrics.channelNameLineLimit)
                  .frame(maxWidth: .infinity, alignment: .leading)
-             if row.catchupCapable {
+-            if row.catchupCapable {
++            if row.catchupCapable, GFGuideGlass.isTV {
                  Image(systemName: "clock.arrow.circlepath")
+                     .font(metrics.catchupGlyphFont)
+                     .foregroundStyle(isHub ? EPGColors.cardText : LiveTVPalette.accent)
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 index 68c44f9..fc0ccf1 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
