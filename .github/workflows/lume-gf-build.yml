@@ -66,6 +66,22 @@ jobs:
           ref: ${{ steps.engine.outputs.ref }}
           path: LumeEngine
 
+      - name: Recorder version paired with this release
+        id: recorder
+        # Lume 2.4 references its recording kit as a local package at ../LumeRecorder/Kit (nothing to fetch
+        # for a Lume without one)
+        run: |
+          ref=$(sh gf/ci/engine-ref.sh Lume RECORDER)
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: LumeRecorder ${{ steps.recorder.outputs.ref }}
+        if: steps.recorder.outputs.ref != ''
+        uses: actions/checkout@v5
+        with:
+          repository: bilipp/LumeRecorder
+          ref: ${{ steps.recorder.outputs.ref }}
+          path: LumeRecorder
+
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -158,6 +174,22 @@ jobs:
           repository: bilipp/LumeEngine
           ref: ${{ steps.engine.outputs.ref }}
           path: LumeEngine
+
+      - name: Recorder version paired with this release
+        id: recorder
+        # Lume 2.4 references its recording kit as a local package at ../LumeRecorder/Kit (nothing to fetch
+        # for a Lume without one)
+        run: |
+          ref=$(sh gf/ci/engine-ref.sh Lume RECORDER)
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: LumeRecorder ${{ steps.recorder.outputs.ref }}
+        if: steps.recorder.outputs.ref != ''
+        uses: actions/checkout@v5
+        with:
+          repository: bilipp/LumeRecorder
+          ref: ${{ steps.recorder.outputs.ref }}
+          path: LumeRecorder
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
