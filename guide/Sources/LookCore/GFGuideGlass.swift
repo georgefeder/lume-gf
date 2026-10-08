@@ -203,6 +203,25 @@ nonisolated enum GFGuideGlass {
         return (insets.leading, insets.trailing)
     }
 
+    /// iPhone ruler (Lume 2.4's shared guide): where the Now pill's centre sits, `nowX` points from the ruler's leading
+    /// edge: over the now line, or pinned whole at that edge once the line reaches it (Georgs on build 31: ":57", the
+    /// pill cut in half by the channel column).
+    static func nowPillCenter(nowX: CGFloat, pillWidth: CGFloat, margin: CGFloat = 2) -> CGFloat {
+        max(nowX, pillWidth / 2 + margin)
+    }
+
+    /// iPhone ruler: whether the time label starting at `labelX` hides behind the pinned Now pill (only while it is
+    /// pinned; over the now line Lume hides the labels it covers itself).
+    static func labelUnderPinnedPill(labelX: CGFloat, nowX: CGFloat, pillCenter: CGFloat, pillWidth: CGFloat) -> Bool {
+        pillCenter > nowX && labelX < pillCenter + pillWidth / 2 + 4
+    }
+
+    /// iPhone guide: how far left of the programme grid its programmes still show, sliding under the glass channel
+    /// column (its width, the gap and the guide's leading inset), so they are built there too.
+    static func underColumnLead(columnWidth: CGFloat, gap: CGFloat) -> CGFloat {
+        columnWidth + 2 * gap
+    }
+
     /// How far the ruler's times blur and fade out at the channel column's edge and the screen's (Georgs on builds 18
     /// and 21); on the Apple TV as wide as the programmes' blurred edge below them.
     static func rulerFade(tv: Bool) -> (leading: CGFloat, trailing: CGFloat) {

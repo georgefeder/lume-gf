@@ -238,3 +238,12 @@ struct GFGridLeadingBlur: ViewModifier {
         }
     }
 }
+
+/// iPhone guide (Lume 2.4's shared guide): the programme grid's clip with only its top edge kept. Its programmes run
+/// on under the glass channel column beside it and under the tab bar (Georgs on build 31: a hard line by the column),
+/// but never up into the time ruler.
+nonisolated struct GFGuideTopClip: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: rect.minX - 10000, y: rect.minY, width: rect.width + 20000, height: rect.height + 10000))
+    }
+}

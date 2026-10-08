@@ -1,0 +1,118 @@
+diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
+index 109edd5..cec2a63 100644
+--- a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
++++ b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
+@@ -69,12 +69,13 @@ struct EPGChannelCell: View {
+         }
+     }
+ 
+-    /// Lume GF: clear glass at rest, lighter while a programme in the row is focused.
++    /// Lume GF: clear glass at rest, lighter while a programme in the row is focused; on iPhone frosted at rest, as
++    /// programmes slide under the column there and the names stay readable over them.
+     private var gfGlass: GlassEffectStyle {
+         switch highlight {
+         case .hub: .regular
+         case .row: .tinted(.white.opacity(0.18))
+-        case .none: .clear
++        case .none: GFGuideGlass.isTV ? .clear : .regular
+         }
+     }
+ 
+@@ -191,6 +192,8 @@ struct EPGTimeRuler: View {
+     let metrics: EPGMetrics
+     /// Observed for `mirror` (moves) and `window` (block crossings).
+     let sync: EPGScrollSync
++    /// Lume GF: the Now pill's width, measured (it pins whole at the iPhone ruler's edge)
++    @State private var gfPillWidth: CGFloat = 0
+ 
+     var body: some View {
+         let mirrorX = sync.mirror.x
+@@ -198,14 +201,22 @@ struct EPGTimeRuler: View {
+         // Moves with the now line, which ticks every minute; the labels the
+         // pill would cover step aside with it.
+         TimelineView(.everyMinute) { context in
++            // Lume GF: on iPhone the pill pins whole at the ruler's edge once the now line reaches it (Georgs on build
++            // 31: ":57" cut in half by the channel column); the labels it then covers step aside too
++            let nowX = timeline.x(for: context.date) - mirrorX
++            let pillX = GFGuideGlass.isTV ? nowX
++                : GFGuideGlass.nowPillCenter(nowX: nowX, pillWidth: gfPillWidth)
+             ZStack(alignment: .leading) {
+                 ForEach(ticks, id: \.self) { tick in
++                    let tickX = timeline.x(for: tick) - mirrorX
+                     label(tick)
+-                        .opacity(EPGTimeline.tickIsCoveredByNowPill(tick, now: context.date) ? 0 : 1)
+-                        .offset(x: timeline.x(for: tick) - mirrorX)
++                        .opacity(EPGTimeline.tickIsCoveredByNowPill(tick, now: context.date)
++                            || GFGuideGlass.labelUnderPinnedPill(labelX: tickX, nowX: nowX, pillCenter: pillX,
++                                                                 pillWidth: gfPillWidth) ? 0 : 1)
++                        .offset(x: tickX)
+                 }
+-                EPGNowPill(date: context.date, metrics: metrics)
+-                    .offset(x: timeline.x(for: context.date) - mirrorX)
++                EPGNowPill(date: context.date, metrics: metrics, gfOnWidth: { gfPillWidth = $0 })
++                    .offset(x: pillX)
+             }
+             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+         }
+@@ -231,6 +242,8 @@ struct EPGTimeRuler: View {
+ struct EPGNowPill: View {
+     let date: Date
+     let metrics: EPGMetrics
++    /// Lume GF: told the pill's width (the iPhone ruler pins it whole at its edge)
++    var gfOnWidth: (CGFloat) -> Void = { _ in }
+ 
+     var body: some View {
+         Text(date, format: .dateTime.hour().minute())
+@@ -240,6 +253,7 @@ struct EPGNowPill: View {
+             .padding(.vertical, metrics.headerHeight * 0.11)
+             .background(Capsule().fill(LiveTVPalette.accent))
+             .fixedSize()
++            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gfOnWidth($0) }
+             .frame(height: metrics.headerHeight)
+             // Zero-width and centred on its point: an alignment guide
+             // would widen the ruler's stack leftwards by half the pill
+diff --git a/Lume/Views/LiveTV/EPG/EPGGrid.swift b/Lume/Views/LiveTV/EPG/EPGGrid.swift
+index 4f3ae91..2356775 100644
+--- a/Lume/Views/LiveTV/EPG/EPGGrid.swift
++++ b/Lume/Views/LiveTV/EPG/EPGGrid.swift
+@@ -92,9 +92,13 @@ struct EPGGrid: View, Equatable {
+                 // move instead (see EPGGridScroller.requestScroll).
+                 sync.mirror = clamped
+             #endif
++            // Lume GF: on iPhone the programmes under the glass channel column are seen too, so they are built
++            let lead = GFGuideGlass.isTV ? 0 : GFGuideGlass.underColumnLead(
++                columnWidth: metrics.channelColumnWidth, gap: metrics.channelColumnGap
++            )
+             let window = EPGRealizeWindow.around(
+-                offset: clamped.x,
+-                viewport: new.width,
++                offset: clamped.x - lead,
++                viewport: new.width + lead,
+                 blockLength: 30 * metrics.pointsPerMinute
+             )
+             if sync.window != window {
+diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+index 743307e..5340039 100644
+--- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
++++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
+@@ -102,8 +102,20 @@ struct EPGGridScroller: View {
+                     onSelectChannel: { onPlay($0.stream) },
+                     onStartMultiView: { onStartMultiView($0.stream) }
+                 )
++                #if !os(tvOS)
++                    // Lume GF: the glass column sits over the programmes that slide under it, and runs on under the
++                    // tab bar with them (it stopped above it in a hard cut; Georgs on build 31)
++                    .ignoresSafeArea(.container, edges: .bottom)
++                    .zIndex(1)
++                #endif
+ 
+                 grid
++                #if !os(tvOS)
++                    // Lume GF: programmes run on under the channel column instead of stopping at a hard line beside
++                    // it; only the top edge stays clipped, so rows never slide up into the time ruler
++                    .scrollClipDisabled()
++                    .clipShape(GFGuideTopClip())
++                #endif
+                 #if os(tvOS)
+                     // Lume GF: programmes blur and fade out as they reach the channel column (Georgs on build 21)
+                     .modifier(GFGridLeadingBlur(width: GFGuideGlass.gridEdge(tv: true)))
