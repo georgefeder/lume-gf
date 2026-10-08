@@ -1,0 +1,43 @@
+diff --git a/Lume/Views/SearchView.swift b/Lume/Views/SearchView.swift
+index e30b344..179bc60 100644
+--- a/Lume/Views/SearchView.swift
++++ b/Lume/Views/SearchView.swift
+@@ -25,6 +25,8 @@ struct SearchView: View {
+     @State private var selectedFilter: ContentFilter = .all
+     @State private var results: [SearchResult] = []
+     @State private var playingMedia: PlayableMedia?
++    /// Lume GF: guide programmes that match ("On TV")
++    @State private var gfGuide = GFGuideSearchModel()
+ 
+     /// Max matches fetched per content type. Keeps the result set bounded so the
+     /// list stays responsive even when a playlist holds tens of thousands of items.
+@@ -78,11 +80,11 @@ struct SearchView: View {
+                 } else {
+                     // Results — only show "No Results" once a query has actually
+                     // been run, so it doesn't flash while the input is debouncing.
+-                    if results.isEmpty {
++                    if results.isEmpty, gfGuide.rows.isEmpty {
+                         if !debouncedSearchText.isEmpty {
+                             ContentUnavailableView.search
+                         }
+-                    } else {
++                    } else if !results.isEmpty {
+                         Section {
+                             ForEach(results) { result in
+                                 switch result {
+@@ -122,9 +124,15 @@ struct SearchView: View {
+                             Text("\(results.count) Results")
+                         }
+                     }
++                    // Lume GF: when and where a matching programme airs (Georgs, 8 Oct)
++                    GFGuideSearchSection(model: gfGuide, onPlay: playChannel)
+                 }
+             }
+             .searchField(text: $searchText)
++            .gfGuideSearch(gfGuide, query: debouncedSearchText,
++                           playlistIDs: (searchAllPlaylists ? playlists : [activePlaylist].compactMap(\.self))
++                               .map(\.id.uuidString),
++                           isWanted: selectedFilter == .all || selectedFilter == .liveTV, onPlay: playChannel)
+             .navigationDestination(for: Movie.self) { movie in
+                 MovieDetailView(movie: movie, animationNamespace: animationNamespace)
+                 #if os(iOS)
