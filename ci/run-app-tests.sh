@@ -30,9 +30,11 @@ xcodebuild test -project Lume.xcodeproj -scheme Lume -configuration Debug -desti
 [ "$STATUS" -eq 0 ] || { python3 "$CI/failure-summary.py" "$RESULT" || true; python3 "$CI/crash-summary.py" 3 || true; }
 if [ -n "$ONLY" ]; then
   ARESULT="${RESULT%.xcresult}-alone.xcresult"; ASTATUS=0
+  # one suite at a time: run side by side, the 100k-entry M3U import starved the channel-change timing (run
+  # 37849071990)
   # shellcheck disable=SC2086
   xcodebuild test-without-building -project Lume.xcodeproj -scheme Lume -configuration Debug -destination "id=$SIM" \
-    CODE_SIGNING_ALLOWED=NO $SPMARGS -resultBundlePath "$ARESULT" $ONLY || ASTATUS=$?
+    CODE_SIGNING_ALLOWED=NO $SPMARGS -resultBundlePath "$ARESULT" -parallel-testing-enabled NO $ONLY || ASTATUS=$?
   [ "$ASTATUS" -eq 0 ] \
     || { python3 "$CI/failure-summary.py" "$ARESULT" || true; python3 "$CI/crash-summary.py" 3 || true; }
   [ "$STATUS" -ne 0 ] || STATUS=$ASTATUS

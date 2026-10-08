@@ -260,6 +260,31 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.tileContent(width: 50) == .full)
     }
 
+    @Test func `the iPhone's Now pill pins whole at the ruler's edge instead of being cut`() {
+        // Georgs on build 31: ":57" cut by the channel column
+        #expect(GFGuideGlass.nowPillCenter(nowX: 120, pillWidth: 60) == 120) // over the now line
+        #expect(GFGuideGlass.nowPillCenter(nowX: 10, pillWidth: 60) == 32) // pinned, whole, 2 points in
+        #expect(GFGuideGlass.nowPillCenter(nowX: -500, pillWidth: 60) == 32) // now scrolled off to the left
+        #expect(GFGuideGlass.nowPillCenter(nowX: 10, pillWidth: 0) == 10) // not measured yet
+    }
+
+    @Test func `a time label hides behind the pinned pill, never while the pill sits on the now line`() {
+        #expect(GFGuideGlass.labelUnderPinnedPill(labelX: 40, nowX: 10, pillCenter: 32, pillWidth: 60))
+        #expect(!GFGuideGlass.labelUnderPinnedPill(labelX: 70, nowX: 10, pillCenter: 32, pillWidth: 60))
+        #expect(!GFGuideGlass.labelUnderPinnedPill(labelX: 40, nowX: 120, pillCenter: 120, pillWidth: 60))
+    }
+
+    @Test func `the iPhone builds the programmes that run on under its channel column`() {
+        #expect(GFGuideGlass.underColumnLead(columnWidth: 136, gap: 4) == 144)
+    }
+
+    @Test func `programmes under the iPhone's column fade out over most of it, gone before its outer edge`() {
+        // Georgs on build 31: they should slowly and then fully disappear
+        let fade = GFGuideGlass.underColumnFade(lead: 140)
+        #expect(fade == 98)
+        #expect(fade < 140)
+    }
+
     @Test func `a title parked at the column fades as its tile slides under it`() {
         #expect(GFGuideGlass.parkedTitleOpacity(room: 120) == 1)
         #expect(GFGuideGlass.parkedTitleOpacity(room: 56) == 1)

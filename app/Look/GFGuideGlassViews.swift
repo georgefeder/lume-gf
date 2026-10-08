@@ -238,3 +238,23 @@ struct GFGridLeadingBlur: ViewModifier {
         }
     }
 }
+
+/// iPhone guide (Lume 2.4's shared guide): the programme grid's mask. Its programmes run on under the glass channel
+/// column beside it (`lead` points: the column and the gap) and under the tab bar, fading out as they go and gone
+/// before the column's outer edge (Georgs on build 31: a hard line by the column, then bits at the screen's edge);
+/// never up into the time ruler.
+struct GFGuideUnderColumnMask: View {
+    let lead: CGFloat
+
+    var body: some View {
+        let fade = GFGuideGlass.underColumnFade(lead: lead)
+        HStack(spacing: 0) {
+            Color.clear.frame(width: max(0, lead - fade))
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: fade)
+            Color.black.frame(width: 10000)
+        }
+        .frame(height: 20000)
+        .offset(x: -lead)
+    }
+}
