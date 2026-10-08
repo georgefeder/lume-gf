@@ -92,7 +92,7 @@ index 4f3ae91..2356775 100644
              )
              if sync.window != window {
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 743307e..5340039 100644
+index 743307e..7f02139 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -102,8 +102,20 @@ struct EPGGridScroller: View {
@@ -111,7 +111,7 @@ index 743307e..5340039 100644
 +                    // Lume GF: programmes run on under the channel column instead of stopping at a hard line beside
 +                    // it; only the top edge stays clipped, so rows never slide up into the time ruler
 +                    .scrollClipDisabled()
-+                    .clipShape(GFGuideTopClip())
++                    .clipShape(GFGuideTopClip(leading: metrics.channelColumnWidth + metrics.channelColumnGap))
 +                #endif
                  #if os(tvOS)
                      // Lume GF: programmes blur and fade out as they reach the channel column (Georgs on build 21)
