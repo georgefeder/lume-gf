@@ -222,6 +222,12 @@ nonisolated enum GFGuideGlass {
         columnWidth + 2 * gap
     }
 
+    /// iPhone guide: over how many points, from the column's inner edge, the programmes under the channel column fade
+    /// out; gone for the rest of it (Georgs on build 31: they should slowly and then fully disappear).
+    static func underColumnFade(lead: CGFloat) -> CGFloat {
+        (lead * 0.7).rounded()
+    }
+
     /// How far the ruler's times blur and fade out at the channel column's edge and the screen's (Georgs on builds 18
     /// and 21); on the Apple TV as wide as the programmes' blurred edge below them.
     static func rulerFade(tv: Bool) -> (leading: CGFloat, trailing: CGFloat) {

@@ -278,6 +278,13 @@ struct GFGuideGlassTests {
         #expect(GFGuideGlass.underColumnLead(columnWidth: 136, gap: 4) == 144)
     }
 
+    @Test func `programmes under the iPhone's column fade out over most of it, gone before its outer edge`() {
+        // Georgs on build 31: they should slowly and then fully disappear
+        let fade = GFGuideGlass.underColumnFade(lead: 140)
+        #expect(fade == 98)
+        #expect(fade < 140)
+    }
+
     @Test func `a title parked at the column fades as its tile slides under it`() {
         #expect(GFGuideGlass.parkedTitleOpacity(room: 120) == 1)
         #expect(GFGuideGlass.parkedTitleOpacity(room: 56) == 1)
