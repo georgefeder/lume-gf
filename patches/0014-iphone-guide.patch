@@ -118,3 +118,25 @@ index 743307e..2d8b6c2 100644
                  #if os(tvOS)
                      // Lume GF: programmes blur and fade out as they reach the channel column (Georgs on build 21)
                      .modifier(GFGridLeadingBlur(width: GFGuideGlass.gridEdge(tv: true)))
+diff --git a/Lume/Views/LiveTV/EPG/EPGProgramRows.swift b/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
+index a0badcb..ffd307f 100644
+--- a/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
++++ b/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
+@@ -77,8 +77,16 @@ struct EPGRows: View, Equatable {
+         .frame(width: timeline.totalWidth, height: contentHeight, alignment: .topLeading)
+         .overlay(alignment: .topLeading) {
+             TimelineView(.everyMinute) { context in
++                let nowX = timeline.x(for: context.date) - EPGNowIndicator.width / 2
+                 EPGNowIndicator(height: contentHeight)
+-                    .offset(x: timeline.x(for: context.date) - EPGNowIndicator.width / 2)
++                #if !os(tvOS)
++                    // Lume GF: the now line goes once it slides past the grid's edge, not on under the channel column
++                    // (Georgs on build 32); the Now pill stays pinned at the ruler's edge
++                    .visualEffect { content, proxy in
++                        content.opacity(proxy.frame(in: .scrollView).minX + nowX < 0 ? 0 : 1)
++                    }
++                #endif
++                    .offset(x: nowX)
+                     .allowsHitTesting(false)
+             }
+         }
