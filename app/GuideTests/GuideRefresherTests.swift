@@ -37,6 +37,19 @@ struct GuideRefresherTests {
         #expect(s.lastUpdate == now && s.channelIDs == ["c1"])
     }
 
+    @Test func `a stale guide goes in now first, a current one does not`() async throws {
+        let (_, _, refresher) = try setUp()
+        let (url, path) = guideTestURL(), id = UUID()
+        let ready = NowReadyCount()
+        refresher.onNowReady = { ready.bump() }
+        GuideStubProtocol.answer(path, .init(status: 200, headers: ["ETag": "\"a\""], body: try guide(3)))
+        let first = try await refresher.refresh(sourceID: id, url: url, knownChannelIDs: ["c1"], force: false)
+        #expect(first.summary.hasSuffix("(now first)") && ready.value == 1) // nothing stored yet
+        GuideStubProtocol.answer(path, .init(status: 200, headers: ["ETag": "\"b\""], body: try guide(4)))
+        let second = try await refresher.refresh(sourceID: id, url: url, knownChannelIDs: ["c1"], force: false)
+        #expect(!second.summary.hasSuffix("(now first)") && ready.value == 1)
+    }
+
     @Test func `an unchanged answer keeps the guide and records the check`() async throws {
         let (container, states, refresher) = try setUp()
         let (url, path) = guideTestURL(), id = UUID()
@@ -124,5 +137,19 @@ struct GuideRefresherTests {
         #expect(GuideStubProtocol.lastRequest(path)?.value(forHTTPHeaderField: "If-None-Match") == nil)
         #expect(outcome.claimedChannelIDs == ["c1", "c2"])
         #expect(try count(container) == 4)
+    }
+}
+
+/// Counts `GuideRefresher.onNowReady` calls (made from the refresh's own thread).
+private nonisolated final class NowReadyCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.withLock { count }
+    }
+
+    func bump() {
+        lock.withLock { count += 1 }
     }
 }

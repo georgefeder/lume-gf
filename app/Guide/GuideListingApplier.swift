@@ -61,8 +61,11 @@ nonisolated struct GuideListingApplier {
     /// Reads `fileURL` and applies it: inserts and updates batch by batch; deletions (and dropping old programmes)
     /// only when the file was read completely. `shouldStop` is asked after each batch (a background task's time).
     /// `allChannels`: every channel of every playlist; old programmes of channels outside it are dropped too.
+    /// `nowFirst` (a stale stored guide, `GuideDiffPlanner.wantsNowFirst`): the programmes it overlaps are read and
+    /// saved first, then `onNowReady` runs (the guide screens show them), then the whole file.
     func apply(fileURL: URL, claimableChannels: Set<String>, index: GuideStoredIndex, now: Date,
-               allChannels: Set<String>? = nil, shouldStop: @escaping () -> Bool = { Task.isCancelled }) -> Result {
+               allChannels: Set<String>? = nil, nowFirst: DateInterval? = nil, onNowReady: () -> Void = {},
+               shouldStop: @escaping () -> Bool = { Task.isCancelled }) -> Result {
         // the planner takes the rows over while the file is read (a shared dictionary is copied whole on its first
         // change); they come back, with this file's changes, at the end
         let rows = index.rows
@@ -72,8 +75,20 @@ nonisolated struct GuideListingApplier {
                                       allChannels: allChannels),
             context: ModelContext(container)
         )
-        let parse = XMLTVParser.parseChecked(fileURL: fileURL, batchSize: 2000, shouldStop: shouldStop) { batch in
-            autoreleasepool { run.apply(batch) }
+        var parse = (count: 0, completed: true)
+        if let nowFirst {
+            parse = XMLTVParser.parseChecked(fileURL: fileURL, batchSize: 2000, shouldStop: shouldStop) { batch in
+                autoreleasepool { run.apply(batch.filter { $0.end > nowFirst.start && $0.start < nowFirst.end }) }
+            }
+            try? run.context.save()
+            run.pending = 0
+            if parse.completed { onNowReady() }
+        }
+        if parse.completed {
+            // the programmes taken first are seen already: the planner skips them
+            parse = XMLTVParser.parseChecked(fileURL: fileURL, batchSize: 2000, shouldStop: shouldStop) { batch in
+                autoreleasepool { run.apply(batch) }
+            }
         }
         var result = run.result
         result.completed = parse.completed

@@ -95,6 +95,7 @@ final class GuideScheduler {
             timer?.cancel()
             timer = nil
             submitBackgroundRefresh()
+            submitImportTask(onPower: true)
         default:
             break
         }
@@ -139,6 +140,7 @@ final class GuideScheduler {
         private func runBackground(_ task: BGTask) async {
             let finished = await EPGSyncService.shared.refreshIfDueAndWait()
             submitBackgroundRefresh()
+            if finished, task is BGProcessingTask { submitImportTask(onPower: true) }
             task.setTaskCompleted(success: finished)
         }
 
@@ -152,9 +154,16 @@ final class GuideScheduler {
             }
         }
 
-        private func submitImportTask() {
+        /// The longer background time Apple gives while the device is idle: to finish a refresh the short one cut off,
+        /// or (`onPower`) to keep the guide current while the iPhone charges overnight, so it opens with today's
+        /// programmes (Georgs, 9 Oct: a guide a day old took a minute to come in at launch).
+        private func submitImportTask(onPower: Bool = false) {
             let request = BGProcessingTaskRequest(identifier: Self.importTaskID)
             request.requiresNetworkConnectivity = true
+            if onPower {
+                request.requiresExternalPower = true
+                request.earliestBeginDate = GuideClock.backgroundBeginDate(next: nextCheck(), now: Date())
+            }
             do {
                 try BGTaskScheduler.shared.submit(request)
             } catch {
@@ -164,6 +173,6 @@ final class GuideScheduler {
     #else
         nonisolated static func registerBackgroundTasks() {}
         private func submitBackgroundRefresh() {}
-        private func submitImportTask() {}
+        private func submitImportTask(onPower _: Bool = false) {}
     #endif
 }

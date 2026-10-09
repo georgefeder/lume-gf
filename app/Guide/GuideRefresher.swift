@@ -19,6 +19,8 @@ nonisolated final class GuideRefresher {
     let now: () -> Date
     /// Every channel of every playlist this run (EPGSyncManager): old programmes of other channels are orphans.
     var allChannelIDs: Set<String>?
+    /// A stale guide's programmes on now are in, ahead of the rest of its file (EPGSyncManager tells the guide screens).
+    var onNowReady: @Sendable () -> Void = {}
     private var index: GuideStoredIndex?
 
     init(container: ModelContainer, fetcher: GuideFetcher = GuideFetcher(), states: GuideSourceStateStore = .shared,
@@ -67,8 +69,14 @@ nonisolated final class GuideRefresher {
             let applier = GuideListingApplier(container: container)
             let index = index ?? GuideStoredIndex(rows: applier.loadStored())
             self.index = index
-            let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: now(),
-                                       allChannels: allChannelIDs)
+            // a stale stored guide (a phone not opened for a day, a first import): what is on now goes in first
+            let mine = state.channelIDs.intersection(knownChannelIDs)
+            let at = now()
+            let stale = GuideDiffPlanner.wantsNowFirst(stored: index.rows,
+                                                       channels: mine.isEmpty ? knownChannelIDs : mine, now: at)
+            let nowFirst = stale ? DateInterval(start: at, duration: GuideDiffPlanner.nowFirstSpan) : nil
+            let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: at,
+                                       allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: onNowReady)
             if Task.isCancelled { throw CancellationError() }
             guard result.completed else {
                 states.update(sourceID) { $0.recordFailure("guide file incomplete", at: now()) }
@@ -81,7 +89,8 @@ nonisolated final class GuideRefresher {
             }
             let seconds = String(format: "%.1f", Date().timeIntervalSince(started))
             return Outcome(claimedChannelIDs: result.claimedChannels,
-                           summary: "+\(result.inserted) ~\(result.updated) -\(result.deleted) in \(seconds) s")
+                           summary: "+\(result.inserted) ~\(result.updated) -\(result.deleted) in \(seconds) s"
+                               + (stale ? " (now first)" : ""))
         }
     }
 

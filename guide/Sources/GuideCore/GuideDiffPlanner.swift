@@ -32,6 +32,21 @@ nonisolated struct GuideDiffPlanner {
     }
 
     static let keepPast: TimeInterval = 12 * 60 * 60
+    /// The span a stale guide takes first (`wantsNowFirst`): wider than an iPhone's or a TV's opening guide screen.
+    static let nowFirstSpan: TimeInterval = 4 * 60 * 60
+
+    /// Whether the stored guide has gone stale for `channels` (fewer than half have a programme on now): then an import
+    /// takes what is on from now for `nowFirstSpan` first and shows it, before the rest of the file (Georgs, 9 Oct: a
+    /// phone that had not refreshed for a day showed "No Programme" everywhere for a minute while a whole new guide
+    /// went in). A first import counts as stale.
+    static func wantsNowFirst(stored: [String: Stored], channels: Set<String>, now: Date) -> Bool {
+        guard !channels.isEmpty else { return false }
+        var onNow: Set<String> = []
+        for row in stored.values where row.start <= now && row.end > now && channels.contains(row.channelId) {
+            onNow.insert(row.channelId)
+        }
+        return onNow.count * 2 < channels.count
+    }
 
     static func id(channelId: String, start: Date) -> String {
         "\(channelId)-\(Int(start.timeIntervalSince1970))"

@@ -93,6 +93,22 @@ struct GuideListingApplierTests {
         #expect(fresh.count == 15000 && fresh == index.rows)
     }
 
+    @Test func `a stale guide takes what is on now first, then the rest`() throws {
+        let container = try makeTestContainer()
+        let index = GuideStoredIndex(rows: [:])
+        let file = try writeGuideFile(hourly("c1", from: now.addingTimeInterval(-2 * 3600), count: 10)) // -2 h to +8 h
+        var savedAtNowReady = -1
+        let result = GuideListingApplier(container: container).apply(
+            fileURL: file, claimableChannels: ["c1"], index: index, now: now,
+            nowFirst: DateInterval(start: now, duration: 4 * 3600),
+            onNowReady: { savedAtNowReady = (try? rows(container).count) ?? -1 }
+        )
+        #expect(savedAtNowReady == 4) // on now and the next hours, saved before the rest of the file
+        #expect(result.completed && result.inserted == 10 && result.updated == 0)
+        #expect(try rows(container).count == 10)
+        #expect(index.rows == GuideListingApplier(container: container).loadStored())
+    }
+
     @Test func `the stored guide is read whole in small pages`() throws {
         let container = try makeTestContainer()
         _ = apply(try writeGuideFile(hourly("c1", from: now, count: 5)), container, GuideStoredIndex(rows: [:]))
