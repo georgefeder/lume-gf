@@ -17,9 +17,11 @@ nonisolated enum GFCatalogStamps {
     }
 }
 
-/// Lume GF: playlist syncs nobody waits for (GFCatalogPlan): one at a time, out of sight. A sync with live channels is
-/// reported to the guide refresh like Lume's covered syncs; films and series alone are not (they add no channels).
-/// Films and series wait while video plays on this device (ContentSyncManager.gfWaitWhilePlaying).
+/// Lume GF: playlist syncs nobody waits for (GFCatalogPlan): one at a time, out of sight. They never hold the guide
+/// refresh back, unlike Lume's covered syncs: the playlist's channels are already in, and a daily sync of films and
+/// series (which waits while video plays here, ContentSyncManager.gfWaitWhilePlaying) kept the iPhone's guide empty
+/// for as long as it ran (Georgs, 9 Oct: "when i launch it, it doesnt automatically sync"). Once live channels are
+/// re-synced, the guide checks for programmes of new ones.
 @MainActor
 final class GFBackgroundCatalogSync {
     static let shared = GFBackgroundCatalogSync()
@@ -71,8 +73,6 @@ final class GFBackgroundCatalogSync {
         guard let playlist = try? ModelContext(container).fetch(
             FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistID })
         ).first, playlist.syncEnabled, playlist.syncStatus != .syncing else { return }
-        let reportsToGuide = job.scope.includesLive
-        if reportsToGuide { EPGSyncService.shared.contentSyncDidStart() }
         var succeeded = false
         do {
             let manager = ContentSyncManager(modelContainer: container, gfScope: job.scope, gfBackground: true)
@@ -85,6 +85,6 @@ final class GFBackgroundCatalogSync {
         } catch {
             Logger.database.info("Lume GF: background \(job.scope.rawValue) sync of \(playlistID) ended: \(error)")
         }
-        if reportsToGuide { EPGSyncService.shared.contentSyncDidFinish(succeeded: succeeded) }
+        if succeeded, job.scope.includesLive { EPGSyncService.shared.channelsDidSync() }
     }
 }

@@ -29,10 +29,10 @@ index cfb9d73..3b30c8c 100644
          // one (GuideRefresher), so a failed or cut-off download never empties the guide.
  
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index 4498429..14e3aba 100644
+index 4498429..d2ca86a 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
-@@ -106,9 +106,32 @@ final class EPGSyncService {
+@@ -106,9 +106,39 @@ final class EPGSyncService {
      /// the EPG frequency setting — and never alongside a pending playlist sync
      /// (see `EPGRefreshGate`). A deferred refresh runs once the sync is done.
      func syncIfDue() {
@@ -65,10 +65,17 @@ index 4498429..14e3aba 100644
 +    /// Lume GF: the player closed: a refresh held back while it played runs now.
 +    func playbackDidEnd() {
 +        runOwedRefresh()
++    }
++
++    /// Lume GF: a playlist's live channels were re-synced out of sight (GFBackgroundCatalogSync, which never holds the
++    /// guide back): a refresh is owed for channels that are new (the same channels only ask "changed?").
++    func channelsDidSync() {
++        gate.owe()
++        runOwedRefresh()
      }
  
      /// The Sports Hub matches fixtures against programme sub-titles; a guide
-@@ -173,10 +196,11 @@ final class EPGSyncService {
+@@ -173,10 +203,11 @@ final class EPGSyncService {
  
      private func runOwedRefresh() {
          // `container` first: taking the debt before `configure` would drop it.
