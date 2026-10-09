@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
-index a77d182..c0f01cb 100644
+index a1f1a50..b8f34f4 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
 +++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 @@ -31,6 +31,11 @@
@@ -17,9 +17,9 @@ index a77d182..c0f01cb 100644
 @@ -103,7 +108,7 @@
              // Reload when the visible window or channel set changes, or a guide
              // import settles — EPG is resolved only for the channels on screen.
-             .task(id: "\(channels.count)-\(visible.count)-\(epgSync.isSyncing)") {
+             .task(id: "\(channels.count)-\(visible.count)-\(epgSync.isSyncing)-\(epgSync.gfNowReady)") {
 -                await loadEPG(for: visible)
-+                await loadEPG(for: visible, generation: "\(channels.count)-\(epgSync.isSyncing)")
++                await loadEPG(for: visible, generation: "\(channels.count)-\(epgSync.isSyncing)-\(epgSync.gfNowReady)")
              }
              .alert("Clear Recently Watched", isPresented: $confirmingClear) {
                  Button("Clear", role: .destructive) { clearRecentlyWatched() }

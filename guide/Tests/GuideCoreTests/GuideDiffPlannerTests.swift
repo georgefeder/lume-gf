@@ -115,4 +115,17 @@ struct GuideDiffPlannerTests {
         var p = GuideDiffPlanner(stored: [:], claimableChannels: ["a"], now: now)
         #expect(p.plan([item("a", 0, fp: 1), item("a", 0, fp: 2)]).inserts == [item("a", 0).id])
     }
+
+    @Test func `a stale stored guide takes what is on now first`() {
+        let current = stored([item("a", -0.5), item("b", -0.5), item("c", -0.5)])
+        let dayOld = stored([item("a", -24), item("b", -24), item("c", -0.5)])
+        #expect(!GuideDiffPlanner.wantsNowFirst(stored: current, channels: ["a", "b", "c"], now: now))
+        #expect(GuideDiffPlanner.wantsNowFirst(stored: dayOld, channels: ["a", "b", "c"], now: now))
+        #expect(GuideDiffPlanner.wantsNowFirst(stored: [:], channels: ["a"], now: now)) // first import
+        #expect(!GuideDiffPlanner.wantsNowFirst(stored: [:], channels: [], now: now))
+        // half on now is not stale; other channels' programmes don't count
+        #expect(!GuideDiffPlanner.wantsNowFirst(stored: stored([item("a", 0)]), channels: ["a", "b"], now: now))
+        #expect(GuideDiffPlanner.wantsNowFirst(stored: stored([item("x", 0), item("y", 0)]), channels: ["a", "b"],
+                                               now: now))
+    }
 }

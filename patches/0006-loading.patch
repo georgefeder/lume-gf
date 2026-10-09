@@ -17,22 +17,34 @@ index 714668d..32a6cd5 100644
  
      /// Set by `CloudSyncCoordinator` while `NSPersistentCloudKitContainer` is
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
-index cfb9d73..3b30c8c 100644
+index cfb9d73..a414ef9 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
 +++ b/Lume/Services/Sync/EPGSyncManager.swift
-@@ -51,6 +51,7 @@ actor EPGSyncManager {
+@@ -51,6 +51,9 @@ actor EPGSyncManager {
              return false
          }
  
 +        refresher.allChannelIDs = knownChannelIDs // Lume GF: old programmes of channels outside it are orphans
++        // Lume GF: a stale guide's programmes on now show before the rest of its file is in
++        refresher.onNowReady = { Task { @MainActor in EPGSyncService.shared.guideNowReady() } }
          // Lume GF: no clearListings(). Each source's new guide is applied as only-what-changed on top of the stored
          // one (GuideRefresher), so a failed or cut-off download never empties the guide.
  
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index 4498429..d2ca86a 100644
+index 4498429..8b67ee4 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
-@@ -106,9 +106,39 @@ final class EPGSyncService {
+@@ -77,6 +77,9 @@ final class EPGSyncService {
+     static let shared = EPGSyncService()
+ 
+     private(set) var isSyncing = false
++    /// Lume GF: bumped when a stale guide's programmes on now are in, ahead of the rest of the file (GuideRefresher).
++    /// The guide screens reload on it as on `isSyncing`.
++    private(set) var gfNowReady = 0
+ 
+     private var container: ModelContainer?
+     private var task: Task<Void, Never>?
+@@ -106,9 +109,44 @@ final class EPGSyncService {
      /// the EPG frequency setting — and never alongside a pending playlist sync
      /// (see `EPGRefreshGate`). A deferred refresh runs once the sync is done.
      func syncIfDue() {
@@ -67,6 +79,11 @@ index 4498429..d2ca86a 100644
 +        runOwedRefresh()
 +    }
 +
++    /// Lume GF: see `gfNowReady`.
++    func guideNowReady() {
++        gfNowReady += 1
++    }
++
 +    /// Lume GF: a playlist's live channels were re-synced out of sight (GFBackgroundCatalogSync, which never holds the
 +    /// guide back): a refresh is owed for channels that are new (the same channels only ask "changed?").
 +    func channelsDidSync() {
@@ -75,7 +92,7 @@ index 4498429..d2ca86a 100644
      }
  
      /// The Sports Hub matches fixtures against programme sub-titles; a guide
-@@ -173,10 +203,11 @@ final class EPGSyncService {
+@@ -173,10 +211,11 @@ final class EPGSyncService {
  
      private func runOwedRefresh() {
          // `container` first: taking the debt before `configure` would drop it.
@@ -91,6 +108,45 @@ index 4498429..d2ca86a 100644
      }
  
      private var isDue: Bool {
+diff --git a/Lume/Views/LiveTV/ChannelsListView.swift b/Lume/Views/LiveTV/ChannelsListView.swift
+index ef03247..17d6379 100644
+--- a/Lume/Views/LiveTV/ChannelsListView.swift
++++ b/Lume/Views/LiveTV/ChannelsListView.swift
+@@ -97,7 +97,7 @@ struct ChannelsList: View {
+         let visible = Array(channels.prefix(visibleCount))
+         // What makes the resolved EPG stale wholesale rather than merely
+         // incomplete: the channel set changing, or a guide import settling.
+-        let generation = "\(channels.count)-\(epgSync.isSyncing)"
++        let generation = "\(channels.count)-\(epgSync.isSyncing)-\(epgSync.gfNowReady)" // Lume GF: and once on now
+         VStack(spacing: 0) {
+             if scope == .recentlyWatched, !channels.isEmpty {
+                 clearHeader
+diff --git a/Lume/Views/LiveTV/EPG/EPGGuideView.swift b/Lume/Views/LiveTV/EPG/EPGGuideView.swift
+index 6eabbe5..cc7f42a 100644
+--- a/Lume/Views/LiveTV/EPG/EPGGuideView.swift
++++ b/Lume/Views/LiveTV/EPG/EPGGuideView.swift
+@@ -125,7 +125,7 @@ struct EPGGuideView: View {
+         // Reload when the channel set changes or a guide import settles. Keyed on
+         // `isSyncing` (which flips twice per sync) rather than observing the store,
+         // so the grid rebuilds a handful of times — not on every batch write.
+-        .task(id: "\(channels.count)-\(epgSync.isSyncing)") {
++        .task(id: "\(channels.count)-\(epgSync.isSyncing)-\(epgSync.gfNowReady)") { // Lume GF: and once on now
+             await loadListings(for: channels)
+         }
+     }
+diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
+index a77d182..a1f1a50 100644
+--- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
++++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
+@@ -102,7 +102,7 @@
+             .focusSection()
+             // Reload when the visible window or channel set changes, or a guide
+             // import settles — EPG is resolved only for the channels on screen.
+-            .task(id: "\(channels.count)-\(visible.count)-\(epgSync.isSyncing)") {
++            .task(id: "\(channels.count)-\(visible.count)-\(epgSync.isSyncing)-\(epgSync.gfNowReady)") {
+                 await loadEPG(for: visible)
+             }
+             .alert("Clear Recently Watched", isPresented: $confirmingClear) {
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
 index 8bbb24a..d814683 100644
 --- a/Lume/Views/MainTabView.swift
