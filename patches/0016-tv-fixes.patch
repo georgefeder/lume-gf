@@ -1,27 +1,17 @@
 diff --git a/Lume/Views/LiveTV/TVCategoryRail.swift b/Lume/Views/LiveTV/TVCategoryRail.swift
-index aec93f7..00d81d3 100644
+index aec93f7..8a14103 100644
 --- a/Lume/Views/LiveTV/TVCategoryRail.swift
 +++ b/Lume/Views/LiveTV/TVCategoryRail.swift
-@@ -50,7 +50,11 @@
-         private func panel(_ proxy: ScrollViewProxy) -> some View {
-             VStack(alignment: .leading, spacing: 0) {
-                 ScrollView {
--                    LazyVStack(alignment: .leading, spacing: 4) {
-+                    // Lume GF: every row built up front (a few hundred buttons at most). In a lazy list a swipe
-+                    // runs ahead of the rows built so far, and focus passes through nil on the way: the rail read
-+                    // that as focus leaving and snapped back to the selected category (Georgs, 11 Oct: swiping
-+                    // down the categories kept jumping back to the top)
-+                    VStack(alignment: .leading, spacing: 4) {
-                         rows
-                     }
-                     // The same inset on every side, so the first category
-@@ -76,7 +80,9 @@
+@@ -76,7 +76,12 @@
                      // A move onto a row the lazy list only just built passes
                      // through nil; only a nil that is still there a turn later
                      // means focus left the rail. Pre-arm the mask for re-entry.
-+                    // Lume GF: a nil that lasts a moment, not a turn (a fast swipe can pass through nil longer)
++                    // Lume GF: a nil that lasts a moment, not a turn. A swipe runs ahead of the rows built so far and
++                    // passes through nil for longer than a turn; read as focus leaving, the next row snapped back to
++                    // the selected category (Georgs, 11 Oct: swiping down the categories kept jumping to the top).
++                    // Building every row instead made a fast swipe stutter (a shadowed row each, build 36).
                      Task { @MainActor in
-+                        try? await Task.sleep(for: .milliseconds(150))
++                        try? await Task.sleep(for: .milliseconds(300))
                          guard focused == nil else { return }
                          railOwnsFocus = false
                          if let focusRegions, focusRegions.railFocused {
