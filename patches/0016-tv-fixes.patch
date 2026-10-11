@@ -25,3 +25,112 @@ index aec93f7..00d81d3 100644
                          guard focused == nil else { return }
                          railOwnsFocus = false
                          if let focusRegions, focusRegions.railFocused {
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Playback.swift b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+index 6852aad..a2b1611 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Playback.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+@@ -73,6 +73,9 @@ extension KSPlayerEngineView {
+     func notePlaybackProgress(_ current: TimeInterval) {
+         guard current.isFinite, !isSeeking else { return }
+         defer { tick.lastPlayhead = current }
++        if !gfDrawn, tick.lastPlayhead >= 0, current > tick.lastPlayhead {
++            gfDrawn = true // Lume GF: frames are on the surface; uncover it
++        }
+         // `.bufferFinished` comes before the first frame is drawn; a held
+         // zap frame waits until the new stream's playhead really moves.
+         if zapFrame != nil, hasStartedPlayback, tick.lastPlayhead >= 0, current > tick.lastPlayhead {
+diff --git a/Lume/Views/Player/KSPlayerEngineView+ZapFrame.swift b/Lume/Views/Player/KSPlayerEngineView+ZapFrame.swift
+index 4d9514d..8a157de 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+ZapFrame.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+ZapFrame.swift
+@@ -26,7 +26,9 @@ extension KSPlayerEngineView {
+         // Only a playing KSMEPlayer: its capture just converts the current
+         // pixel buffer, where KSAVPlayer's would decode a frame from the
+         // asset and hold up the switch.
+-        guard next.id != media.id, hasStartedPlayback,
++        // Lume GF: and only once frames are on screen: `.bufferFinished` (hasStartedPlayback) comes before the first
++        // frame, and a capture then converts a pixel buffer nothing was drawn into yet
++        guard next.id != media.id, hasStartedPlayback, gfDrawn,
+               let player = coordinator.playerLayer?.player as? KSMEPlayer
+         else {
+             onSelectMedia(next)
+@@ -59,6 +61,25 @@ extension KSPlayerEngineView {
+         }
+     }
+ 
++    /// Lume GF: black over the video surface until the stream on it has drawn a frame. A new stream's surface can show
++    /// leftover image memory first; surfing fast (the channel before never started, so no frame is held) flashed
++    /// fragments of other screens (Georgs, 11 Oct: a shrunken piece of the Live TV list while a channel loaded).
++    /// Shown at most a second past the stream's start, should its playhead not move (a paused start).
++    @ViewBuilder
++    var gfUndrawnCover: some View {
++        if !gfDrawn {
++            Color.black
++                .ignoresSafeArea()
++                .allowsHitTesting(false)
++                .accessibilityHidden(true)
++                .task(id: hasStartedPlayback) {
++                    guard hasStartedPlayback else { return }
++                    try? await Task.sleep(for: .seconds(1))
++                    if !Task.isCancelled { gfDrawn = true }
++                }
++        }
++    }
++
+     /// Above the video and below the subtitles, spinner and controls, which
+     /// keep showing that the next channel is on its way.
+     @ViewBuilder
+diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
+index 6008618..8346f3a 100644
+--- a/Lume/Views/Player/KSPlayerEngineView.swift
++++ b/Lume/Views/Player/KSPlayerEngineView.swift
+@@ -80,6 +80,9 @@ struct KSPlayerEngineView: View {
+     /// channel starts (see `selectMedia(_:)`).
+     @State var zapFrame: CGImage?
+     @State var zapFrameToken = 0
++    /// Lume GF: whether the stream on the video surface has drawn a frame (its playhead moved). Until then the surface
++    /// is covered (`gfUndrawnCover`).
++    @State var gfDrawn = false
+     /// True while the engine is preparing or (re)buffering, so the spinner shows
+     /// both on first open and on a mid-stream stall.
+     @State var isBuffering = true
+@@ -256,6 +259,7 @@ struct KSPlayerEngineView: View {
+                 }
+                 .ignoresSafeArea()
+ 
++                gfUndrawnCover
+                 zapFrameOverlay
+ 
+                 // KSPlayer decodes the selected subtitle into
+@@ -318,6 +322,7 @@ struct KSPlayerEngineView: View {
+                 scheduleHide()
+                 startStartupWatchdog()
+                 seedAdoptedSessionState()
++                if isAdoptedSession { gfDrawn = true } // Lume GF: the preview's picture is already on it
+             }
+             .onDisappear {
+                 hideTask?.cancel()
+@@ -342,6 +347,7 @@ struct KSPlayerEngineView: View {
+             .onChange(of: media) { _, _ in
+                 // The host swapped the stream (KSPlayer reloads its URL
+                 // automatically). Reset local scrubbing / panel state.
++                gfDrawn = false // Lume GF
+                 isSeeking = false
+                 seekPosition = 0
+                 isPanelOpen = false
+@@ -467,6 +473,7 @@ struct KSPlayerEngineView: View {
+                 }
+                 .ignoresSafeArea()
+ 
++                gfUndrawnCover
+                 zapFrameOverlay
+ 
+                 // KSPlayer decodes the selected subtitle into
+@@ -527,6 +534,7 @@ struct KSPlayerEngineView: View {
+             }
+             #endif
+             .onChange(of: media.id) { _, _ in
++                gfDrawn = false // Lume GF
+                 resetVideoInfo()
+                 // An in-player swap reuses the KSPlayerLayer but re-prepares it;
+                 // re-arm the observation so the task can never be left awaiting a
