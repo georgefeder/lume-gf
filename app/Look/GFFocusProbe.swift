@@ -5,16 +5,17 @@
     /// of mine".
     @MainActor
     enum GFFocusProbe {
-        /// Whether the focused item lies on `rect` (window coordinates, SwiftUI's `.global`). A long swipe hands focus
+        /// Whether the focused item's centre lies on `rect` (window coordinates, SwiftUI's `.global`) or just past its
+        /// edge: a large item only overlapping it (a full-screen view) is not on it. A long swipe hands focus
         /// to a scroll view's fast-scroll index (the dots along its edge) for as long as it runs; that index is no
         /// SwiftUI view, but it is still inside the scroll view (Georgs, 11 Oct: the category rail read it as focus
         /// leaving and snapped back to the selected category).
         static func focusIsInside(_ rect: CGRect) -> Bool {
             guard !rect.isEmpty, let window = keyWindow,
                   let item = UIFocusSystem.focusSystem(for: window)?.focusedItem,
-                  let frame = frame(of: item, in: window)
+                  let focusedFrame = frame(of: item, in: window)
             else { return false }
-            return rect.intersects(frame)
+            return rect.insetBy(dx: -16, dy: -16).contains(CGPoint(x: focusedFrame.midX, y: focusedFrame.midY))
         }
 
         private static var keyWindow: UIWindow? {
@@ -28,8 +29,15 @@
             if let view = item as? UIView {
                 return view.convert(view.bounds, to: window)
             }
-            guard let space = item.parentFocusEnvironment?.focusItemContainer?.coordinateSpace else { return nil }
-            return space.convert(item.frame, to: window)
+            // the frame is in the space of the container holding the item: the nearest one up the environments
+            var environment = item.parentFocusEnvironment
+            while let current = environment {
+                if let container = current.focusItemContainer {
+                    return container.coordinateSpace.convert(item.frame, to: window)
+                }
+                environment = current.parentFocusEnvironment
+            }
+            return nil
         }
     }
 #endif

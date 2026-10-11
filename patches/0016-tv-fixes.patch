@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/LiveTV/TVCategoryRail.swift b/Lume/Views/LiveTV/TVCategoryRail.swift
-index aec93f7..0d27067 100644
+index aec93f7..aee53e3 100644
 --- a/Lume/Views/LiveTV/TVCategoryRail.swift
 +++ b/Lume/Views/LiveTV/TVCategoryRail.swift
 @@ -32,10 +32,11 @@
@@ -16,16 +16,20 @@ index aec93f7..0d27067 100644
  
          private var panelShape: RoundedRectangle {
              RoundedRectangle(cornerRadius: 32, style: .continuous)
-@@ -66,6 +67,8 @@
+@@ -66,6 +67,12 @@
              }
              .frame(width: TVLiveTVLayout.railWidth, alignment: .leading)
              .frame(maxHeight: .infinity, alignment: .top)
 +            // Lume GF: kept in the box, so a layout change never re-renders the rail
 +            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { leaveCheck.railFrame = $0 }
++            .onDisappear {
++                leaveCheck.task?.cancel() // Lume GF: a check never outlives the rail
++                leaveCheck.task = nil
++            }
              // Lume GF: clear Liquid Glass, the Live TV glow showing through (was frosted glass over a grey fill)
              .glassEffectCompat(.clear, in: panelShape)
              .onChange(of: recordings == nil) { _, isHidden in
-@@ -76,8 +79,18 @@
+@@ -76,8 +83,21 @@
                      // A move onto a row the lazy list only just built passes
                      // through nil; only a nil that is still there a turn later
                      // means focus left the rail. Pre-arm the mask for re-entry.
@@ -36,17 +40,20 @@ index aec93f7..0d27067 100644
 +                    // row snapped back to the selected category (Georgs, 11 Oct: swiping down the categories kept
 +                    // jumping to the top). One check at a time, dropped when focus lands: an older one waking in a
 +                    // later blip would read that blip as leaving. Focus still on the rail (the fast-scroll index a
-+                    // long swipe brings up holds it for seconds, and is no row) is not leaving: checked again.
++                    // long swipe brings up holds it for seconds, and is no row) is not leaving: checked again, for
++                    // 18 s at most.
 +                    leaveCheck.task?.cancel()
 +                    leaveCheck.task = Task { @MainActor in
++                        var checks = 0
 +                        repeat {
 +                            try? await Task.sleep(for: .milliseconds(300))
 +                            guard !Task.isCancelled, focused == nil else { return }
-+                        } while GFFocusProbe.focusIsInside(leaveCheck.railFrame)
++                            checks += 1
++                        } while checks < 60 && GFFocusProbe.focusIsInside(leaveCheck.railFrame)
                          railOwnsFocus = false
                          if let focusRegions, focusRegions.railFocused {
                              focusRegions.railFocused = false
-@@ -85,6 +98,8 @@
+@@ -85,6 +105,8 @@
                      }
                      return
                  }
@@ -55,7 +62,7 @@ index aec93f7..0d27067 100644
                  if let focusRegions, !focusRegions.railFocused {
                      focusRegions.railFocused = true
                  }
-@@ -148,7 +163,8 @@
+@@ -148,7 +170,8 @@
          }
  
          private func categoryButton(_ section: LiveTVSection) -> some View {
@@ -65,7 +72,7 @@ index aec93f7..0d27067 100644
                  selectedSection = section
                  onCategoryActivated()
              }
-@@ -157,7 +173,9 @@
+@@ -157,7 +180,9 @@
          private func recordingsButton(_ entry: TVCategoryRailRecordingsEntry) -> some View {
              railButton(
                  id: TVCategoryRailRecordingsEntry.id,
@@ -75,7 +82,7 @@ index aec93f7..0d27067 100644
                  icon: entry.isLocked ? "crown" : "recordingtape",
                  action: entry.onActivate
              )
-@@ -166,59 +184,115 @@
+@@ -166,59 +191,115 @@
              .id(TVCategoryRailRecordingsEntry.id)
          }
  
