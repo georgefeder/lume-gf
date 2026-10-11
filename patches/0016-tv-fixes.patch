@@ -1,20 +1,212 @@
 diff --git a/Lume/Views/LiveTV/TVCategoryRail.swift b/Lume/Views/LiveTV/TVCategoryRail.swift
-index aec93f7..8a14103 100644
+index aec93f7..82c56e1 100644
 --- a/Lume/Views/LiveTV/TVCategoryRail.swift
 +++ b/Lume/Views/LiveTV/TVCategoryRail.swift
-@@ -76,7 +76,12 @@
+@@ -32,10 +32,11 @@
+         /// commit later: without the pre-armed mask the wrong category
+         /// flashes fully styled for that first frame.
+         @State private var railOwnsFocus = false
++        /// Lume GF: the one pending "did focus leave?" check, dropped as soon as focus lands on a row again. Held in
++        /// a box, so starting or dropping it never re-renders the rail.
++        @State private var leaveCheck = LeaveCheck()
+ 
+         private let panelPadding: CGFloat = 16
+-        private let rowInset: CGFloat = 18
+-        private let iconSize: CGFloat = 22
+ 
+         private var panelShape: RoundedRectangle {
+             RoundedRectangle(cornerRadius: 32, style: .continuous)
+@@ -76,8 +77,15 @@
                      // A move onto a row the lazy list only just built passes
                      // through nil; only a nil that is still there a turn later
                      // means focus left the rail. Pre-arm the mask for re-entry.
-+                    // Lume GF: a nil that lasts a moment, not a turn. A swipe runs ahead of the rows built so far and
-+                    // passes through nil for longer than a turn; read as focus leaving, the next row snapped back to
-+                    // the selected category (Georgs, 11 Oct: swiping down the categories kept jumping to the top).
-+                    // Building every row instead made a fast swipe stutter (a shadowed row each, build 36).
-                     Task { @MainActor in
+-                    Task { @MainActor in
+-                        guard focused == nil else { return }
++                    // Lume GF: a nil that lasts 300 ms without a break, not a turn. A swipe runs ahead of the rows
++                    // built so far and passes through nil for longer than a turn; read as focus leaving, the next
++                    // row snapped back to the selected category (Georgs, 11 Oct: swiping down the categories kept
++                    // jumping to the top). One check at a time, dropped when focus lands: an older one waking in a
++                    // later blip would read that blip as leaving.
++                    leaveCheck.task?.cancel()
++                    leaveCheck.task = Task { @MainActor in
 +                        try? await Task.sleep(for: .milliseconds(300))
-                         guard focused == nil else { return }
++                        guard !Task.isCancelled, focused == nil else { return }
                          railOwnsFocus = false
                          if let focusRegions, focusRegions.railFocused {
+                             focusRegions.railFocused = false
+@@ -85,6 +93,8 @@
+                     }
+                     return
+                 }
++                leaveCheck.task?.cancel()
++                leaveCheck.task = nil
+                 if let focusRegions, !focusRegions.railFocused {
+                     focusRegions.railFocused = true
+                 }
+@@ -148,7 +158,7 @@
+         }
+ 
+         private func categoryButton(_ section: LiveTVSection) -> some View {
+-            railButton(id: section.id, title: section.titleText, icon: section.icon) {
++            railButton(id: section.id, title: section.titleText, label: section.title, icon: section.icon) {
+                 selectedSection = section
+                 onCategoryActivated()
+             }
+@@ -158,6 +168,7 @@
+             railButton(
+                 id: TVCategoryRailRecordingsEntry.id,
+                 title: Text("Recordings"),
++                label: "Recordings",
+                 icon: entry.isLocked ? "crown" : "recordingtape",
+                 action: entry.onActivate
+             )
+@@ -166,59 +177,110 @@
+             .id(TVCategoryRailRecordingsEntry.id)
+         }
+ 
+-        private func railButton(id: String, title: Text, icon: String?, action: @escaping () -> Void) -> some View {
++        private func railButton(id: String, title: Text, label: String, icon: String?,
++                                action: @escaping () -> Void) -> some View {
+             let isSelected = selectedID == id
+-            // The selected category is exempt: when entry lands there
+-            // directly, it should read as focused from the first frame.
+-            let suppressed = !railOwnsFocus && !isSelected
+-            let isItemFocused = focused == id && !suppressed
++            // Lume GF: the row reads its own focus (`TVCategoryRailRow`): read here, every row the lazy list had
++            // built re-rendered on each focus move, and a fast swipe stuttered more the deeper it went (build 36)
++            return TVCategoryRailRow(
++                id: id, title: title, label: label, icon: icon, isSelected: isSelected,
++                // The selected category is exempt: when entry lands there
++                // directly, it should read as focused from the first frame.
++                suppressed: !railOwnsFocus && !isSelected,
++                focus: $focused, action: action
++            )
++            .equatable()
++        }
++    }
++
++    /// Lume GF: see `TVCategoryRail.leaveCheck`.
++    private final class LeaveCheck {
++        var task: Task<Void, Never>?
++    }
++
++    /// Lume GF: one rail row (Lume's styling, moved out of `TVCategoryRail.railButton`). `Equatable` on what it shows,
++    /// and wrapped in `.equatable()`, so the rail's focus changes skip it; its own focus comes from `isFocused`.
++    private struct TVCategoryRailRow: View, Equatable {
++        let id: String
++        let title: Text
++        /// The title as text, for `==`.
++        let label: String
++        let icon: String?
++        let isSelected: Bool
++        let suppressed: Bool
++        let focus: FocusState<String?>.Binding
++        /// Deliberately outside `==`: a fresh closure alone must not re-run the body.
++        let action: () -> Void
++
++        static func == (lhs: Self, rhs: Self) -> Bool {
++            lhs.id == rhs.id && lhs.label == rhs.label && lhs.icon == rhs.icon
++                && lhs.isSelected == rhs.isSelected && lhs.suppressed == rhs.suppressed
++        }
++
++        var body: some View {
++            Button(action: action) {
++                TVCategoryRailRowLabel(title: title, icon: icon, isSelected: isSelected, suppressed: suppressed)
++            }
++            .buttonStyle(TVCardButtonStyle(focusScale: 1.03, suppressFocusEffects: suppressed))
++            .focused(focus, equals: id)
++        }
++    }
++
++    private struct TVCategoryRailRowLabel: View {
++        let title: Text
++        let icon: String?
++        let isSelected: Bool
++        let suppressed: Bool
++        @Environment(\.isFocused) private var isFocusedRaw
++
++        private let rowInset: CGFloat = 18
++        private let iconSize: CGFloat = 22
++
++        var body: some View {
++            let isItemFocused = isFocusedRaw && !suppressed
+             let rowShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+-            return Button(action: action) {
+-                // Labels start flush at the row's edge; the virtual
+-                // collections' icon trails, so every label lines up whether or
+-                // not its row has one.
+-                HStack(spacing: 16) {
+-                    // One line at one size: provider names like
+-                    // "DE • Sport • Bundesliga • RAW" truncate rather than wrap,
+-                    // so every row keeps the same height.
+-                    title
+-                        .font(.system(
+-                            size: 22,
+-                            weight: isSelected || isItemFocused ? .semibold : .medium
+-                        ))
+-                        .lineLimit(1)
+-                        .truncationMode(.tail)
+-                    Spacer(minLength: 0)
+-                    if let icon {
+-                        Image(systemName: icon)
+-                            .font(.system(size: iconSize, weight: .semibold))
+-                            .frame(width: iconSize)
+-                    }
++            // Labels start flush at the row's edge; the virtual
++            // collections' icon trails, so every label lines up whether or
++            // not its row has one.
++            HStack(spacing: 16) {
++                // One line at one size: provider names like
++                // "DE • Sport • Bundesliga • RAW" truncate rather than wrap,
++                // so every row keeps the same height.
++                title
++                    .font(.system(
++                        size: 22,
++                        weight: isSelected || isItemFocused ? .semibold : .medium
++                    ))
++                    .lineLimit(1)
++                    .truncationMode(.tail)
++                Spacer(minLength: 0)
++                if let icon {
++                    Image(systemName: icon)
++                        .font(.system(size: iconSize, weight: .semibold))
++                        .frame(width: iconSize)
+                 }
+-                .foregroundStyle(textColor(isFocused: isItemFocused, isSelected: isSelected))
+-                .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+-                .padding(.horizontal, rowInset)
+-                .background(rowShape.fill(rowFill(isFocused: isItemFocused, isSelected: isSelected)))
+-                .overlay(rowShape.strokeBorder(rowBorder(isFocused: isItemFocused, isSelected: isSelected), lineWidth: 1))
+             }
+-            .buttonStyle(TVCardButtonStyle(focusScale: 1.03, suppressFocusEffects: suppressed))
+-            .focused($focused, equals: id)
++            .foregroundStyle(textColor(isFocused: isItemFocused))
++            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
++            .padding(.horizontal, rowInset)
++            .background(rowShape.fill(rowFill(isFocused: isItemFocused)))
++            .overlay(rowShape.strokeBorder(rowBorder(isFocused: isItemFocused), lineWidth: 1))
+             .animation(.easeOut(duration: 0.18), value: isItemFocused)
+         }
+ 
+-        private func textColor(isFocused: Bool, isSelected: Bool) -> Color {
++        private func textColor(isFocused: Bool) -> Color {
+             if isFocused { return EPGColors.ink }
+             if isSelected { return .white }
+             return .white.opacity(0.82)
+         }
+ 
+-        private func rowFill(isFocused: Bool, isSelected: Bool) -> Color {
++        private func rowFill(isFocused: Bool) -> Color {
+             if isFocused { return EPGColors.cardFill }
+             if isSelected { return .white.opacity(0.16) }
+             return .clear
+         }
+ 
+-        private func rowBorder(isFocused: Bool, isSelected: Bool) -> Color {
++        private func rowBorder(isFocused: Bool) -> Color {
+             isSelected && !isFocused ? .white.opacity(0.22) : .clear
+         }
+     }
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Playback.swift b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
 index 6852aad..a2b1611 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Playback.swift
