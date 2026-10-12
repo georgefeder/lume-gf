@@ -1,8 +1,8 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 06d98af..a166c61 100644
+index 0d82baa..fef03f5 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -230,6 +230,7 @@ struct LumeApp: App {
+@@ -232,6 +232,7 @@ struct LumeApp: App {
          WindowGroup {
              // Lume GF: the screenshot build's demo (-D GF_DEMO only); every other build shows ContentView
              GFDemoSwitch { ContentView() }
@@ -11,10 +11,10 @@ index 06d98af..a166c61 100644
                  .environment(PremiumManager.shared)
                  .environment(cloudSync)
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index 5473c54..5290ecd 100644
+index 41334e5..6eff88f 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -255,6 +255,8 @@ struct FullScreenPlayerView: View {
+@@ -256,6 +256,8 @@ struct FullScreenPlayerView: View {
          .persistentSystemOverlays(.hidden)
          // Lume GF: only the player's screen is dark (iPhone/iPad: no dark flash of the app before a channel opens)
          .gfPlayerScreenDark()

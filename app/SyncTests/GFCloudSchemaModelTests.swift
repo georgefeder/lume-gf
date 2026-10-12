@@ -9,7 +9,7 @@ struct GFCloudSchemaModelTests {
         let model = try #require(NSManagedObjectModel.makeManagedObjectModel(for: [
             SyncedPlaylist.self, UserContentState.self, UserProfile.self, SyncedEPGSource.self,
             SyncedParentalPIN.self, SyncedCategoryRestriction.self, SyncedSportsFollow.self,
-            SyncedRecordingServer.self
+            SyncedRecordingServer.self, SyncedLiveTVPreferences.self
         ]))
         let real = model.entities.map { entity in
             GFCloudSchema.Entity(name: entity.name ?? "", attributes: entity.attributesByName.values.map { attribute in

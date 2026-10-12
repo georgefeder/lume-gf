@@ -1,8 +1,8 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 815d94e..7c5a998 100644
+index 051a63c..de9b471 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -228,7 +228,8 @@ struct LumeApp: App {
+@@ -230,7 +230,8 @@ struct LumeApp: App {
  
      var body: some Scene {
          WindowGroup {
@@ -13,7 +13,7 @@ index 815d94e..7c5a998 100644
                  .environment(PremiumManager.shared)
                  .environment(cloudSync)
 diff --git a/Lume/Services/Home/HomeLayoutSettings.swift b/Lume/Services/Home/HomeLayoutSettings.swift
-index 85b8b07..b056988 100644
+index c4d7eb3..7fca3fa 100644
 --- a/Lume/Services/Home/HomeLayoutSettings.swift
 +++ b/Lume/Services/Home/HomeLayoutSettings.swift
 @@ -15,6 +15,10 @@ import SwiftUI
@@ -27,7 +27,7 @@ index 85b8b07..b056988 100644
      case forYou
      case trendingMovies
      case trendingSeries
-@@ -33,6 +37,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
+@@ -34,6 +38,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
          switch self {
          case .recentlyWatched: "Recently Watched"
          case .favorites: "Favorites"
@@ -36,7 +36,7 @@ index 85b8b07..b056988 100644
          case .forYou: "For You"
          case .trendingMovies: "Trending Movies"
          case .trendingSeries: "Trending Series"
-@@ -49,6 +55,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
+@@ -51,6 +57,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
          switch self {
          case .recentlyWatched: String(localized: "Recently Watched")
          case .favorites: String(localized: "Favorites")
@@ -45,7 +45,7 @@ index 85b8b07..b056988 100644
          case .forYou: String(localized: "For You")
          case .trendingMovies: String(localized: "Trending Movies")
          case .trendingSeries: String(localized: "Trending Series")
-@@ -62,6 +70,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
+@@ -65,6 +73,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
          switch self {
          case .recentlyWatched: "clock.arrow.circlepath"
          case .favorites: "star"
@@ -271,11 +271,11 @@ index 98ede44..9a5e17a 100644
      }
  
 diff --git a/Lume/Views/Home/HomeRows.swift b/Lume/Views/Home/HomeRows.swift
-index c6d9d32..9207973 100644
+index 351f733..eb6fdee 100644
 --- a/Lume/Views/Home/HomeRows.swift
 +++ b/Lume/Views/Home/HomeRows.swift
-@@ -38,7 +38,9 @@ struct HomeRow: View {
-                 .padding(.horizontal)
+@@ -36,7 +36,9 @@ struct HomeRow: View {
+             header
  
              ScrollView(.horizontal, showsIndicators: false) {
 -                LazyHStack(spacing: PosterCardMetrics.railSpacing) {
@@ -285,7 +285,7 @@ index c6d9d32..9207973 100644
                      ForEach(items) { item in
                          HomeItemCell(
                              item: item,
-@@ -49,6 +51,9 @@ struct HomeRow: View {
+@@ -47,6 +49,9 @@ struct HomeRow: View {
                              onStartMultiView: onStartMultiView,
                              animationNamespace: animationNamespace
                          )
@@ -296,7 +296,7 @@ index c6d9d32..9207973 100644
                  }
                  .padding(.horizontal)
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index 7b450c3..32a71f3 100644
+index d061f8d..c68d570 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
 @@ -34,6 +34,9 @@ struct HomeView: View {
@@ -309,7 +309,7 @@ index 7b450c3..32a71f3 100644
  
      @State var trendingMovies: [HomeMediaItem] = []
      @State var trendingSeries: [HomeMediaItem] = []
-@@ -137,6 +140,13 @@ struct HomeView: View {
+@@ -138,6 +141,13 @@ struct HomeView: View {
          )
          favStreams.fetchLimit = 30
          _favoriteStreams = Query(favStreams)
@@ -323,10 +323,10 @@ index 7b450c3..32a71f3 100644
      }
  
      var body: some View {
-@@ -206,6 +216,16 @@ struct HomeView: View {
-                     .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
+@@ -208,6 +218,16 @@ struct HomeView: View {
                  #endif
              }
+             .homeDownloadsDestination()
 +            // Lume GF: "Show All" from the recently added rows
 +            .navigationDestination(for: LibraryCollection.self) { collection in
 +                if collection.type == .series {
@@ -340,7 +340,7 @@ index 7b450c3..32a71f3 100644
              #if os(tvOS)
              .navigationDestination(item: $selectedHero) { hero in
                  if let movie = hero.movie {
-@@ -265,6 +285,12 @@ struct HomeView: View {
+@@ -267,6 +287,12 @@ struct HomeView: View {
                  rail("Recently Watched", recentlyWatched, onRemove: removeFromRecentlyWatched)
              case .favorites:
                  rail("Favorites", favorites)
@@ -353,7 +353,7 @@ index 7b450c3..32a71f3 100644
              case .forYou:
                  ForYouRow(
                      items: recommendations,
-@@ -396,11 +422,18 @@ struct HomeView: View {
+@@ -400,11 +426,18 @@ struct HomeView: View {
              .map(\.item)
      }
  
@@ -486,7 +486,7 @@ index 642e3dd..a77d182 100644
          @State private var recordingStore = RecordingServerStore.shared
          /// Settings › Live TV's switch for the rail entry; off by default.
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index fde8702..068ec8d 100644
+index 2500ca4..9ee57a4 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
 @@ -165,7 +165,7 @@ struct AVPlayerEngineView: View {
@@ -499,10 +499,10 @@ index fde8702..068ec8d 100644
              coordinator.onTime = { current in
                  if !isSeeking, current.isFinite { clock.current = current }
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index ddd3bfa..5473c54 100644
+index 0a260ba..41334e5 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -253,7 +253,8 @@ struct FullScreenPlayerView: View {
+@@ -254,7 +254,8 @@ struct FullScreenPlayerView: View {
          .statusBarHidden(true)
          #endif
          .persistentSystemOverlays(.hidden)
@@ -513,10 +513,10 @@ index ddd3bfa..5473c54 100644
          .playerRecording(for: activeMedia)
          // Synchronous on purpose, and ahead of the `.task` below: the engine
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index 1ea5298..6008618 100644
+index 00c562e..92ea061 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
-@@ -311,7 +311,7 @@ struct KSPlayerEngineView: View {
+@@ -313,7 +313,7 @@ struct KSPlayerEngineView: View {
                  }
              }
              .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
@@ -525,7 +525,7 @@ index 1ea5298..6008618 100644
              .onAppear {
                  engine.attach(coordinator: coordinator)
                  attachNowPlayingTransport()
-@@ -499,7 +499,7 @@ struct KSPlayerEngineView: View {
+@@ -502,7 +502,7 @@ struct KSPlayerEngineView: View {
                  }
              }
              .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
@@ -535,7 +535,7 @@ index 1ea5298..6008618 100644
                  attachNowPlayingTransport()
                  scheduleHide()
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index 823f2f5..cd1a490 100644
+index 71c29f8..36c0659 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
 @@ -183,7 +183,7 @@ struct LumeEngineEngineView: View {
@@ -548,10 +548,10 @@ index 823f2f5..cd1a490 100644
              wireCoordinator()
              coordinator.startupTimeout = usesQuickStartupTimeout ? 15 : 40
 diff --git a/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift b/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift
-index b58f52e..9128ed9 100644
+index 85cf43e..835c78f 100644
 --- a/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift
 +++ b/Lume/Views/Player/MultiView/MultiViewChannelPickerTV.swift
-@@ -193,8 +193,8 @@
+@@ -197,8 +197,8 @@
                              .frame(width: 84, height: 56)
                              .background(.white.opacity(0.08), in: .rect(cornerRadius: 10))
  
@@ -577,10 +577,10 @@ index a83ff01..5e027b0 100644
                  // The tiles' QoE reports would be nonsense against a summary that
                  // models one stream at a time, and background indexing merges
 diff --git a/Lume/Views/Player/TVChannelBrowserOverlay.swift b/Lume/Views/Player/TVChannelBrowserOverlay.swift
-index 58eb4b3..773ba05 100644
+index af0338b..d4aca9f 100644
 --- a/Lume/Views/Player/TVChannelBrowserOverlay.swift
 +++ b/Lume/Views/Player/TVChannelBrowserOverlay.swift
-@@ -248,8 +248,8 @@
+@@ -252,8 +252,8 @@
                  .background(.white.opacity(0.08), in: .rect(cornerRadius: 10))
  
                  VStack(alignment: .leading, spacing: 3) {
@@ -609,7 +609,7 @@ index 6fc769f..f1d89e5 100644
                          .font(.system(size: 19))
                          .foregroundStyle(.white.opacity(0.6))
 diff --git a/Lume/Views/Player/VLCPlayerEngineView.swift b/Lume/Views/Player/VLCPlayerEngineView.swift
-index 7406035..fecb75a 100644
+index db4804b..1170e6f 100644
 --- a/Lume/Views/Player/VLCPlayerEngineView.swift
 +++ b/Lume/Views/Player/VLCPlayerEngineView.swift
 @@ -182,7 +182,7 @@ struct VLCPlayerEngineView: View {

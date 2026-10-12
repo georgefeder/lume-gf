@@ -166,10 +166,10 @@ index fc0ccf1..743307e 100644
              // On tvOS the focus strip overlays the channel column — the
              // guide's leftmost band, directly beside the rail. Being adjacent
 diff --git a/Lume/Views/LiveTV/TVCategoryRail.swift b/Lume/Views/LiveTV/TVCategoryRail.swift
-index ff9f065..aec93f7 100644
+index f809da4..28560d5 100644
 --- a/Lume/Views/LiveTV/TVCategoryRail.swift
 +++ b/Lume/Views/LiveTV/TVCategoryRail.swift
-@@ -66,9 +66,8 @@
+@@ -69,9 +69,8 @@
              }
              .frame(width: TVLiveTVLayout.railWidth, alignment: .leading)
              .frame(maxHeight: .infinity, alignment: .top)

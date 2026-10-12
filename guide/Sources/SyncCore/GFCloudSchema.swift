@@ -67,6 +67,11 @@ public nonisolated enum GFCloudSchema {
             .init(name: "baseURL", type: .string), .init(name: "serverID", type: .uuid),
             .init(name: "deviceID", type: .uuid), .init(name: "token", type: .string, encrypted: true),
             .init(name: "isEnabled", type: .bool), .init(name: "updatedAt", type: .date)
+        ]),
+        // Lume 2.5: the Live TV rail switches (Favorites, Recently Watched), account-wide
+        Entity(name: "SyncedLiveTVPreferences", attributes: [
+            .init(name: "id", type: .string), .init(name: "showsFavorites", type: .bool),
+            .init(name: "showsRecentlyWatched", type: .bool), .init(name: "updatedAt", type: .date)
         ])
     ]
 
