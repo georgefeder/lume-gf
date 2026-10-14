@@ -6,3 +6,4 @@ CloudSyncPrunedStateTests  # Lume's own iCloud test; failed in the parallel run 
 RecordingServerStoreTests  # Lume 2.4's own: "gives up in time" took 26 s against its 10 s in the parallel run (run 37670119522)
 M3USyncTests  # Lume's own 100k-entry timing test: 134 s against its 120 s in the parallel run (run 37670119522)
 GuideNowFirstTimingTests  # prints how soon a day-old guide shows what is on now; timings need the run to itself
+LumeEngineShutdownWaitTests  # Lume 2.6's own: waits timed to the second ("< 1 s") failed in the parallel run, where a no-op test took 52 s (run 38559986597)
