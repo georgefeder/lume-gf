@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-index 109edd5..cec2a63 100644
+index 84fdb68..7c9063f 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-@@ -69,12 +69,13 @@ struct EPGChannelCell: View {
+@@ -68,12 +68,13 @@ struct EPGChannelCell: View {
          }
      }
  
@@ -18,7 +18,7 @@ index 109edd5..cec2a63 100644
          }
      }
  
-@@ -191,6 +192,8 @@ struct EPGTimeRuler: View {
+@@ -190,6 +191,8 @@ struct EPGTimeRuler: View {
      let metrics: EPGMetrics
      /// Observed for `mirror` (moves) and `window` (block crossings).
      let sync: EPGScrollSync
@@ -27,7 +27,7 @@ index 109edd5..cec2a63 100644
  
      var body: some View {
          let mirrorX = sync.mirror.x
-@@ -198,14 +201,22 @@ struct EPGTimeRuler: View {
+@@ -197,14 +200,22 @@ struct EPGTimeRuler: View {
          // Moves with the now line, which ticks every minute; the labels the
          // pill would cover step aside with it.
          TimelineView(.everyMinute) { context in
@@ -54,7 +54,7 @@ index 109edd5..cec2a63 100644
              }
              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
          }
-@@ -231,6 +242,8 @@ struct EPGTimeRuler: View {
+@@ -230,6 +241,8 @@ struct EPGTimeRuler: View {
  struct EPGNowPill: View {
      let date: Date
      let metrics: EPGMetrics
@@ -63,7 +63,7 @@ index 109edd5..cec2a63 100644
  
      var body: some View {
          Text(date, format: .dateTime.hour().minute())
-@@ -240,6 +253,7 @@ struct EPGNowPill: View {
+@@ -239,6 +252,7 @@ struct EPGNowPill: View {
              .padding(.vertical, metrics.headerHeight * 0.11)
              .background(Capsule().fill(LiveTVPalette.accent))
              .fixedSize()
@@ -72,10 +72,10 @@ index 109edd5..cec2a63 100644
              // Zero-width and centred on its point: an alignment guide
              // would widen the ruler's stack leftwards by half the pill
 diff --git a/Lume/Views/LiveTV/EPG/EPGGrid.swift b/Lume/Views/LiveTV/EPG/EPGGrid.swift
-index 4f3ae91..2356775 100644
+index 327e5e3..981ca99 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGrid.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGrid.swift
-@@ -92,9 +92,13 @@ struct EPGGrid: View, Equatable {
+@@ -94,9 +94,13 @@ struct EPGGrid: View, Equatable {
                  // move instead (see EPGGridScroller.requestScroll).
                  sync.mirror = clamped
              #endif
@@ -92,7 +92,7 @@ index 4f3ae91..2356775 100644
              )
              if sync.window != window {
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 743307e..2d8b6c2 100644
+index 9f1c757..0f40f47 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -102,8 +102,22 @@ struct EPGGridScroller: View {
@@ -119,10 +119,10 @@ index 743307e..2d8b6c2 100644
                      // Lume GF: programmes blur and fade out as they reach the channel column (Georgs on build 21)
                      .modifier(GFGridLeadingBlur(width: GFGuideGlass.gridEdge(tv: true)))
 diff --git a/Lume/Views/LiveTV/EPG/EPGProgramRows.swift b/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
-index a0badcb..ffd307f 100644
+index 991a2d7..fcd4730 100644
 --- a/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGProgramRows.swift
-@@ -77,8 +77,16 @@ struct EPGRows: View, Equatable {
+@@ -79,8 +79,16 @@ struct EPGRows: View, Equatable {
          .frame(width: timeline.totalWidth, height: contentHeight, alignment: .topLeading)
          .overlay(alignment: .topLeading) {
              TimelineView(.everyMinute) { context in

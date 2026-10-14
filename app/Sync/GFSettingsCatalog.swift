@@ -26,7 +26,8 @@ enum GFSettingsCatalog {
 
     static let perKind: [String] = [
         AppAppearance.storageKey, HomeLayoutSettings.sectionOrderKey, HomeLayoutSettings.disabledSectionsKey,
-        HomeLayoutSettings.enabledSectionsKey,
+        HomeLayoutSettings.enabledSectionsKey, HomeLayoutSettings.recentlyWatchedIncludesLiveTVKey,
+        PlayerSettings.Playback.rotateToLandscapeKey, SubtitleStyle.storageKey,
         LiveTVLayoutMode.storageKey, PlayerSettings.engineKey, PlayerSettings.enginePriorityKey,
         PlayerSettings.externalPlayerKey, PlayerSettings.externalPlayerScopeKey, PlayerSettings.liveSurfModeKey,
         PlayerSettings.tvRemoteSwipesKey, PlayerSettings.tvGuidePreviewModeKey, PlayerSettings.deinterlaceKey,

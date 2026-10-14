@@ -135,7 +135,7 @@ index 6eabbe5..cc7f42a 100644
          }
      }
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
-index a77d182..a1f1a50 100644
+index 5681b2d..68d932b 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
 +++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 @@ -102,7 +102,7 @@

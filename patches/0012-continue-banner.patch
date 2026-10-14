@@ -11,13 +11,13 @@ index 0d82baa..fef03f5 100644
                  .environment(PremiumManager.shared)
                  .environment(cloudSync)
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index 41334e5..6eff88f 100644
+index 43b8345..feb1c55 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -256,6 +256,8 @@ struct FullScreenPlayerView: View {
-         .persistentSystemOverlays(.hidden)
+@@ -257,6 +257,8 @@ struct FullScreenPlayerView: View {
          // Lume GF: only the player's screen is dark (iPhone/iPad: no dark flash of the app before a channel opens)
          .gfPlayerScreenDark()
+         .playerOrientationLock()
 +        // Lume GF: tell the other devices what plays, for their continue banner (Part 4)
 +        .gfReportsLastPlayed(media: activeMedia, position: { clock.current }, duration: { clock.duration })
          .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }

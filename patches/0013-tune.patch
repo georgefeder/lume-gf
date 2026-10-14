@@ -40,7 +40,7 @@ index b2e7e1f..db5b91b 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index 9ee57a4..6aad23b 100644
+index cf7a90b..13c3743 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
 @@ -447,6 +447,7 @@ struct AVPlayerEngineView: View {
@@ -104,10 +104,10 @@ index f0739ed..f6b5d1c 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineCoordinator.swift b/Lume/Views/Player/LumeEngineCoordinator.swift
-index dc71b88..514687d 100644
+index 3261be6..a21f898 100644
 --- a/Lume/Views/Player/LumeEngineCoordinator.swift
 +++ b/Lume/Views/Player/LumeEngineCoordinator.swift
-@@ -265,6 +265,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
+@@ -270,6 +270,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
  
      // MARK: Transport
  
@@ -122,10 +122,10 @@ index dc71b88..514687d 100644
          let session = session
          let playing = isPlaying
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index 36c0659..892688e 100644
+index 66a9951..5f2c9a1 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
-@@ -510,6 +510,7 @@ struct LumeEngineEngineView: View {
+@@ -507,6 +507,7 @@ struct LumeEngineEngineView: View {
      }
  
      private func closePlayer() {

@@ -13,7 +13,7 @@ index 051a63c..de9b471 100644
                  .environment(PremiumManager.shared)
                  .environment(cloudSync)
 diff --git a/Lume/Services/Home/HomeLayoutSettings.swift b/Lume/Services/Home/HomeLayoutSettings.swift
-index c4d7eb3..7fca3fa 100644
+index c6f673f..3974cd0 100644
 --- a/Lume/Services/Home/HomeLayoutSettings.swift
 +++ b/Lume/Services/Home/HomeLayoutSettings.swift
 @@ -15,6 +15,10 @@ import SwiftUI
@@ -72,10 +72,10 @@ index bed4969..3cf64ba 100644
  
      // MARK: - State sampler
 diff --git a/Lume/Services/Player/PlayableMedia.swift b/Lume/Services/Player/PlayableMedia.swift
-index d7d453b..60a6010 100644
+index 0342f33..982ba9e 100644
 --- a/Lume/Services/Player/PlayableMedia.swift
 +++ b/Lume/Services/Player/PlayableMedia.swift
-@@ -264,7 +264,7 @@ nonisolated extension PlayableMedia {
+@@ -258,7 +258,7 @@ nonisolated extension PlayableMedia {
          return PlayableMedia(
              id: "live-\(stream.id)",
              url: url,
@@ -84,7 +84,7 @@ index d7d453b..60a6010 100644
              subtitle: nil,
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .live,
-@@ -307,7 +307,7 @@ nonisolated extension PlayableMedia {
+@@ -386,7 +386,7 @@ nonisolated extension PlayableMedia {
          return PlayableMedia(
              id: "catchup-\(stream.id)-\(Int(start.timeIntervalSince1970))",
              url: url,
@@ -94,7 +94,7 @@ index d7d453b..60a6010 100644
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .vod,
 diff --git a/Lume/Views/Components/Cards/LiveStreamCardView.swift b/Lume/Views/Components/Cards/LiveStreamCardView.swift
-index fa8f4f9..65ef1db 100644
+index 0fa3a30..5eb8752 100644
 --- a/Lume/Views/Components/Cards/LiveStreamCardView.swift
 +++ b/Lume/Views/Components/Cards/LiveStreamCardView.swift
 @@ -51,9 +51,10 @@ struct LiveStreamCardView: View {
@@ -296,7 +296,7 @@ index 351f733..eb6fdee 100644
                  }
                  .padding(.horizontal)
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index d061f8d..c68d570 100644
+index 07a28f3..534e461 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
 @@ -34,6 +34,9 @@ struct HomeView: View {
@@ -309,7 +309,7 @@ index d061f8d..c68d570 100644
  
      @State var trendingMovies: [HomeMediaItem] = []
      @State var trendingSeries: [HomeMediaItem] = []
-@@ -138,6 +141,13 @@ struct HomeView: View {
+@@ -140,6 +143,13 @@ struct HomeView: View {
          )
          favStreams.fetchLimit = 30
          _favoriteStreams = Query(favStreams)
@@ -323,7 +323,7 @@ index d061f8d..c68d570 100644
      }
  
      var body: some View {
-@@ -208,6 +218,16 @@ struct HomeView: View {
+@@ -210,6 +220,16 @@ struct HomeView: View {
                  #endif
              }
              .homeDownloadsDestination()
@@ -338,9 +338,9 @@ index d061f8d..c68d570 100644
 +                }
 +            }
              #if os(tvOS)
-             .navigationDestination(item: $selectedHero) { hero in
-                 if let movie = hero.movie {
-@@ -267,6 +287,12 @@ struct HomeView: View {
+                 .navigationDestination(item: $selectedHero) { hero in
+                     if let movie = hero.movie {
+@@ -269,6 +289,12 @@ struct HomeView: View {
                  rail("Recently Watched", recentlyWatched, onRemove: removeFromRecentlyWatched)
              case .favorites:
                  rail("Favorites", favorites)
@@ -353,7 +353,7 @@ index d061f8d..c68d570 100644
              case .forYou:
                  ForYouRow(
                      items: recommendations,
-@@ -400,11 +426,18 @@ struct HomeView: View {
+@@ -404,11 +430,18 @@ struct HomeView: View {
              .map(\.item)
      }
  
@@ -373,7 +373,7 @@ index d061f8d..c68d570 100644
              && trendingSeries.isEmpty
              && watchlist.isEmpty
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-index e71e81c..e68d0f0 100644
+index a4f745a..a6a705a 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 @@ -36,12 +36,21 @@ struct EPGChannelCell: View {
@@ -397,12 +397,12 @@ index e71e81c..e68d0f0 100644
 -                .lineLimit(metrics.channelNameLineLimit)
                  .frame(maxWidth: .infinity, alignment: .leading)
 -            if row.catchupCapable {
-+            if row.catchupCapable, GFGuideGlass.isTV {
-                 Image(systemName: "clock.arrow.circlepath")
++            if row.catchupCapable, GFGuideGlass.isTV { // Lume GF: on the iPhone the clock follows the badges
+                 CatchupBadge(days: nil)
                      .font(metrics.catchupGlyphFont)
                      .foregroundStyle(isHub ? EPGColors.cardText : LiveTVPalette.accent)
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 68c44f9..fc0ccf1 100644
+index ee3538f..7ad293a 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -131,6 +131,10 @@ struct EPGGridScroller: View {
@@ -417,10 +417,10 @@ index 68c44f9..fc0ccf1 100644
          }
          .reportsGuideFocus(surfaceFocused)
 diff --git a/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift b/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
-index 50d6fd2..e8c942c 100644
+index 9b23b68..65483a8 100644
 --- a/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
-@@ -84,7 +84,7 @@ struct EPGProgramDetailView: View {
+@@ -100,7 +100,7 @@ struct EPGProgramDetailView: View {
                      .padding(.vertical, 24)
                      .frame(maxWidth: .infinity, alignment: .leading)
                  }
@@ -429,7 +429,7 @@ index 50d6fd2..e8c942c 100644
                  #if os(iOS)
                      .navigationBarTitleDisplayMode(.inline)
                  #endif
-@@ -120,7 +120,9 @@ struct EPGProgramDetailView: View {
+@@ -136,7 +136,9 @@ struct EPGProgramDetailView: View {
                              .font(.system(size: 56, weight: .bold))
                              .lineLimit(3)
  
@@ -440,7 +440,7 @@ index 50d6fd2..e8c942c 100644
                              .font(.system(size: 30, weight: .semibold))
                              .foregroundStyle(.secondary)
  
-@@ -253,9 +255,10 @@ struct EPGProgramDetailView: View {
+@@ -276,9 +278,10 @@ struct EPGProgramDetailView: View {
              .frame(width: 60, height: 60)
              .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
  
@@ -454,7 +454,7 @@ index 50d6fd2..e8c942c 100644
              Spacer(minLength: 0)
          }
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
-index 642e3dd..a77d182 100644
+index 74f2ff1..5681b2d 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
 +++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 @@ -183,10 +183,11 @@
@@ -486,7 +486,7 @@ index 642e3dd..a77d182 100644
          @State private var recordingStore = RecordingServerStore.shared
          /// Settings › Live TV's switch for the rail entry; off by default.
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index 2500ca4..9ee57a4 100644
+index 43c054a..cf7a90b 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
 @@ -165,7 +165,7 @@ struct AVPlayerEngineView: View {
@@ -499,7 +499,7 @@ index 2500ca4..9ee57a4 100644
              coordinator.onTime = { current in
                  if !isSeeking, current.isFinite { clock.current = current }
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index 0a260ba..41334e5 100644
+index ad290e8..43b8345 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
 @@ -254,7 +254,8 @@ struct FullScreenPlayerView: View {
@@ -509,9 +509,9 @@ index 0a260ba..41334e5 100644
 -        .preferredColorScheme(.dark)
 +        // Lume GF: only the player's screen is dark (iPhone/iPad: no dark flash of the app before a channel opens)
 +        .gfPlayerScreenDark()
+         .playerOrientationLock()
          .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }
          .playerRecording(for: activeMedia)
-         // Synchronous on purpose, and ahead of the `.task` below: the engine
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
 index 00c562e..92ea061 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
@@ -535,10 +535,10 @@ index 00c562e..92ea061 100644
                  attachNowPlayingTransport()
                  scheduleHide()
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index 71c29f8..36c0659 100644
+index 2a00399..66a9951 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
-@@ -183,7 +183,7 @@ struct LumeEngineEngineView: View {
+@@ -190,7 +190,7 @@ struct LumeEngineEngineView: View {
          .subtitleSearch(isPresented: $isSearchingSubtitles, media: media) { subtitle in
              coordinator.loadExternalSubtitle(subtitle)
          }
@@ -577,10 +577,10 @@ index a83ff01..5e027b0 100644
                  // The tiles' QoE reports would be nonsense against a summary that
                  // models one stream at a time, and background indexing merges
 diff --git a/Lume/Views/Player/TVChannelBrowserOverlay.swift b/Lume/Views/Player/TVChannelBrowserOverlay.swift
-index af0338b..d4aca9f 100644
+index ae5de9f..868400c 100644
 --- a/Lume/Views/Player/TVChannelBrowserOverlay.swift
 +++ b/Lume/Views/Player/TVChannelBrowserOverlay.swift
-@@ -252,8 +252,8 @@
+@@ -237,8 +237,8 @@
                  .background(.white.opacity(0.08), in: .rect(cornerRadius: 10))
  
                  VStack(alignment: .leading, spacing: 3) {
@@ -609,7 +609,7 @@ index 6fc769f..f1d89e5 100644
                          .font(.system(size: 19))
                          .foregroundStyle(.white.opacity(0.6))
 diff --git a/Lume/Views/Player/VLCPlayerEngineView.swift b/Lume/Views/Player/VLCPlayerEngineView.swift
-index db4804b..1170e6f 100644
+index c47ffb2..e182d75 100644
 --- a/Lume/Views/Player/VLCPlayerEngineView.swift
 +++ b/Lume/Views/Player/VLCPlayerEngineView.swift
 @@ -182,7 +182,7 @@ struct VLCPlayerEngineView: View {
