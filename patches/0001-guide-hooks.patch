@@ -24,7 +24,7 @@ index 620dcaa..926477f 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 8194b68..815d94e 100644
+index 7e8d0c6..051a63c 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -32,11 +32,15 @@ struct LumeApp: App {
@@ -43,7 +43,7 @@ index 8194b68..815d94e 100644
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -332,6 +336,8 @@ struct LumeApp: App {
+@@ -334,6 +338,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
@@ -52,7 +52,7 @@ index 8194b68..815d94e 100644
                  }
                  .onChange(of: cloudSync.status.lastReconcile) {
                      // A reconcile may have pulled a PIN this device didn't have
-@@ -346,6 +352,7 @@ struct LumeApp: App {
+@@ -348,6 +354,7 @@ struct LumeApp: App {
                      RecordingServerConfigService.shared.reload()
                  }
                  .onChange(of: scenePhase) { _, phase in

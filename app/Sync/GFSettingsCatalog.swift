@@ -26,6 +26,8 @@ enum GFSettingsCatalog {
 
     static let perKind: [String] = [
         AppAppearance.storageKey, HomeLayoutSettings.sectionOrderKey, HomeLayoutSettings.disabledSectionsKey,
+        HomeLayoutSettings.enabledSectionsKey, HomeLayoutSettings.recentlyWatchedIncludesLiveTVKey,
+        PlayerSettings.Playback.rotateToLandscapeKey, SubtitleStyle.storageKey,
         LiveTVLayoutMode.storageKey, PlayerSettings.engineKey, PlayerSettings.enginePriorityKey,
         PlayerSettings.externalPlayerKey, PlayerSettings.externalPlayerScopeKey, PlayerSettings.liveSurfModeKey,
         PlayerSettings.tvRemoteSwipesKey, PlayerSettings.tvGuidePreviewModeKey, PlayerSettings.deinterlaceKey,
@@ -51,9 +53,12 @@ enum GFSettingsCatalog {
         RecordingServerSetup.showsRecordingsInLiveTVRailKey
     ]
 
+    /// Left to the device by our sync. The Live TV rail switches are synced by Lume itself since 2.5, account-wide
+    /// (`SyncedLiveTVPreferences` in iCloud): ours as well would fight it.
     static let deviceOnly: [String] = [
         DownloadManager.autoDeleteKey, DownloadManager.maxConcurrentKey, PlaylistSelectionStore.key,
         ProfileSettings.askOnStartupKey, DebugLogSettings.enabledKey, "tv.quickSwitch.hintShown.v1",
-        RecordingServerSetup.disclosureAcknowledgedKey
+        RecordingServerSetup.disclosureAcknowledgedKey,
+        LiveTVRailSettings.showsFavoritesKey, LiveTVRailSettings.showsRecentlyWatchedKey
     ]
 }

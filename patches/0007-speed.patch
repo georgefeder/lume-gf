@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
-index a1f1a50..b8f34f4 100644
+index 68d932b..84399b2 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
 +++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 @@ -31,6 +31,11 @@
@@ -62,7 +62,7 @@ index a1f1a50..b8f34f4 100644
  
          /// Clears a channel's watch timestamp so it drops out of the Recently
 diff --git a/Lume/Views/Player/TVPlayerContent.swift b/Lume/Views/Player/TVPlayerContent.swift
-index d824752..761987d 100644
+index 8c11e54..f806125 100644
 --- a/Lume/Views/Player/TVPlayerContent.swift
 +++ b/Lume/Views/Player/TVPlayerContent.swift
 @@ -92,9 +92,11 @@
