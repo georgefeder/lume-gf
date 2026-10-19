@@ -33,7 +33,7 @@ index 41533ef..dacc9b9 100644
      }
  
 diff --git a/Lume/Views/LiveTV/LiveTVView.swift b/Lume/Views/LiveTV/LiveTVView.swift
-index f067ec2..9ffe1ec 100644
+index edd3240..f2b9eb7 100644
 --- a/Lume/Views/LiveTV/LiveTVView.swift
 +++ b/Lume/Views/LiveTV/LiveTVView.swift
 @@ -226,12 +226,7 @@ struct LiveTVView: View {

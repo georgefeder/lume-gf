@@ -165,19 +165,3 @@ index 7ad293a..9f1c757 100644
              }
              // On tvOS the focus strip overlays the channel column — the
              // guide's leftmost band, directly beside the rail. Being adjacent
-diff --git a/Lume/Views/LiveTV/TVCategoryRail.swift b/Lume/Views/LiveTV/TVCategoryRail.swift
-index f809da4..28560d5 100644
---- a/Lume/Views/LiveTV/TVCategoryRail.swift
-+++ b/Lume/Views/LiveTV/TVCategoryRail.swift
-@@ -69,9 +69,8 @@
-             }
-             .frame(width: TVLiveTVLayout.railWidth, alignment: .leading)
-             .frame(maxHeight: .infinity, alignment: .top)
--            .background(panelShape.fill(.white.opacity(0.06)))
--            .glassEffectCompat(.regular, in: panelShape)
--            .overlay(panelShape.strokeBorder(.white.opacity(0.12), lineWidth: 1))
-+            // Lume GF: clear Liquid Glass, the Live TV glow showing through (was frosted glass over a grey fill)
-+            .glassEffectCompat(.clear, in: panelShape)
-             .onChange(of: recordings == nil) { _, isHidden in
-                 if isHidden { recordingsEntryRemoved(proxy) }
-             }

@@ -257,11 +257,13 @@ jobs:
             xcodebuild -showBuildSettings -project Lume.xcodeproj -target "$1" -configuration Sideload \
               -sdk ${{ matrix.sdk }} 2>/dev/null | sed -nE 's/^ *CODE_SIGN_ENTITLEMENTS = //p' | head -1
           }
-          if [ "${{ matrix.sdk }}" = iphoneos ]; then
-            sh ../gf/ci/sign-local.sh "$RUNNER_TEMP/LumeGF.xcarchive" "$(ent Lume)" "LumeWidgets=$(ent LumeWidgets)"
-          else
-            sh ../gf/ci/sign-local.sh "$RUNNER_TEMP/LumeGF.xcarchive" "$(ent Lume)"
-          fi
+          # every extension the archive holds (iOS: the widgets; tvOS since Lume 2.7: the Top Shelf), by its target's file
+          set -- "$RUNNER_TEMP/LumeGF.xcarchive" "$(ent Lume)"
+          for X in "$RUNNER_TEMP"/LumeGF.xcarchive/Products/Applications/*.app/PlugIns/*.appex; do
+            [ -d "$X" ] || continue
+            N=$(basename "$X" .appex); set -- "$@" "$N=$(ent "$N")"
+          done
+          sh ../gf/ci/sign-local.sh "$@"
 
       - name: App Store Connect key
         env:

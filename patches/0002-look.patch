@@ -1,8 +1,8 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 051a63c..de9b471 100644
+index bb06e21..4ce6eda 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -230,7 +230,8 @@ struct LumeApp: App {
+@@ -249,7 +249,8 @@ struct LumeApp: App {
  
      var body: some Scene {
          WindowGroup {
@@ -72,7 +72,7 @@ index bed4969..3cf64ba 100644
  
      // MARK: - State sampler
 diff --git a/Lume/Services/Player/PlayableMedia.swift b/Lume/Services/Player/PlayableMedia.swift
-index 0342f33..982ba9e 100644
+index 834f9d5..1446c5b 100644
 --- a/Lume/Services/Player/PlayableMedia.swift
 +++ b/Lume/Services/Player/PlayableMedia.swift
 @@ -258,7 +258,7 @@ nonisolated extension PlayableMedia {
@@ -94,7 +94,7 @@ index 0342f33..982ba9e 100644
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .vod,
 diff --git a/Lume/Views/Components/Cards/LiveStreamCardView.swift b/Lume/Views/Components/Cards/LiveStreamCardView.swift
-index 0fa3a30..5eb8752 100644
+index a58b78e..567ce31 100644
 --- a/Lume/Views/Components/Cards/LiveStreamCardView.swift
 +++ b/Lume/Views/Components/Cards/LiveStreamCardView.swift
 @@ -51,9 +51,10 @@ struct LiveStreamCardView: View {
@@ -271,7 +271,7 @@ index 98ede44..9a5e17a 100644
      }
  
 diff --git a/Lume/Views/Home/HomeRows.swift b/Lume/Views/Home/HomeRows.swift
-index 351f733..eb6fdee 100644
+index b1736c1..d32d087 100644
 --- a/Lume/Views/Home/HomeRows.swift
 +++ b/Lume/Views/Home/HomeRows.swift
 @@ -36,7 +36,9 @@ struct HomeRow: View {
@@ -454,7 +454,7 @@ index 9b23b68..65483a8 100644
              Spacer(minLength: 0)
          }
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
-index 74f2ff1..5681b2d 100644
+index d877deb..8ccf4ba 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
 +++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 @@ -183,10 +183,11 @@

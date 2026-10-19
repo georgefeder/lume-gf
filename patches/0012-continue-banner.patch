@@ -1,8 +1,8 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 0d82baa..fef03f5 100644
+index 734d01e..e43ec06 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -232,6 +232,7 @@ struct LumeApp: App {
+@@ -251,6 +251,7 @@ struct LumeApp: App {
          WindowGroup {
              // Lume GF: the screenshot build's demo (-D GF_DEMO only); every other build shows ContentView
              GFDemoSwitch { ContentView() }

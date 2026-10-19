@@ -1,5 +1,5 @@
 diff --git a/Lume/Info.plist b/Lume/Info.plist
-index 620dcaa..926477f 100644
+index b58785f..c85fc02 100644
 --- a/Lume/Info.plist
 +++ b/Lume/Info.plist
 @@ -2,6 +2,11 @@
@@ -14,7 +14,7 @@ index 620dcaa..926477f 100644
  	<key>CFBundleAllowMixedLocalizations</key>
  	<true/>
  	<key>CFBundleLocalizations</key>
-@@ -56,6 +61,8 @@
+@@ -57,6 +62,8 @@
  	<array>
  		<string>audio</string>
  		<string>remote-notification</string>
@@ -24,7 +24,7 @@ index 620dcaa..926477f 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 7e8d0c6..051a63c 100644
+index 75ce664..bb06e21 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -32,11 +32,15 @@ struct LumeApp: App {
@@ -43,16 +43,16 @@ index 7e8d0c6..051a63c 100644
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -334,6 +338,8 @@ struct LumeApp: App {
+@@ -353,6 +357,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
 +                    // Lume GF: keep the guide in step with the guide server while the app is open.
 +                    GuideScheduler.shared.appLaunched()
-                 }
-                 .onChange(of: cloudSync.status.lastReconcile) {
-                     // A reconcile may have pulled a PIN this device didn't have
-@@ -348,6 +354,7 @@ struct LumeApp: App {
+ 
+                     // Seed the widget / Top Shelf snapshot once services are up
+                     // (after profile bootstrap, so the catalog is profile-scoped).
+@@ -371,6 +377,7 @@ struct LumeApp: App {
                      RecordingServerConfigService.shared.reload()
                  }
                  .onChange(of: scenePhase) { _, phase in

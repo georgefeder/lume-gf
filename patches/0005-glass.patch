@@ -155,7 +155,7 @@ index fe96621..f13b39b 100644
              .allowsHitTesting(false)
          }
 diff --git a/Lume/Views/TV/TVSeriesDetailView.swift b/Lume/Views/TV/TVSeriesDetailView.swift
-index 905f7e3..0b595c5 100644
+index 93dee65..4aaf1d8 100644
 --- a/Lume/Views/TV/TVSeriesDetailView.swift
 +++ b/Lume/Views/TV/TVSeriesDetailView.swift
 @@ -568,19 +568,17 @@

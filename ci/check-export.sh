@@ -1,7 +1,8 @@
 #!/bin/sh
 # Checks the exported, App Store-signed app before it is uploaded: Lume GF's bundle id and home-screen name, Georgs'
 # team in the app id, no debug entitlement, our iCloud container, key-value store and production push in the app
-# (never Lume's container), none of them in the extensions, and (iOS) the app group in the app and every extension.
+# (never Lume's container), none of them in the extensions, and the app group in the app and every extension (iOS;
+# tvOS when the app has one, as the Top Shelf since Lume 2.7).
 # Usage: sh check-export.sh <export dir> <TEAM_ID> <iOS|tvOS>
 set -u
 USAGE="usage: check-export.sh EXPORT_DIR TEAM_ID iOS|tvOS"
@@ -20,6 +21,7 @@ APP=$(find "$T/Payload" -maxdepth 1 -name "*.app" | head -1)
 ents() { codesign -d --entitlements - --xml "$1" 2>/dev/null | plutil -convert xml1 -o - - 2>/dev/null; }
 ents "$APP" | grep -A1 "<key>application-identifier</key>" | grep -q "<string>$TEAM.lv.georgefeder.lume</string>" \
   || bad "application-identifier is not $TEAM.lv.georgefeder.lume"
+EXT=$(find "$APP/PlugIns" -maxdepth 1 -name "*.appex" 2>/dev/null | head -1)
 for B in "$APP" "$APP"/PlugIns/*.appex; do
   [ -d "$B" ] || continue
   N=$(basename "$B"); E=$(ents "$B")
@@ -34,7 +36,7 @@ for B in "$APP" "$APP"/PlugIns/*.appex; do
   else
     printf '%s\n' "$E" | grep -qiE "aps-environment|icloud|ubiquity" && bad "push/iCloud entitlement in $N"
   fi
-  if [ "$PLATFORM" = iOS ]; then
+  if [ "$PLATFORM" = iOS ] || [ -n "$EXT" ]; then
     printf '%s\n' "$E" | grep -q "<string>group.lv.georgefeder.lume</string>" || bad "app group missing in $N"
   fi
 done
@@ -43,5 +45,5 @@ for T in guide.refresh guide.import; do
     || bad "background task lv.georgefeder.lume.$T not declared"
 done
 V=$($PB -c 'Print :CFBundleVersion' "$APP/Info.plist" 2>/dev/null)
-[ "$fail" -eq 0 ] && echo "check-export: OK - $(basename "$APP") lv.georgefeder.lume build $V, our iCloud$( [ "$PLATFORM" = iOS ] && echo ", app group in the app and its extensions")"
+[ "$fail" -eq 0 ] && echo "check-export: OK - $(basename "$APP") lv.georgefeder.lume build $V, our iCloud$( { [ "$PLATFORM" = iOS ] || [ -n "$EXT" ]; } && echo ", app group in the app and its extensions")"
 exit "$fail"
