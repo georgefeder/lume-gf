@@ -11,3 +11,4 @@ TextEmbedderTests             # on-device text embeddings are not available on t
 SportsHubStringsTests         # fails on plain Lume too (baseline run 36525661807)
 SportsSyncStaleRefreshTests   # timing-dependent: failed once on plain Lume (baseline run 36525661807)
 SportsResolveCacheTests       # "an unchanged catalog reuses the answer, a sync recomputes it" fails on plain Lume 2.2.2 too (baseline run 37012552348)
+MediaServerLocalizationTests  # Lume 2.7.0's own test still lists the media-server footer from before Silo ("Lume recognizes Jellyfin, Emby and Plex servers ..."); Lume changed the text, not the test, so it fails on plain Lume (run 39289551969). Drop once Lume fixes it
