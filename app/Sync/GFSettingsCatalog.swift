@@ -28,6 +28,8 @@ enum GFSettingsCatalog {
         AppAppearance.storageKey, HomeLayoutSettings.sectionOrderKey, HomeLayoutSettings.disabledSectionsKey,
         HomeLayoutSettings.enabledSectionsKey, HomeLayoutSettings.recentlyWatchedIncludesLiveTVKey,
         PlayerSettings.Playback.rotateToLandscapeKey, SubtitleStyle.storageKey,
+        TopShelfSettings.enabledKey, TopShelfSettings.styleKey, TopShelfSettings.sectionOrderKey,
+        TopShelfSettings.disabledSectionsKey, TopShelfSettings.itemsPerSectionKey,
         LiveTVLayoutMode.storageKey, PlayerSettings.engineKey, PlayerSettings.enginePriorityKey,
         PlayerSettings.externalPlayerKey, PlayerSettings.externalPlayerScopeKey, PlayerSettings.liveSurfModeKey,
         PlayerSettings.tvRemoteSwipesKey, PlayerSettings.tvGuidePreviewModeKey, PlayerSettings.deinterlaceKey,

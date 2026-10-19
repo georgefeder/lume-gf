@@ -53,7 +53,7 @@ index 581c6f2..3f5f09e 100644
  
      /// Deletes movies for `playlistId` whose id is absent from `seenIds`.
 diff --git a/Lume/Services/Sync/ContentSyncManager.swift b/Lume/Services/Sync/ContentSyncManager.swift
-index 9a82f0c..b29760c 100644
+index b4b2c78..bc1990d 100644
 --- a/Lume/Services/Sync/ContentSyncManager.swift
 +++ b/Lume/Services/Sync/ContentSyncManager.swift
 @@ -20,6 +20,10 @@ actor ContentSyncManager {
@@ -187,7 +187,7 @@ index 9a82f0c..b29760c 100644
  
      func syncAllCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {
 diff --git a/Lume/Services/Sync/SyncProgress.swift b/Lume/Services/Sync/SyncProgress.swift
-index e81d463..1815c93 100644
+index 1dc9115..0ec52d0 100644
 --- a/Lume/Services/Sync/SyncProgress.swift
 +++ b/Lume/Services/Sync/SyncProgress.swift
 @@ -57,9 +57,18 @@ enum SyncStep: Int, CaseIterable, Identifiable {
@@ -212,10 +212,10 @@ index e81d463..1815c93 100644
          // Stalker maps onto the same catalog kinds as Xtream, but its default
          // sync skips the movie/series content walk (loaded on demand); only a
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index d814683..a71be97 100644
+index 4a840a0..69d243a 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
-@@ -460,7 +460,18 @@ struct MainTabView: View {
+@@ -500,7 +500,18 @@ struct MainTabView: View {
  
          for playlist in candidates where shouldAutoSync(playlist) {
              autoSyncAttempted.insert(playlist.id)

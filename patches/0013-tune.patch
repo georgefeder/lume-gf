@@ -14,7 +14,7 @@ index e47fa33..59d9c63 100644
                  case .empty:
                      // Reserve the logo's vertical space without flashing the
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index b2e7e1f..db5b91b 100644
+index 4cac0c6..021c570 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
 @@ -40,12 +40,15 @@ import SwiftUI
@@ -52,7 +52,7 @@ index cf7a90b..13c3743 100644
              if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
                  window.toggleFullScreen(nil)
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index 64f98cb..d6b0c61 100644
+index fc4c5cc..c835da4 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -65,12 +65,15 @@ import SwiftUI
@@ -78,7 +78,7 @@ index 64f98cb..d6b0c61 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineControlsOverlay.swift b/Lume/Views/Player/LumeEngineControlsOverlay.swift
-index f0739ed..f6b5d1c 100644
+index 61b5873..1246b0c 100644
 --- a/Lume/Views/Player/LumeEngineControlsOverlay.swift
 +++ b/Lume/Views/Player/LumeEngineControlsOverlay.swift
 @@ -54,12 +54,15 @@ import SwiftUI
@@ -134,7 +134,7 @@ index 66a9951..5f2c9a1 100644
              if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
                  window.toggleFullScreen(nil)
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index 10617fd..c096e40 100644
+index 848d052..f052d33 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 @@ -43,12 +43,15 @@ import VLCKit

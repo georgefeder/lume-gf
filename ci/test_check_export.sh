@@ -58,6 +58,11 @@ expect "iCloud in the widgets fails" 1 "$(ipa xcloud 'Lume GF' group,icloud,push
 expect "another team's app id fails" 1 "$(ipa appid 'Lume GF' group,icloud,push,appid=ZZZZZ99999.lv.georgefeder.lume group)" iOS "application-identifier"
 expect "wrong home-screen name fails" 1 "$(ipa name 'Lume' group,icloud,push group)" iOS "display name"
 expect "tvOS export without app group passes" 0 "$(ipa tv 'Lume GF' icloud,push none)" tvOS "check-export: OK"
+# Lume 2.7: the Apple TV app has an extension (the Top Shelf), which shares the app group with it
+expect "tvOS export with an extension and the app group passes" 0 "$(ipa tvx 'Lume GF' group,icloud,push group)" tvOS \
+  "app group in the app and its extensions"
+expect "tvOS export with an extension but no app group fails" 1 "$(ipa tvxnogroup 'Lume GF' icloud,push group)" tvOS \
+  "app group missing in Lume.app"
 mkdir -p "$T/none/export"
 expect "no .ipa fails" 1 "$T/none/export" iOS "no .ipa"
 expect "missing background task ids fails" 1 "$(ipa nobg 'Lume GF' group,icloud,push group)" iOS "background task"
