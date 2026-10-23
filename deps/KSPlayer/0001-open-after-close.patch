@@ -5,13 +5,14 @@ Debug builds also log when each open and close step happened (gfZapLog), for GFZ
 Test: LumeTests GFZapTests (local stream server). Made against KSPlayer bdfa2da (deps/KSPlayer/REVISION).
 
 diff --git a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
-index 5d539f3..ab12128 100644
+index 5d539f3..d9d00c0 100644
 --- a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
 +++ b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
-@@ -316,9 +316,12 @@ extension KSMEPlayer: MediaPlayerProtocol {
+@@ -316,9 +316,13 @@ extension KSMEPlayer: MediaPlayerProtocol {
  
      public func replace(url: URL, options: KSOptions) {
          KSLog("replaceUrl \(self)")
++        gfZapLog("replace with \(url.lastPathComponent) starts")
 +        // Lume GF: the next item opens only after this one has closed its input
 +        let replaced = playerItem
          shutdown()
@@ -21,8 +22,16 @@ index 5d539f3..ab12128 100644
          if options.videoDisable {
              videoOutput = nil
          } else if videoOutput == nil {
+@@ -331,6 +335,7 @@ extension KSMEPlayer: MediaPlayerProtocol {
+         audioOutput.renderSource = playerItem
+         videoOutput?.renderSource = playerItem
+         videoOutput?.options = options
++        gfZapLog("replace with \(url.lastPathComponent) done")
+     }
+ 
+     public var currentPlaybackTime: TimeInterval {
 diff --git a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
-index 5c52790..476c815 100644
+index 5c52790..fc91308 100644
 --- a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
 +++ b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
 @@ -11,6 +11,14 @@ import Libavcodec
@@ -40,7 +49,7 @@ index 5c52790..476c815 100644
  public final class MEPlayerItem: Sendable {
      private let url: URL
      private let options: KSOptions
-@@ -23,6 +31,11 @@ public final class MEPlayerItem: Sendable {
+@@ -23,6 +31,13 @@ public final class MEPlayerItem: Sendable {
      private var openOperation: BlockOperation?
      private var readOperation: BlockOperation?
      private var closeOperation: BlockOperation?
@@ -49,10 +58,20 @@ index 5c52790..476c815 100644
 +    /// Lume GF: the item this one replaces (`KSMEPlayer.replace`). It closes its input before this one opens, so a
 +    /// channel change never holds two connections to the server at once; waited for at most 1.5 s.
 +    var replacedItem: MEPlayerItem?
++    /// Lume GF: whether FFmpeg has been told to stop yet (logged once, Debug builds).
++    private var gfInterruptNoted = false
      private var seekingCompletionHandler: ((Bool) -> Void)?
      // 没有音频数据可以渲染
      private var isAudioStalled = true
-@@ -201,6 +214,7 @@ extension MEPlayerItem {
+@@ -177,6 +192,7 @@ extension MEPlayerItem {
+             let formatContext = Unmanaged<MEPlayerItem>.fromOpaque(ctx).takeUnretainedValue()
+             switch formatContext.state {
+             case .finished, .closed, .failed:
++                formatContext.gfNoteInterrupt()
+                 return 1
+             default:
+                 return 0
+@@ -201,6 +217,7 @@ extension MEPlayerItem {
          }
          var result = avformat_open_input(&self.formatCtx, urlString, nil, &avOptions)
          av_dict_free(&avOptions)
@@ -60,7 +79,7 @@ index 5c52790..476c815 100644
          if result == AVError.eof.code {
              state = .finished
              delegate?.sourceDidFinished()
-@@ -223,6 +237,7 @@ extension MEPlayerItem {
+@@ -223,6 +240,7 @@ extension MEPlayerItem {
              formatCtx.pointee.max_analyze_duration = maxAnalyzeDuration
          }
          result = avformat_find_stream_info(formatCtx, nil)
@@ -68,7 +87,7 @@ index 5c52790..476c815 100644
          guard result == 0 else {
              error = .init(errorCode: .formatFindStreamInfo, avErrorCode: result)
              avformat_close_input(&self.formatCtx)
-@@ -260,6 +275,7 @@ extension MEPlayerItem {
+@@ -260,6 +278,7 @@ extension MEPlayerItem {
          if let outputURL = options.outputURL {
              startRecord(url: outputURL)
          }
@@ -76,7 +95,23 @@ index 5c52790..476c815 100644
          if videoTrack == nil, audioTrack == nil {
              state = .failed
          } else {
-@@ -616,6 +632,13 @@ extension MEPlayerItem: MediaPlayback {
+@@ -610,12 +629,29 @@ extension MEPlayerItem: MediaPlayback {
+         return seekable
+     }
+ 
++    /// Lume GF: FFmpeg asked whether to stop and was told yes (logged the first time only).
++    fileprivate func gfNoteInterrupt() {
++        #if DEBUG
++            guard !gfInterruptNoted else { return }
++            gfInterruptNoted = true
++            gfZapLog("\(url.lastPathComponent) FFmpeg told to stop")
++        #endif
++    }
++
+     public func prepareToPlay() {
++        gfZapLog("\(url.lastPathComponent) open queued")
+         state = .opening
+         openOperation = BlockOperation { [weak self] in
              guard let self else { return }
              Thread.current.name = (self.operationQueue.name ?? "") + "_open"
              Thread.current.stackSize = KSOptions.stackSize
@@ -90,7 +125,7 @@ index 5c52790..476c815 100644
              self.openThread()
          }
          openOperation?.queuePriority = .veryHigh
-@@ -627,12 +650,14 @@ extension MEPlayerItem: MediaPlayback {
+@@ -627,12 +663,14 @@ extension MEPlayerItem: MediaPlayback {
  
      public func shutdown() {
          guard state != .closed else { return }
@@ -105,7 +140,7 @@ index 5c52790..476c815 100644
              self.allPlayerItemTracks.forEach { $0.shutdown() }
              KSLog("清空formatCtx")
              // 自定义的协议才会av_class为空
-@@ -646,6 +671,9 @@ extension MEPlayerItem: MediaPlayback {
+@@ -646,6 +684,9 @@ extension MEPlayerItem: MediaPlayback {
              self.formatCtx?.pointee.interrupt_callback.callback = nil
              avformat_close_input(&self.formatCtx)
              avformat_close_input(&self.outputFormatCtx)
