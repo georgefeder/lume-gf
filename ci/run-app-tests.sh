@@ -22,13 +22,9 @@ SPMARGS=""
 RESULT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/lume-app-tests-$$.xcresult"
 cd "$LUME"
 STATUS=0
-# a failed test gets one more go: on Xcode 27.1's runners the simulator itself has died mid-run (its services killed
-# at 15:43 in run 39978237971, every test still queued "failed") and hung in CoreAudio (run 39973169759). The log
-# still shows the first failure. The timing suites below get no second go.
 # shellcheck disable=SC2086
 xcodebuild test -project Lume.xcodeproj -scheme Lume -configuration Debug -destination "id=$SIM" \
-  CODE_SIGNING_ALLOWED=NO $SPMARGS -resultBundlePath "$RESULT" -retry-tests-on-failure -test-iterations 2 \
-  -only-testing:LumeTests $SKIP $ALONE || STATUS=$?
+  CODE_SIGNING_ALLOWED=NO $SPMARGS -resultBundlePath "$RESULT" -only-testing:LumeTests $SKIP $ALONE || STATUS=$?
 # a test process that dies leaves its remaining tests "failed (0.000 seconds)"; the crash report says why
 # xcodebuild says which Swift Testing test failed, the result bundle says why
 [ "$STATUS" -eq 0 ] || { python3 "$CI/failure-summary.py" "$RESULT" || true; python3 "$CI/crash-summary.py" 3 || true; }

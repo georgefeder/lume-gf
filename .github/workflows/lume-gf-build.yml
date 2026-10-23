@@ -20,7 +20,10 @@ jobs:
   # legs wait for this job: a failing test stops the upload for iPhone/iPad and Apple TV alike.
   tests:
     name: Tests before upload
-    runs-on: xcode-27
+    # the simulator tests stay on macOS 26 / iOS 26: on the xcode-27 image the simulator stalled for seconds at a time
+    # (the channel-change test's old stream closed after 22.6 s there and after 30 ms here, same code; runs 39998878835
+    # and 39998894394), crashed in CoreAudio and died mid-run. Archives and screenshots use Xcode 27.1.
+    runs-on: macos-26
     timeout-minutes: 90
     steps:
       - name: Our changes
@@ -82,12 +85,10 @@ jobs:
           ref: ${{ steps.recorder.outputs.ref }}
           path: LumeRecorder
 
-      # Xcode 27.1 (iOS 27.1 SDK): only apps built with it fill the iPhone Duo's inner display. The xcode-27 image
-      # defaults to 27.0 and also carries 27.2 betas, so 27.1 is picked by its path.
       - name: Select Xcode
-        run: |
-          sudo xcode-select -s /Applications/Xcode_27.1.app
-          xcodebuild -version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
 
       - name: Guide logic tests (swift test)
         working-directory: gf/guide
