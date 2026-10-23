@@ -1,0 +1,112 @@
+diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
+index fbcdc5a..d1e47dc 100644
+--- a/Lume/Views/Player/KSPlayerEngineView.swift
++++ b/Lume/Views/Player/KSPlayerEngineView.swift
+@@ -83,6 +83,10 @@ struct KSPlayerEngineView: View {
+     /// Lume GF: whether the stream on the video surface has drawn a frame (its playhead moved). Until then the surface
+     /// is covered (`gfUndrawnCover`).
+     @State var gfDrawn = false
++    /// Lume GF: an iPhone Duo stood up half folded: where the picture and the controls go (GFTabletop); nil when whole.
++    @State var gfTabletop: GFTabletopFrames?
++    /// Lume GF: the split player's reflection of the picture (GFVideoReflection), kept out of this view's state.
++    @State var gfReflection = GFReflection()
+     /// True while the engine is preparing or (re)buffering, so the spinner shows
+     /// both on first open and on a mid-stream stall.
+     @State var isBuffering = true
+@@ -475,27 +479,44 @@ struct KSPlayerEngineView: View {
+                     }
+                 }
+                 .ignoresSafeArea()
++                .gfTabletopArea(gfTabletop?.video, alignment: .top) // Lume GF: above the fold when stood up
+ 
+                 gfUndrawnCover
++                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
+                 zapFrameOverlay
++                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
++
++                // Lume GF: below the fold, the controls sit over a reflection of the picture
++                if let gfTabletop {
++                    GFVideoReflection(reflection: gfReflection)
++                        .gfTabletopArea(gfTabletop.panel, alignment: .bottom)
++                }
+ 
+                 // KSPlayer decodes the selected subtitle into
+                 // `subtitleModel.parts`, but the bare `KSVideoPlayer` above draws
+                 // only video — this overlay renders those parts on screen.
+                 KSSubtitleOverlay(subtitleModel: coordinator.subtitleModel)
++                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
+ 
+                 // Hold the controls back until the stream starts, so the loading
+                 // indicator stands in for a player that would otherwise look
+                 // paused behind its Play button.
+-                if isControlsVisible, hasStartedPlayback, !loadFailed {
++                // Lume GF: below the fold they cover nothing, so they stay (and the demo's fold shows them for its
++                // screenshot, though its made-up channel never plays)
++                if isControlsVisible || gfTabletop != nil, hasStartedPlayback && !loadFailed || GFTabletop.demoFold {
+                     controlsOverlay
++                        .gfTabletopArea(gfTabletop?.panel, alignment: .bottom,
++                                        bottomInset: gfTabletop?.bottomInset ?? 0)
+                         .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+                 }
+ 
+-                episodeOverlays(controlsVisible: isControlsVisible) { coordinator.seek(time: $0) }
++                // Lume GF: controls below the fold leave Skip Intro room on the picture
++                episodeOverlays(controlsVisible: isControlsVisible && gfTabletop == nil) { coordinator.seek(time: $0) }
++                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
+ 
+                 if isBuffering {
+                     PlayerLoadingIndicator(title: hasStartedPlayback ? nil : media.title)
++                        .gfTabletopArea(gfTabletop?.video, alignment: .top)
+                         .transition(.opacity)
+                 }
+ 
+@@ -505,9 +526,12 @@ struct KSPlayerEngineView: View {
+                         onRetry: { retryPlayback() },
+                         onClose: { closePlayer() }
+                     )
++                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
+                     .transition(.opacity)
+                 }
+             }
++            .gfReadsFold(into: $gfTabletop) // Lume GF: an iPhone Duo stood up half folded (GFTabletop)
++            .task(id: gfTabletop != nil) { await gfFollowReflection() }
+             .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
+             .gfPlayerContentDark() // Lume GF: dark without switching the app (see GFPlayerAppearance)
+             .onAppear {
+diff --git a/Lume/Views/Player/PlayerOrientationLock.swift b/Lume/Views/Player/PlayerOrientationLock.swift
+index 66f15b3..9ca198a 100644
+--- a/Lume/Views/Player/PlayerOrientationLock.swift
++++ b/Lume/Views/Player/PlayerOrientationLock.swift
+@@ -23,7 +23,9 @@ import SwiftUI
+         private static var holders: Set<String> = []
+ 
+         static var supportedOrientations: UIInterfaceOrientationMask {
+-            orientations(locked: !holders.isEmpty, idiom: UIDevice.current.userInterfaceIdiom)
++            // Lume GF: an iPhone Duo stood up half folded is held however it stands (GFTabletop)
++            orientations(locked: !holders.isEmpty && !GFTabletop.shared.isPartlyOpen,
++                         idiom: UIDevice.current.userInterfaceIdiom)
+         }
+ 
+         static func orientations(locked: Bool, idiom: UIUserInterfaceIdiom) -> UIInterfaceOrientationMask {
+@@ -39,7 +41,20 @@ import SwiftUI
+ 
+         static func acquire(_ holder: String) {
+             guard holders.insert(holder).inserted, holders.count == 1 else { return }
+-            apply(requesting: .landscape)
++            apply(requesting: gfHeld) // Lume GF: an iPhone Duo standing half folded (GFTabletop)
++        }
++
++        /// Lume GF: the phone opened part way or all the way (GFTabletop): a held lock lets go, or takes hold again.
++        static func gfFoldChanged() {
++            guard !holders.isEmpty else { return }
++            apply(requesting: gfHeld)
++        }
++
++        /// Lume GF: landscape, or, while an iPhone Duo stands half folded, portrait when it stands upright (asking for
++        /// any orientation leaves a landscape screen as it is) and any orientation otherwise.
++        private static var gfHeld: UIInterfaceOrientationMask {
++            guard GFTabletop.shared.isPartlyOpen else { return .landscape }
++            return UIDevice.current.orientation.isPortrait ? .portrait : .allButUpsideDown
+         }
+ 
+         static func release(_ holder: String) {

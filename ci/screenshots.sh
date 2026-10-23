@@ -11,13 +11,15 @@ SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"; REC_GRACE="${GF_R
 REC_PAUSE="${GF_REC_PAUSE:-5}"
 LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0  # the app's own output, kept with the pictures
 SHOT_DISPLAYS=""  # "<id>:<name> ..." while shooting a simulator with more than one display
+# Apple's public HLS test stream (bipbop), for the shots that need a playing picture
+TEST_STREAM="https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8"
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
 
 build() {  # $1 = simulator id, $2 = products folder; prints the built .app
   # shellcheck disable=SC2086
   xcodebuild build -project "$LUME/Lume.xcodeproj" -scheme Lume -configuration Debug -destination "id=$1" \
-    -derivedDataPath "$DD" CODE_SIGNING_ALLOWED=NO 'OTHER_SWIFT_FLAGS=$(inherited) -D GF_DEMO' $SPMARGS -quiet >&2
+    -derivedDataPath "$DD" CODE_SIGNING_ALLOWED=NO 'OTHER_SWIFT_FLAGS=$(inherited) -D GF_DEMO -D GF_FOLD_API' $SPMARGS -quiet >&2
   find "$DD/Build/Products/Debug-$2" -maxdepth 1 -name '*.app' | head -1
 }
 
@@ -162,6 +164,9 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   shoot "$DUO" "$DBID" duo-guide-dark -GFDemo guide
   shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
   shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
+  # stood up half folded (a pretend fold: nothing folds the simulator): the picture above, the controls below over its
+  # reflection; Apple's public test stream plays, the demo's made-up channels never do
+  shoot "$DUO" "$DBID" duo-player-folded -GFDemo list -GFDemoMoves play -GFDemoFold 1 -GFDemoStream "$TEST_STREAM"
   SHOT_DISPLAYS=""
   xcrun simctl shutdown "$DUO" >/dev/null 2>&1 || true
 else
