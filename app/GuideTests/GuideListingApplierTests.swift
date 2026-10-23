@@ -77,6 +77,29 @@ struct GuideListingApplierTests {
         #expect(try rows(container).count == 1)
     }
 
+    @Test func `programmes long over go before an import, whether or not the last one finished`() throws {
+        let container = try makeTestContainer()
+        let applier = GuideListingApplier(container: container)
+        let index = GuideStoredIndex(rows: [:])
+        // one-hour programmes that ended 400 days, 30 h, 25 h and 20 h ago, and one on now; each put in as current
+        for (channel, endedHoursAgo) in [("old", 9600.0), ("c30", 30), ("c25", 25), ("c20", 20), ("now", -1)] {
+            let start = now.addingTimeInterval(-(endedHoursAgo + 1) * 3600)
+            _ = applier.apply(fileURL: try writeGuideFile(hourly(channel, from: start, count: 1)),
+                              claimableChannels: [channel], index: index, now: start)
+        }
+        let cutoff = now.addingTimeInterval(-GuideListingApplier.pruneAfter)
+        #expect(applier.deleteEnded(before: cutoff) == 3)
+        #expect(Set(try rows(container).map(\.channelId)) == ["c20", "now"])
+        #expect(applier.deleteEnded(before: cutoff) == 0)
+    }
+
+    @Test func `a guide file's earliest programme is found without parsing it`() throws {
+        let earlier = now.addingTimeInterval(-7200)
+        let file = try writeGuideFile(hourly("c1", from: now, count: 3) + hourly("c2", from: earlier, count: 1))
+        #expect(GuideListingApplier.earliestStart(inFileAt: file) == earlier)
+        #expect(GuideListingApplier.earliestStart(inFileAt: try writeGuideFile([])) == nil)
+    }
+
     @Test func `a full-size guide imports, a stopped import resumes, and a rerun writes nothing`() throws {
         let container = try makeTestContainer()
         let programmes = (0 ..< 3000).flatMap { hourly("ch\($0)", from: now, count: 5) } // 15,000

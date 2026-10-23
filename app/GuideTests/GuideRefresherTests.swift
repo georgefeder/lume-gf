@@ -50,6 +50,41 @@ struct GuideRefresherTests {
         #expect(!second.summary.hasSuffix("(now first)") && ready.value == 1)
     }
 
+    /// Rows of channel `channel` that ended `hoursAgo` hours ago, put in back when they were on.
+    func storeOld(_ container: ModelContainer, _ channel: String, endedHoursAgo hoursAgo: Double) throws {
+        let start = now.addingTimeInterval(-(hoursAgo + 1) * 3600)
+        _ = GuideListingApplier(container: container).apply(
+            fileURL: try writeGuideFile(hourly(channel, from: start, count: 1)), claimableChannels: [channel],
+            index: GuideStoredIndex(rows: [:]), now: start)
+    }
+
+    func channels(_ container: ModelContainer) throws -> [String] {
+        try ModelContext(container).fetch(FetchDescriptor<EPGListing>(sortBy: [SortDescriptor(\.start)]))
+            .map(\.channelId)
+    }
+
+    @Test func `a guide a day behind clears what is long over, but nothing its file still carries`() async throws {
+        let (container, _, refresher) = try setUp()
+        let (url, path) = guideTestURL(), id = UUID()
+        try storeOld(container, "gone", endedHoursAgo: 72)
+        // the file carries catch-up from 30 h back (ended 29 h ago) up to the next 2 h
+        let file = hourly("c1", from: now.addingTimeInterval(-30 * 3600), count: 1) + hourly("c1", from: now, count: 2)
+        GuideStubProtocol.answer(path, .init(status: 200, body: try Data(contentsOf: writeGuideFile(file))))
+        _ = try await refresher.refresh(sourceID: id, url: url, knownChannelIDs: ["c1"], force: false)
+        #expect(try channels(container) == ["c1", "c1", "c1"])
+    }
+
+    @Test func `a guide imported lately clears nothing ahead of its import`() async throws {
+        let (container, states, refresher) = try setUp()
+        let (url, path) = guideTestURL(), id = UUID()
+        try storeOld(container, "other", endedHoursAgo: 72) // another source's channel
+        states.update(id) { $0.recordImported(etag: nil, lastModified: nil, serverBuild: nil, channelIDs: ["c1"],
+                                              at: now.addingTimeInterval(-3600)) }
+        GuideStubProtocol.answer(path, .init(status: 200, body: try guide(2)))
+        _ = try await refresher.refresh(sourceID: id, url: url, knownChannelIDs: ["c1"], force: false)
+        #expect(try channels(container) == ["other", "c1", "c1"])
+    }
+
     @Test func `an unchanged answer keeps the guide and records the check`() async throws {
         let (container, states, refresher) = try setUp()
         let (url, path) = guideTestURL(), id = UUID()
