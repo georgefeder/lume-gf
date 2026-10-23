@@ -25,14 +25,16 @@ concurrency:
 jobs:
   core:
     name: Guide logic (swift test)
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+      # Xcode 27.1 (iOS 27.1 SDK): only apps built with it fill the iPhone Duo's inner display. The xcode-27 image
+      # defaults to 27.0 and also carries 27.2 betas, so 27.1 is picked by its path.
       - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
+        run: |
+          sudo xcode-select -s /Applications/Xcode_27.1.app
+          xcodebuild -version
       - name: Script tests
         run: |
           sh ci/test_add_sources.sh
@@ -56,7 +58,7 @@ jobs:
   app:
     name: App tests (iOS Simulator)
     if: ${{ !inputs.only_logic }}
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 90
     steps:
       - name: Our changes
@@ -99,10 +101,12 @@ jobs:
           repository: bilipp/LumeRecorder
           ref: ${{ steps.recorder.outputs.ref }}
           path: LumeRecorder
+      # Xcode 27.1 (iOS 27.1 SDK): only apps built with it fill the iPhone Duo's inner display. The xcode-27 image
+      # defaults to 27.0 and also carries 27.2 betas, so 27.1 is picked by its path.
       - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
+        run: |
+          sudo xcode-select -s /Applications/Xcode_27.1.app
+          xcodebuild -version
       - name: Download Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
       - name: Our changes onto Lume
@@ -129,7 +133,7 @@ jobs:
   screenshots:
     name: Screenshots (simulators)
     if: ${{ !inputs.baseline && !inputs.only_logic }}
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 120
     steps:
       - name: Our changes
@@ -172,10 +176,12 @@ jobs:
           repository: bilipp/LumeRecorder
           ref: ${{ steps.recorder.outputs.ref }}
           path: LumeRecorder
+      # Xcode 27.1 (iOS 27.1 SDK): only apps built with it fill the iPhone Duo's inner display. The xcode-27 image
+      # defaults to 27.0 and also carries 27.2 betas, so 27.1 is picked by its path.
       - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
+        run: |
+          sudo xcode-select -s /Applications/Xcode_27.1.app
+          xcodebuild -version
       - name: Download Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
       - name: Our changes onto Lume
@@ -202,7 +208,7 @@ jobs:
   # takes it only from Georgs' "Deploy Schema Changes". Uses the token only here, never echoed.
   icloud-layout:
     name: iCloud layout (development)
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 15
     if: ${{ !inputs.baseline && !inputs.only_logic && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/part4/')) }}
     steps:

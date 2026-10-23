@@ -78,14 +78,19 @@ film() {  # $1 = simulator id, $2 = bundle id, $3 = name, rest = launch argument
   fi
 }
 
-new_tv() {  # an Apple TV simulator on the newest tvOS runtime; prints its id
-  RT=$(xcrun simctl list runtimes --json | python3 -c 'import json, sys
-r = [x for x in json.load(sys.stdin)["runtimes"] if x.get("platform") == "tvOS" and x.get("isAvailable")]
-print(r[-1]["identifier"] if r else "")')
+new_tv() {  # an Apple TV simulator on the newest tvOS runtime this Xcode's SDK covers; prints its id
+  RT=$(xcrun simctl list runtimes --json | MAX="$(xcrun --sdk appletvsimulator --show-sdk-version 2>/dev/null || echo 999)" \
+    python3 -c 'import json, os, re, sys
+v = lambda s: [int(n) for n in re.findall(r"\d+", s)]
+r = [x for x in json.load(sys.stdin)["runtimes"] if x.get("platform") == "tvOS" and x.get("isAvailable")
+     and v(x.get("version", "0")) <= (v(os.environ["MAX"]) or [999])]
+print(max(r, key=lambda x: v(x["version"]))["identifier"] if r else "")')
   [ -n "$RT" ] || return 1
   xcrun simctl create "GF Apple TV" "com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K" "$RT"
 }
 
+# what this Xcode offers for the iPhone Duo (log only, for its own screenshots later)
+echo "screenshots: iPhone Duo simulator types: $(xcrun simctl list devicetypes 2>/dev/null | grep -i duo | tr '\n' ' ')"
 IOS=$(sh "$CI/pick-simulator.sh" iOS)
 APP=$(build "$IOS" iphonesimulator); BID=$(start "$IOS" "$APP")
 # a freshly booted iPhone shows first-boot notices (the Apple Intelligence banner covered a picture once)
