@@ -14,7 +14,7 @@
     /// `-GFDemo home`, `movies` or `series` shows Lume's own Home, Movies or Series screen over made-up films and
     /// series (some with long titles) and a few watched channels. `-GFDemo banner` shows Home with the continue banner
     /// over it, as when another device played BBC One three minutes ago. `-GFDemoFold 1` stands the player up half
-    /// folded like an iPhone Duo on a table (GFTabletop).
+    /// folded like an iPhone Duo on a table (GFTabletop); `-GFDemoStream <url>` gives the played channel a real stream.
     enum GFDemo {
         static var mode: String? {
             value(after: "-GFDemo")
@@ -36,6 +36,12 @@
         /// (no simulator command folds one).
         static var fold: Bool {
             value(after: "-GFDemoFold") == "1"
+        }
+
+        /// `-GFDemoStream <url>`: the channel `-GFDemoMoves play` opens plays this instead of its made-up address
+        /// (which never plays: the player would fall back from KSPlayer to its other engines and show their error).
+        static var streamURL: URL? {
+            value(after: "-GFDemoStream").flatMap(URL.init(string:))
         }
 
         /// For ci/guide-check.py, in points on screen: the guide, the glass panel, the fades and where the programmes
@@ -334,7 +340,13 @@
         }
 
         private func play(_ stream: LiveStream) {
-            playing = PlayableMedia.from(stream: stream, playlist: store.playlist)
+            let media: PlayableMedia? = PlayableMedia.from(stream: stream, playlist: store.playlist)
+            playing = media.map { media in
+                guard let url = GFDemo.streamURL else { return media }
+                return PlayableMedia(id: media.id, url: url, title: media.title, subtitle: media.subtitle,
+                                     posterURL: media.posterURL, kind: media.kind, startTime: media.startTime,
+                                     contentRef: media.contentRef, channelScope: media.channelScope)
+            }
         }
 
         @ViewBuilder private var content: some View {
