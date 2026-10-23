@@ -94,6 +94,11 @@ L=$(patched widgetpush)
 expect "iCloud or push in the widgets fails" 1 "$L" "iCloud entitlement in the widgets"
 L=$(patched nobgmode); /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$L/Lume/Info.plist"
 expect "no remote-notification mode fails" 1 "$L" "remote-notification background mode missing"
+L=$(fixture topshelf); mkdir -p "$L/LumeTopShelf"; plist "$L/LumeTopShelf/Info.plist" NSExtensionPrincipalClass X
+(cd "$L" && sh "$CI/gf-patch.sh" "$TEAM" >/dev/null && sh "$CI/gf-patch.sh" "$TEAM" >/dev/null)
+v=$(/usr/libexec/PlistBuddy -c "Print :UIRequiredDeviceCapabilities" "$L/LumeTopShelf/Info.plist" 2>/dev/null | tr -d ' \n')
+[ "$v" = "Array{arm64}" ] && echo "ok   the Top Shelf extension asks for arm64 (once)" \
+  || { echo "FAIL Top Shelf capabilities ($v)"; fails=$((fails + 1)); }
 
 L=$(fixture moved); printf 'let g = "group.com.bilipp.lume"\n' > "$L/Lume/AppGroup.swift"
 (cd "$L" && sh "$CI/gf-patch.sh" "$TEAM" >/dev/null)
