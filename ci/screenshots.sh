@@ -152,15 +152,8 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   echo "screenshots: letting the iPhone Duo settle ($SETTLE s)"; sleep "$SETTLE"
   xcrun simctl ui "$DUO" appearance dark
   SHOT_DISPLAYS=$(duo_displays "$DUO"); echo "screenshots: iPhone Duo displays: ${SHOT_DISPLAYS:-one}"
-  # the scale that turns its pixels into points (subtitle sizes are in points), and whatever simctl offers for the
-  # fold (it boots folded: the inner display stays black)
-  T=$(xcrun simctl list devicetypes --json | python3 -c 'import json, sys
-print(next((t.get("bundlePath", "") for t in json.load(sys.stdin)["devicetypes"]
-            if t["identifier"].endswith("iPhone-Duo")), ""))') || T=""
-  [ -n "$T" ] && plutil -p "$T/Contents/Resources/profile.plist" 2>/dev/null \
-    | grep -i -E "scale|width|height|display|fold|posture" | head -30 | sed 's/^/   duo profile: /'
-  { xcrun simctl help; xcrun simctl ui 2>&1; xcrun simctl io "$DUO" enumerate 2>&1; } \
-    | grep -i -E "fold|posture|hinge|display|screen" | head -30 | sed 's/^/   duo simctl: /' || true
+  # it boots folded and Xcode 27.1's simctl has nothing to unfold it (help, ui and io enumerate checked, run
+  # 39978237971): the inner display pictures stay black until it does
   shoot "$DUO" "$DBID" duo-guide-dark -GFDemo guide
   shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
   shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
