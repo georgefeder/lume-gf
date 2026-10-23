@@ -11,7 +11,7 @@ struct GFSubtitleScaleTests {
 
     @Test func `a bigger screen grows the subtitles up to an iPad's`() {
         #expect(GFSubtitleScale.phonePointSize(shortSide: 466) == 17) // iPhone Duo, outer display (1398 px at 3x)
-        #expect(GFSubtitleScale.phonePointSize(shortSide: 626) == 22) // iPhone Duo, inner display (1878 px at 3x)
+        #expect(GFSubtitleScale.phonePointSize(shortSide: 669) == 24) // iPhone Duo, inner display (2007 px at 3x)
         #expect(GFSubtitleScale.phonePointSize(shortSide: 744) == 26)
         #expect(GFSubtitleScale.phonePointSize(shortSide: 1024) == 26)
     }

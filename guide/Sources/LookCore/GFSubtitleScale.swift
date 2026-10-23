@@ -13,7 +13,7 @@ nonisolated enum GFSubtitleScale {
 
     /// An iPhone's standard subtitle size on a screen whose short side is `shortSide` points: a phone's up to a
     /// phone's short side, an iPad's from an iPad mini's, in proportion between (the iPhone Duo's inner display gets
-    /// about 22 pt). Unknown: a phone's.
+    /// about 24 pt). Unknown: a phone's.
     static func phonePointSize(shortSide: CGFloat?) -> CGFloat {
         guard let shortSide, shortSide > phoneShortSide else { return phoneSize }
         let share = min(1, (shortSide - phoneShortSide) / (tabletShortSide - phoneShortSide))

@@ -10,6 +10,7 @@ DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_
 SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"; REC_GRACE="${GF_REC_GRACE:-20}"
 REC_PAUSE="${GF_REC_PAUSE:-5}"
 LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0  # the app's own output, kept with the pictures
+SHOT_DISPLAYS=""  # "<id>:<name> ..." while shooting a simulator with more than one display
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
 
@@ -34,7 +35,14 @@ shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch ar
   SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
     "$SIM" "$BID" -ui-testing "$@" >/dev/null
   sleep "$WAIT"
-  xcrun simctl io "$SIM" screenshot "$OUT/$NAME.png" >/dev/null
+  if [ -n "$SHOT_DISPLAYS" ]; then  # a simulator with two displays (the iPhone Duo): one picture each
+    for D in $SHOT_DISPLAYS; do
+      xcrun simctl io "$SIM" screenshot --display="${D%%:*}" "$OUT/$NAME-${D#*:}.png" >/dev/null \
+        || echo "screenshots: $NAME: no picture of the ${D#*:} display"
+    done
+  else
+    xcrun simctl io "$SIM" screenshot "$OUT/$NAME.png" >/dev/null
+  fi
   # a picture of the home screen is no picture of Lume: say so, with the app's last words
   if xcrun simctl spawn "$SIM" launchctl list 2>/dev/null | grep -q "UIKitApplication:$BID"; then
     echo "screenshots: $NAME.png"
@@ -102,6 +110,12 @@ print(max(r, key=lambda x: v(x["version"]))["identifier"] if r else "")')
   [ -n "$RT" ] || return 1
   xcrun simctl create "GF iPhone Duo" "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" "$RT"
 }
+duo_displays() {  # $1 = simulator id; "<id>:inner <id>:outer", from the list simctl gives when asked without one
+  xcrun simctl io "$1" screenshot "$LOGS/duo-probe.png" 2>&1 | python3 -c 'import re, sys
+d = sorted(((int(w) * int(h), i) for i, w, h in re.findall(r"--display=(\d+)\s.*?\b(\d+)x(\d+)\b", sys.stdin.read())),
+           reverse=True)
+print(" ".join(f"{i}:{n}" for (_, i), n in zip(d, ["inner", "outer"])))' || true
+}
 
 IOS=$(sh "$CI/pick-simulator.sh" iOS)
 APP=$(build "$IOS" iphonesimulator); BID=$(start "$IOS" "$APP")
@@ -137,9 +151,15 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   DBID=$(start "$DUO" "$APP")
   echo "screenshots: letting the iPhone Duo settle ($SETTLE s)"; sleep "$SETTLE"
   xcrun simctl ui "$DUO" appearance dark
+  SHOT_DISPLAYS=$(duo_displays "$DUO"); echo "screenshots: iPhone Duo displays: ${SHOT_DISPLAYS:-one}"
+  # the scale that turns its pixels into points (subtitle sizes are in points)
+  find "$(xcode-select -p)/Platforms/iPhoneOS.platform" -name "iPhone Duo.simdevicetype" -maxdepth 8 2>/dev/null \
+    | head -1 | while read -r T; do plutil -p "$T/Contents/Resources/profile.plist" 2>/dev/null \
+    | grep -i -E "scale|width|height" | head -12 | sed 's/^/   /'; done
   shoot "$DUO" "$DBID" duo-guide-dark -GFDemo guide
   shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
   shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
+  SHOT_DISPLAYS=""
   xcrun simctl shutdown "$DUO" >/dev/null 2>&1 || true
 else
   echo "screenshots: no iPhone Duo simulator in this Xcode"
