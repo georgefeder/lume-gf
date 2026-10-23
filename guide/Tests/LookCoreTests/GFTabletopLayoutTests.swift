@@ -22,6 +22,9 @@ struct GFTabletopLayoutTests {
     @Test func `a fold too near an edge keeps the player whole`() {
         #expect(GFTabletopLayout.split(size: duo, folds: [CGRect(x: 0, y: 60, width: 669, height: 10)]) == nil)
         #expect(GFTabletopLayout.split(size: duo, folds: [CGRect(x: 0, y: 880, width: 669, height: 10)]) == nil)
+        // the controls need about 320 pt below the fold
+        #expect(GFTabletopLayout.split(size: duo, folds: [CGRect(x: 0, y: 640, width: 669, height: 11)]) == nil)
+        #expect(GFTabletopLayout.split(size: duo, folds: [CGRect(x: 0, y: 600, width: 669, height: 11)]) != nil)
     }
 
     @Test func `the pretend fold splits the screen in the middle`() {

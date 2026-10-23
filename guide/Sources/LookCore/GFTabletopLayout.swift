@@ -11,8 +11,9 @@ nonisolated enum GFTabletopLayout {
         var panel: CGRect
     }
 
-    /// The least height either side of the fold needs before the player splits.
-    static let minimumSide: CGFloat = 120
+    /// The least height either side of the fold needs before the player splits: the controls' bars and buttons need
+    /// about this much below it.
+    static let minimumSide: CGFloat = 320
 
     /// The split for a view of `size` with the fold areas iOS reports for it (same coordinates), or nil: no fold
     /// across the view (flat open, closed, or folded like a book, where the fold runs top to bottom), or one too near
