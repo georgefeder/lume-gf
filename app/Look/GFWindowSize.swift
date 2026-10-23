@@ -21,10 +21,11 @@
 
         private static let changes = Changes()
 
-        /// Counts the window scenes' geometry changes (a fold or unfold, a turn), for SwiftUI to observe.
+        /// Counts the window scenes' geometry changes (a fold or unfold, a turn), for SwiftUI to observe. Fileprivate:
+        /// @Observable's conformance is written outside the enum.
         @MainActor
         @Observable
-        private final class Changes {
+        fileprivate final class Changes {
             private(set) var count = 0
             /// One observation per scene; a scene that goes away takes its entry with it.
             private let watched = NSMapTable<UIWindowScene, NSKeyValueObservation>.weakToStrongObjects()
