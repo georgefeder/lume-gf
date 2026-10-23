@@ -91,6 +91,18 @@ print(max(r, key=lambda x: v(x["version"]))["identifier"] if r else "")')
 
 # what this Xcode offers for the iPhone Duo (log only, for its own screenshots later)
 echo "screenshots: iPhone Duo simulator types: $(xcrun simctl list devicetypes 2>/dev/null | grep -i duo | tr '\n' ' ')"
+new_duo() {  # an iPhone Duo simulator (Xcode 27.1 on) on the newest iOS runtime this Xcode's SDK covers; prints its id
+  xcrun simctl list devicetypes 2>/dev/null | grep -q "SimDeviceType.iPhone-Duo" || return 1
+  RT=$(xcrun simctl list runtimes --json | MAX="$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || echo 999)" \
+    python3 -c 'import json, os, re, sys
+v = lambda s: [int(n) for n in re.findall(r"\d+", s)]
+r = [x for x in json.load(sys.stdin)["runtimes"] if x.get("platform") == "iOS" and x.get("isAvailable")
+     and v(x.get("version", "0")) <= (v(os.environ["MAX"]) or [999])]
+print(max(r, key=lambda x: v(x["version"]))["identifier"] if r else "")')
+  [ -n "$RT" ] || return 1
+  xcrun simctl create "GF iPhone Duo" "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" "$RT"
+}
+
 IOS=$(sh "$CI/pick-simulator.sh" iOS)
 APP=$(build "$IOS" iphonesimulator); BID=$(start "$IOS" "$APP")
 # a freshly booted iPhone shows first-boot notices (the Apple Intelligence banner covered a picture once)
@@ -118,6 +130,20 @@ film "$IOS" "$BID" iphone-open-lightsetting -GFDemo list -GFDemoMoves play -app.
 xcrun simctl ui "$IOS" appearance dark
 shoot "$IOS" "$BID" iphone-guide-landscape-dark -GFDemo guide -GFDemoMoves landscape  # last: the iPhone stays sideways
 xcrun simctl shutdown "$IOS" >/dev/null 2>&1 || true
+
+# the iPhone Duo (Georgs' since 23 Oct; the iOS 27.1 SDK fills its inner display), in the pose it starts in: no
+# command folds or unfolds the simulator
+if DUO=$(new_duo) && [ -n "$DUO" ]; then
+  DBID=$(start "$DUO" "$APP")
+  echo "screenshots: letting the iPhone Duo settle ($SETTLE s)"; sleep "$SETTLE"
+  xcrun simctl ui "$DUO" appearance dark
+  shoot "$DUO" "$DBID" duo-guide-dark -GFDemo guide
+  shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
+  shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
+  xcrun simctl shutdown "$DUO" >/dev/null 2>&1 || true
+else
+  echo "screenshots: no iPhone Duo simulator in this Xcode"
+fi
 
 TV=$(sh "$CI/pick-simulator.sh" tvOS 2>/dev/null) || TV=$(new_tv) \
   || { xcodebuild -downloadPlatform tvOS >&2; TV=$(new_tv); }
