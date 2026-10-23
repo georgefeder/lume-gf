@@ -13,7 +13,8 @@
     /// leave under it: the simulator's glass is too frosted to show it, a real Apple TV's bends it into view).
     /// `-GFDemo home`, `movies` or `series` shows Lume's own Home, Movies or Series screen over made-up films and
     /// series (some with long titles) and a few watched channels. `-GFDemo banner` shows Home with the continue banner
-    /// over it, as when another device played BBC One three minutes ago.
+    /// over it, as when another device played BBC One three minutes ago. `-GFDemoFold 1` stands the player up half
+    /// folded like an iPhone Duo on a table (GFTabletop).
     enum GFDemo {
         static var mode: String? {
             value(after: "-GFDemo")
@@ -29,6 +30,12 @@
 
         static var noPanel: Bool {
             value(after: "-GFDemoNoPanel") == "1"
+        }
+
+        /// `-GFDemoFold 1`: the player behaves as on an iPhone Duo stood up half folded, the fold across the middle
+        /// (no simulator command folds one).
+        static var fold: Bool {
+            value(after: "-GFDemoFold") == "1"
         }
 
         /// For ci/guide-check.py, in points on screen: the guide, the glass panel, the fades and where the programmes

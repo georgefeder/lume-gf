@@ -17,7 +17,7 @@ SPMARGS=""
 build() {  # $1 = simulator id, $2 = products folder; prints the built .app
   # shellcheck disable=SC2086
   xcodebuild build -project "$LUME/Lume.xcodeproj" -scheme Lume -configuration Debug -destination "id=$1" \
-    -derivedDataPath "$DD" CODE_SIGNING_ALLOWED=NO 'OTHER_SWIFT_FLAGS=$(inherited) -D GF_DEMO' $SPMARGS -quiet >&2
+    -derivedDataPath "$DD" CODE_SIGNING_ALLOWED=NO 'OTHER_SWIFT_FLAGS=$(inherited) -D GF_DEMO -D GF_FOLD_API' $SPMARGS -quiet >&2
   find "$DD/Build/Products/Debug-$2" -maxdepth 1 -name '*.app' | head -1
 }
 
@@ -162,6 +162,8 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   shoot "$DUO" "$DBID" duo-guide-dark -GFDemo guide
   shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
   shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
+  # stood up half folded (a pretend fold: nothing folds the simulator): the picture above, the controls below
+  shoot "$DUO" "$DBID" duo-player-folded -GFDemo list -GFDemoMoves play -GFDemoFold 1
   SHOT_DISPLAYS=""
   xcrun simctl shutdown "$DUO" >/dev/null 2>&1 || true
 else

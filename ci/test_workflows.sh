@@ -25,6 +25,8 @@ check "the test run patches Lume's packages and compiles tvOS with them" \
 check "a change to our package patches starts a build" \
   'y=YAML.load_file(ARGV[0]); o=y["on"] || y[true]; exit(Array(o["push"]["paths"]).include?("deps/**") ? 0 : 1)' "$WC"
 check "no build includes the screenshot demo" 'exit(File.read(ARGV[0]).include?("GF_DEMO") ? 1 : 0)'
+check "the archive reads the iPhone Duo's fold (Xcode 27.1 only)" \
+  'y=YAML.load_file(ARGV[0]); r=y["jobs"]["build"]["steps"].map { |s| s["run"].to_s }.find { |r| r.include?("xcodebuild archive") }.to_s; exit(r.include?("-D GF_FOLD_API") ? 0 : 1)'
 check "pushes to part3 branches run the tests" \
   'y=YAML.load_file(ARGV[0]); o=y["on"] || y[true]; exit(Array(o["push"]["branches"]).include?("part3/**") ? 0 : 1)' "$WT"
 check "pushes to part4 branches run the tests" \
