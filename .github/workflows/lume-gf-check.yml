@@ -28,6 +28,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
           TAG=$(gh api repos/bilipp/Lume/releases/latest --jq .tag_name)
           WANT="Lume GF $TAG ($SHA)"
@@ -41,6 +42,15 @@ jobs:
           RUNNING=$(gh run list -R "$REPO" --workflow lume-gf-build.yml --status in_progress --json displayTitle \
                       --jq "[.[] | select(.displayTitle == \"$WANT\")] | length")
           if [ "$RUNNING" != "0" ]; then echo "Already building: $WANT"; exit 0; fi
+          # two failed builds of the same thing need a person (build 51's Apple TV half failed on a missing App ID,
+          # and every 6 hours a new try uploaded the same iPhone build again: 52 to 66); a manual run or a new commit
+          # tries again
+          FAILED=$(gh run list -R "$REPO" --workflow lume-gf-build.yml --status failure --limit 50 --json displayTitle \
+                     --jq "[.[] | select(.displayTitle == \"$WANT\")] | length")
+          if [ "$EVENT" = schedule ] && [ "$FAILED" -ge 2 ]; then
+            echo "::warning::$WANT failed $FAILED times; not trying again on the schedule"
+            exit 0
+          fi
           echo "Starting build: $WANT"
           gh workflow run lume-gf-build.yml -R "$REPO" --ref main -f tag="$TAG"
 
