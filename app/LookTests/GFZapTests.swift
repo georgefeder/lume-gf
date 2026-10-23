@@ -18,6 +18,8 @@ struct GFZapTests {
         try await Task.sleep(for: .seconds(1))
         probe.switchTo(server.url("/b.ts"))
         #expect(await server.wait(for: .opened, path: "/b.ts", timeout: 30), "\(server.eventsDescription)")
+        // a late close still gets its time in the report; KSPlayer's "GF zap" log lines say which step held it
+        _ = await server.wait(for: .closed, path: "/a.ts", timeout: 10)
         let events = server.events
         let oldClosed = try #require(events.first { $0.kind == .closed && $0.path == "/a.ts" },
                                      "the next channel opened while the old one was still connected: \(server.eventsDescription)")
