@@ -5,7 +5,7 @@ import Testing
 struct GFSubtitleScaleTests {
     @Test func `a phone keeps Lume's size`() {
         #expect(GFSubtitleScale.phonePointSize(shortSide: 393) == 16) // iPhone 17
-        #expect(GFSubtitleScale.phonePointSize(shortSide: 430) == 16) // the largest iPhone
+        #expect(GFSubtitleScale.phonePointSize(shortSide: 440) == 16) // the largest iPhone (Pro Max)
         #expect(GFSubtitleScale.phonePointSize(shortSide: nil) == 16)
     }
 

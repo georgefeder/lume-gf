@@ -7,8 +7,8 @@ nonisolated enum GFSubtitleScale {
     /// Lume's standard sizes.
     static let phoneSize: CGFloat = 16
     static let tabletSize: CGFloat = 26
-    /// The short sides those sizes belong to: the largest iPhone's (430 pt) and the iPad mini's (744 pt).
-    static let phoneShortSide: CGFloat = 430
+    /// The short sides those sizes belong to: the largest iPhone's (440 pt, the Pro Max) and the iPad mini's (744 pt).
+    static let phoneShortSide: CGFloat = 440
     static let tabletShortSide: CGFloat = 744
 
     /// An iPhone's standard subtitle size on a screen whose short side is `shortSide` points: a phone's up to a

@@ -6,14 +6,16 @@
     /// iPhone Duo's displays are an iPhone, and folding or unfolding it resizes the window mid-session.
     @MainActor
     enum GFWindowSize {
-        /// The foreground window's shorter side, in points; nil before there is one. A SwiftUI view that reads it
+        /// The foreground window scene's shorter side, in points; nil before there is one. A SwiftUI view that reads it
         /// redraws when the window resizes (subtitles on screen while the iPhone Duo folds or unfolds).
         static var shortSide: CGFloat? {
             _ = changes.count
             let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+                .filter { $0.session.role == .windowApplication }
             scenes.forEach(changes.watch)
-            let window = scenes.first { $0.activationState == .foregroundActive }?.keyWindow ?? scenes.first?.keyWindow
-            guard let bounds = window?.bounds, !bounds.isEmpty else { return nil }
+            // the scene's own bounds: there is always one, where its key window can be missing mid-fold
+            guard let bounds = (scenes.first { $0.activationState == .foregroundActive } ?? scenes.first)?
+                .coordinateSpace.bounds, !bounds.isEmpty else { return nil }
             return min(bounds.width, bounds.height)
         }
 
