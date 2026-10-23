@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 /// One guide source's refresh for Lume GF: a conditional download, then an only-what-changed import that never
@@ -43,14 +44,19 @@ nonisolated final class GuideRefresher {
         let channelsKey = GuideFingerprint.ofSet(knownChannelIDs)
         let conditional = !force && hasGuide && state.mayAskUnchanged(channelsKey: channelsKey)
         let answer: GuideFetcher.Result
+        let asked = Date()
         do {
             answer = try await fetcher.fetch(urlString: url, etag: conditional ? state.etag : nil,
                                              lastModified: conditional ? state.lastModified : nil)
         } catch {
             let reason = Self.reason(error)
             states.update(sourceID) { $0.recordFailure(reason, at: now()) }
+            let text = "Guide: download stopped after \(Self.seconds(since: asked)) s (\(reason))"
+            Logger.database.info("\(text, privacy: .public)")
             throw error
         }
+        let fetched = Self.seconds(since: asked)
+        Logger.database.info("Guide: \(Self.describe(answer), privacy: .public) in \(fetched, privacy: .public) s")
         switch answer {
         case .unchanged:
             states.update(sourceID) { $0.recordUnchanged(at: now()) }
@@ -67,7 +73,7 @@ nonisolated final class GuideRefresher {
             }
             let started = Date()
             let applier = GuideListingApplier(container: container)
-            let index = index ?? GuideStoredIndex(rows: applier.loadStored())
+            let index = index ?? Self.readStored(applier, now: now())
             self.index = index
             // a stale stored guide (a phone not opened for a day, a first import): what is on now goes in first
             let mine = state.channelIDs.intersection(knownChannelIDs)
@@ -75,8 +81,18 @@ nonisolated final class GuideRefresher {
             let stale = GuideDiffPlanner.wantsNowFirst(stored: index.rows,
                                                        channels: mine.isEmpty ? knownChannelIDs : mine, now: at)
             let nowFirst = stale ? DateInterval(start: at, duration: GuideDiffPlanner.nowFirstSpan) : nil
+            let nowReady = onNowReady
+            let logged: () -> Void = {
+                let took = Self.seconds(since: started)
+                Logger.database.info("Guide: what is on now is in after \(took, privacy: .public) s")
+                nowReady()
+            }
             let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: at,
-                                       allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: onNowReady)
+                                       allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: logged)
+            if Task.isCancelled || !result.completed {
+                let text = "Guide: import stopped after \(Self.seconds(since: started)) s, \(result.inserted) in so far"
+                Logger.database.info("\(text, privacy: .public)")
+            }
             if Task.isCancelled { throw CancellationError() }
             guard result.completed else {
                 states.update(sourceID) { $0.recordFailure("guide file incomplete", at: now()) }
@@ -87,11 +103,36 @@ nonisolated final class GuideRefresher {
                                   channelIDs: result.claimedChannels, at: now(), fileHash: fileHash,
                                   channelsKey: channelsKey)
             }
-            let seconds = String(format: "%.1f", Date().timeIntervalSince(started))
+            let took = Self.seconds(since: started)
             return Outcome(claimedChannelIDs: result.claimedChannels,
-                           summary: "+\(result.inserted) ~\(result.updated) -\(result.deleted) in \(seconds) s"
+                           summary: "+\(result.inserted) ~\(result.updated) -\(result.deleted) in \(took) s"
                                + (stale ? " (now first)" : ""))
         }
+    }
+
+    /// The stored guide, read once per run, after the programmes long over have gone
+    /// (`GuideListingApplier.deleteEnded`). Logged with its size: Lume's diagnostic report shows where the time goes.
+    private static func readStored(_ applier: GuideListingApplier, now: Date) -> GuideStoredIndex {
+        let started = Date()
+        let removed = applier.deleteEnded(before: now.addingTimeInterval(-GuideListingApplier.pruneAfter))
+        let index = GuideStoredIndex(rows: applier.loadStored())
+        let took = seconds(since: started)
+        let text = "Guide: \(removed) long-over programmes removed, \(index.rows.count) read in \(took) s"
+        Logger.database.info("\(text, privacy: .public)")
+        return index
+    }
+
+    private static func describe(_ answer: GuideFetcher.Result) -> String {
+        switch answer {
+        case .unchanged: return "unchanged"
+        case let .file(file, _, _, _, _):
+            let bytes = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            return "new guide file, \(bytes / 1_000_000) MB"
+        }
+    }
+
+    private static func seconds(since start: Date) -> String {
+        String(format: "%.1f", Date().timeIntervalSince(start))
     }
 
     /// A source with nothing to download this time (all its channels are guided by an earlier source, or no channel

@@ -28,6 +28,35 @@ nonisolated struct GuideListingApplier {
     /// Rows per page when reading the stored guide.
     var pageSize = 5000
 
+    /// How long after it ended a programme goes whatever happens to the import (`deleteEnded`). Longer than
+    /// `GuideDiffPlanner.keepPast`, so programmes still in an hourly file are never deleted and inserted again.
+    static let pruneAfter: TimeInterval = 24 * 60 * 60
+
+    /// Deletes the programmes that ended before `cutoff`, oldest first a day (or a thirtieth of the span) at a time,
+    /// each step saved so a stop keeps what is done, and returns how many went. An import only deletes once it has
+    /// read its whole file, so imports that kept being cut off deleted nothing and the stored guide grew with every
+    /// try, each try slower than the last (Georgs' iPhone, 14-23 Oct: no complete import for nine days). This runs
+    /// before every import.
+    func deleteEnded(before cutoff: Date) -> Int {
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        var oldest = FetchDescriptor<EPGListing>(sortBy: [SortDescriptor(\.end)])
+        oldest.fetchLimit = 1
+        oldest.propertiesToFetch = [\.end]
+        guard var dayEnd = (try? context.fetch(oldest))?.first?.end, dayEnd < cutoff else { return 0 }
+        var removed = 0
+        let step = max(24 * 60 * 60, cutoff.timeIntervalSince(dayEnd) / 30) // about 30 saves however old it is
+        while dayEnd < cutoff, !Task.isCancelled {
+            dayEnd = min(dayEnd.addingTimeInterval(step), cutoff)
+            let limit = dayEnd
+            let gone = #Predicate<EPGListing> { $0.end < limit }
+            removed += (try? context.fetchCount(FetchDescriptor(predicate: gone))) ?? 0
+            try? context.delete(model: EPGListing.self, where: gone)
+            try? context.save()
+        }
+        return removed
+    }
+
     /// Every stored listing's comparable content, read in pages with only the compared fields. (Paging by "id after
     /// the last one" skipped rows: the store sorts ids its own way, not as `>` compares them.)
     func loadStored() -> [String: GuideDiffPlanner.Stored] {
