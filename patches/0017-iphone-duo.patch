@@ -1,0 +1,30 @@
+diff --git a/Lume/Views/Components/Subtitles/SubtitleStyleModifier.swift b/Lume/Views/Components/Subtitles/SubtitleStyleModifier.swift
+index 212f4f8..2c20ff7 100644
+--- a/Lume/Views/Components/Subtitles/SubtitleStyleModifier.swift
++++ b/Lume/Views/Components/Subtitles/SubtitleStyleModifier.swift
+@@ -13,7 +13,10 @@ extension SubtitleStyle {
+         #elseif os(macOS)
+             26
+         #else
+-            UIDevice.current.userInterfaceIdiom == .phone ? 16 : 26
++            // Lume GF: an iPhone by the screen it shows on (both of the iPhone Duo's displays are an iPhone; its 7.6"
++            // inner display got a phone's 16 pt)
++            UIDevice.current.userInterfaceIdiom == .phone
++                ? GFSubtitleScale.phonePointSize(shortSide: GFWindowSize.shortSide) : 26
+         #endif
+     }
+ 
+diff --git a/Lume/Views/Settings/SubtitleStylePreview.swift b/Lume/Views/Settings/SubtitleStylePreview.swift
+index ba9f041..8555479 100644
+--- a/Lume/Views/Settings/SubtitleStylePreview.swift
++++ b/Lume/Views/Settings/SubtitleStylePreview.swift
+@@ -19,7 +19,8 @@ struct SubtitleStylePreview: View {
+             CGSize(width: 1280, height: 720)
+         #else
+             if UIDevice.current.userInterfaceIdiom == .phone {
+-                CGSize(width: 720, height: 405)
++                // Lume GF: grown with the subtitle size, so a bigger screen's preview keeps the player's proportion
++                GFSubtitleScale.phonePreviewCanvas(pointSize: SubtitleStyle.standardPointSize)
+             } else {
+                 CGSize(width: 1180, height: 664)
+             }

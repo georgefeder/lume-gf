@@ -10,6 +10,7 @@ DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_
 SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"; REC_GRACE="${GF_REC_GRACE:-20}"
 REC_PAUSE="${GF_REC_PAUSE:-5}"
 LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0  # the app's own output, kept with the pictures
+SHOT_DISPLAYS=""  # "<id>:<name> ..." while shooting a simulator with more than one display
 SPMARGS=""
 [ -n "${GF_SPM:-}" ] && SPMARGS="-clonedSourcePackagesDirPath $GF_SPM -disableAutomaticPackageResolution"
 
@@ -21,9 +22,14 @@ build() {  # $1 = simulator id, $2 = products folder; prints the built .app
 }
 
 start() {  # $1 = simulator id, $2 = app; prints the bundle id
-  xcrun simctl boot "$1" >/dev/null 2>&1 || true
-  xcrun simctl bootstatus "$1" -b >/dev/null
-  xcrun simctl install "$1" "$2"
+  # a second boot when the first one goes down: Xcode 27.1's simulator was "Shutdown" by install time (run 39984530532)
+  for TRY in 1 2; do
+    xcrun simctl boot "$1" >/dev/null 2>&1 || true
+    xcrun simctl bootstatus "$1" -b >/dev/null && xcrun simctl install "$1" "$2" && break
+    [ "$TRY" = 1 ] || return 1
+    echo "screenshots: the simulator went down while starting; booting it again" >&2
+    xcrun simctl shutdown "$1" >/dev/null 2>&1 || true
+  done
   plutil -extract CFBundleIdentifier raw -o - "$2/Info.plist"
 }
 
@@ -34,7 +40,14 @@ shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch ar
   SIMCTL_CHILD_TZ=Europe/London xcrun simctl launch --stdout="$LOGS/$NAME.out" --stderr="$LOGS/$NAME.err" \
     "$SIM" "$BID" -ui-testing "$@" >/dev/null
   sleep "$WAIT"
-  xcrun simctl io "$SIM" screenshot "$OUT/$NAME.png" >/dev/null
+  if [ -n "$SHOT_DISPLAYS" ]; then  # a simulator with two displays (the iPhone Duo): one picture each
+    for D in $SHOT_DISPLAYS; do
+      xcrun simctl io "$SIM" screenshot --display="${D%%:*}" "$OUT/$NAME-${D#*:}.png" >/dev/null \
+        || echo "screenshots: $NAME: no picture of the ${D#*:} display"
+    done
+  else
+    xcrun simctl io "$SIM" screenshot "$OUT/$NAME.png" >/dev/null
+  fi
   # a picture of the home screen is no picture of Lume: say so, with the app's last words
   if xcrun simctl spawn "$SIM" launchctl list 2>/dev/null | grep -q "UIKitApplication:$BID"; then
     echo "screenshots: $NAME.png"
@@ -78,12 +91,35 @@ film() {  # $1 = simulator id, $2 = bundle id, $3 = name, rest = launch argument
   fi
 }
 
-new_tv() {  # an Apple TV simulator on the newest tvOS runtime; prints its id
-  RT=$(xcrun simctl list runtimes --json | python3 -c 'import json, sys
-r = [x for x in json.load(sys.stdin)["runtimes"] if x.get("platform") == "tvOS" and x.get("isAvailable")]
-print(r[-1]["identifier"] if r else "")')
+new_tv() {  # an Apple TV simulator on the newest tvOS runtime this Xcode's SDK covers; prints its id
+  RT=$(xcrun simctl list runtimes --json | MAX="$(xcrun --sdk appletvsimulator --show-sdk-version 2>/dev/null || echo 999)" \
+    python3 -c 'import json, os, re, sys
+v = lambda s: [int(n) for n in re.findall(r"\d+", s)]
+r = [x for x in json.load(sys.stdin)["runtimes"] if x.get("platform") == "tvOS" and x.get("isAvailable")
+     and v(x.get("version", "0")) <= (v(os.environ["MAX"]) or [999])]
+print(max(r, key=lambda x: v(x["version"]))["identifier"] if r else "")')
   [ -n "$RT" ] || return 1
   xcrun simctl create "GF Apple TV" "com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K-3rd-generation-4K" "$RT"
+}
+
+# what this Xcode offers for the iPhone Duo (log only, for its own screenshots later)
+echo "screenshots: iPhone Duo simulator types: $(xcrun simctl list devicetypes 2>/dev/null | grep -i duo | tr '\n' ' ')"
+new_duo() {  # an iPhone Duo simulator (Xcode 27.1 on) on the newest iOS runtime this Xcode's SDK covers; prints its id
+  xcrun simctl list devicetypes 2>/dev/null | grep -q "SimDeviceType.iPhone-Duo" || return 1
+  RT=$(xcrun simctl list runtimes --json | MAX="$(xcrun --sdk iphonesimulator --show-sdk-version 2>/dev/null || echo 999)" \
+    python3 -c 'import json, os, re, sys
+v = lambda s: [int(n) for n in re.findall(r"\d+", s)]
+r = [x for x in json.load(sys.stdin)["runtimes"] if x.get("platform") == "iOS" and x.get("isAvailable")
+     and v(x.get("version", "0")) <= (v(os.environ["MAX"]) or [999])]
+print(max(r, key=lambda x: v(x["version"]))["identifier"] if r else "")')
+  [ -n "$RT" ] || return 1
+  xcrun simctl create "GF iPhone Duo" "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" "$RT"
+}
+duo_displays() {  # $1 = simulator id; "<id>:inner <id>:outer", from the list simctl gives when asked without one
+  xcrun simctl io "$1" screenshot "$LOGS/duo-probe.png" 2>&1 | python3 -c 'import re, sys
+d = sorted(((int(w) * int(h), i) for i, w, h in re.findall(r"--display=(\d+)\s.*?\b(\d+)x(\d+)\b", sys.stdin.read())),
+           reverse=True)
+print(" ".join(f"{i}:{n}" for (_, i), n in zip(d, ["inner", "outer"])))' || true
 }
 
 IOS=$(sh "$CI/pick-simulator.sh" iOS)
@@ -113,6 +149,24 @@ film "$IOS" "$BID" iphone-open-lightsetting -GFDemo list -GFDemoMoves play -app.
 xcrun simctl ui "$IOS" appearance dark
 shoot "$IOS" "$BID" iphone-guide-landscape-dark -GFDemo guide -GFDemoMoves landscape  # last: the iPhone stays sideways
 xcrun simctl shutdown "$IOS" >/dev/null 2>&1 || true
+
+# the iPhone Duo (Georgs' since 23 Oct; the iOS 27.1 SDK fills its inner display), in the pose it starts in: no
+# command folds or unfolds the simulator
+if DUO=$(new_duo) && [ -n "$DUO" ]; then
+  DBID=$(start "$DUO" "$APP")
+  echo "screenshots: letting the iPhone Duo settle ($SETTLE s)"; sleep "$SETTLE"
+  xcrun simctl ui "$DUO" appearance dark
+  SHOT_DISPLAYS=$(duo_displays "$DUO"); echo "screenshots: iPhone Duo displays: ${SHOT_DISPLAYS:-one}"
+  # it boots folded and Xcode 27.1's simctl has nothing to unfold it (help, ui and io enumerate checked, run
+  # 39978237971): the inner display pictures stay black until it does
+  shoot "$DUO" "$DBID" duo-guide-dark -GFDemo guide
+  shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
+  shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
+  SHOT_DISPLAYS=""
+  xcrun simctl shutdown "$DUO" >/dev/null 2>&1 || true
+else
+  echo "screenshots: no iPhone Duo simulator in this Xcode"
+fi
 
 TV=$(sh "$CI/pick-simulator.sh" tvOS 2>/dev/null) || TV=$(new_tv) \
   || { xcodebuild -downloadPlatform tvOS >&2; TV=$(new_tv); }

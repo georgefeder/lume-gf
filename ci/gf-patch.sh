@@ -33,4 +33,10 @@ done
 grep -rlF --exclude-dir=.git "$UP_GROUP" . | while IFS= read -r F; do sed -i '' "s/${UP_GROUP}/${GF_GROUP}/g" "$F"; done
 # 4. home-screen name
 plutil -replace CFBundleDisplayName -string "Lume GF" Lume/Info.plist
+# 5. the Apple TV's Top Shelf extension says it needs arm64: App Store Connect refused it without (ITMS-90502, build 66:
+#    "has a 64-bit architecture slice, so you must include the arm64 value for UIRequiredDeviceCapabilities")
+T=LumeTopShelf/Info.plist
+if [ -f "$T" ] && ! $PB -c "Print :UIRequiredDeviceCapabilities" "$T" >/dev/null 2>&1; then
+  $PB -c "Add :UIRequiredDeviceCapabilities array" -c "Add :UIRequiredDeviceCapabilities:0 string arm64" "$T"
+fi
 echo "gf-patch: identity applied (team ${TEAM})"

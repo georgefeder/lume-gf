@@ -1,16 +1,18 @@
 Lume GF: a channel change closes the old stream before the next one opens.
 KSMEPlayer.replace hands the new item the one it replaces; the new item's open waits (at most 1.5 s) until the old
 item's close operation has closed its input, so two TVs zapping on a two-connection account never wait for each other.
+Debug builds also log when each open and close step happened (gfZapLog), for GFZapTests' failure report.
 Test: LumeTests GFZapTests (local stream server). Made against KSPlayer bdfa2da (deps/KSPlayer/REVISION).
 
 diff --git a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
-index 5d539f3..ab12128 100644
+index 5d539f3..d9d00c0 100644
 --- a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
 +++ b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
-@@ -316,9 +316,12 @@ extension KSMEPlayer: MediaPlayerProtocol {
+@@ -316,9 +316,13 @@ extension KSMEPlayer: MediaPlayerProtocol {
  
      public func replace(url: URL, options: KSOptions) {
          KSLog("replaceUrl \(self)")
++        gfZapLog("replace with \(url.lastPathComponent) starts")
 +        // Lume GF: the next item opens only after this one has closed its input
 +        let replaced = playerItem
          shutdown()
@@ -20,11 +22,34 @@ index 5d539f3..ab12128 100644
          if options.videoDisable {
              videoOutput = nil
          } else if videoOutput == nil {
+@@ -331,6 +335,7 @@ extension KSMEPlayer: MediaPlayerProtocol {
+         audioOutput.renderSource = playerItem
+         videoOutput?.renderSource = playerItem
+         videoOutput?.options = options
++        gfZapLog("replace with \(url.lastPathComponent) done")
+     }
+ 
+     public var currentPlaybackTime: TimeInterval {
 diff --git a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
-index 5c52790..00df390 100644
+index 5c52790..fc91308 100644
 --- a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
 +++ b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
-@@ -23,6 +23,11 @@ public final class MEPlayerItem: Sendable {
+@@ -11,6 +11,14 @@ import Libavcodec
+ import Libavfilter
+ import Libavformat
+ 
++/// Lume GF: when each step of a channel change happened (Debug builds only: CI's GFZapTests read it when the old
++/// channel closes late). Names the stream by its last path part, never the whole address.
++func gfZapLog(_ message: @autoclosure () -> String) {
++    #if DEBUG
++        NSLog("GF zap %.3f %@", CACurrentMediaTime(), message())
++    #endif
++}
++
+ public final class MEPlayerItem: Sendable {
+     private let url: URL
+     private let options: KSOptions
+@@ -23,6 +31,13 @@ public final class MEPlayerItem: Sendable {
      private var openOperation: BlockOperation?
      private var readOperation: BlockOperation?
      private var closeOperation: BlockOperation?
@@ -33,26 +58,94 @@ index 5c52790..00df390 100644
 +    /// Lume GF: the item this one replaces (`KSMEPlayer.replace`). It closes its input before this one opens, so a
 +    /// channel change never holds two connections to the server at once; waited for at most 1.5 s.
 +    var replacedItem: MEPlayerItem?
++    /// Lume GF: whether FFmpeg has been told to stop yet (logged once, Debug builds).
++    private var gfInterruptNoted = false
      private var seekingCompletionHandler: ((Bool) -> Void)?
      // 没有音频数据可以渲染
      private var isAudioStalled = true
-@@ -616,6 +621,11 @@ extension MEPlayerItem: MediaPlayback {
+@@ -177,6 +192,7 @@ extension MEPlayerItem {
+             let formatContext = Unmanaged<MEPlayerItem>.fromOpaque(ctx).takeUnretainedValue()
+             switch formatContext.state {
+             case .finished, .closed, .failed:
++                formatContext.gfNoteInterrupt()
+                 return 1
+             default:
+                 return 0
+@@ -201,6 +217,7 @@ extension MEPlayerItem {
+         }
+         var result = avformat_open_input(&self.formatCtx, urlString, nil, &avOptions)
+         av_dict_free(&avOptions)
++        gfZapLog("\(url.lastPathComponent) input opened (\(result))")
+         if result == AVError.eof.code {
+             state = .finished
+             delegate?.sourceDidFinished()
+@@ -223,6 +240,7 @@ extension MEPlayerItem {
+             formatCtx.pointee.max_analyze_duration = maxAnalyzeDuration
+         }
+         result = avformat_find_stream_info(formatCtx, nil)
++        gfZapLog("\(url.lastPathComponent) stream info (\(result), state \(state))")
+         guard result == 0 else {
+             error = .init(errorCode: .formatFindStreamInfo, avErrorCode: result)
+             avformat_close_input(&self.formatCtx)
+@@ -260,6 +278,7 @@ extension MEPlayerItem {
+         if let outputURL = options.outputURL {
+             startRecord(url: outputURL)
+         }
++        gfZapLog("\(url.lastPathComponent) decoders made (state \(state))")
+         if videoTrack == nil, audioTrack == nil {
+             state = .failed
+         } else {
+@@ -610,12 +629,29 @@ extension MEPlayerItem: MediaPlayback {
+         return seekable
+     }
+ 
++    /// Lume GF: FFmpeg asked whether to stop and was told yes (logged the first time only).
++    fileprivate func gfNoteInterrupt() {
++        #if DEBUG
++            guard !gfInterruptNoted else { return }
++            gfInterruptNoted = true
++            gfZapLog("\(url.lastPathComponent) FFmpeg told to stop")
++        #endif
++    }
++
+     public func prepareToPlay() {
++        gfZapLog("\(url.lastPathComponent) open queued")
+         state = .opening
+         openOperation = BlockOperation { [weak self] in
              guard let self else { return }
              Thread.current.name = (self.operationQueue.name ?? "") + "_open"
              Thread.current.stackSize = KSOptions.stackSize
 +            // Lume GF: one connection at a time — the replaced item closes its input first (at most 1.5 s)
 +            if let replaced = self.replacedItem {
 +                self.replacedItem = nil
-+                _ = replaced.inputClosed.wait(timeout: .now() + 1.5)
++                gfZapLog("\(self.url.lastPathComponent) waits for \(replaced.url.lastPathComponent) to close")
++                let waited = replaced.inputClosed.wait(timeout: .now() + 1.5)
++                gfZapLog("\(self.url.lastPathComponent) stops waiting: \(waited == .success ? "closed" : "timed out")")
 +            }
              self.openThread()
          }
          openOperation?.queuePriority = .veryHigh
-@@ -646,6 +656,8 @@ extension MEPlayerItem: MediaPlayback {
+@@ -627,12 +663,14 @@ extension MEPlayerItem: MediaPlayback {
+ 
+     public func shutdown() {
+         guard state != .closed else { return }
++        gfZapLog("\(url.lastPathComponent) shuts down (was \(state), reading: \(readOperation != nil))")
+         state = .closed
+         av_packet_free(&outputPacket)
+         stopRecord()
+         // 故意循环引用。等结束了。才释放
+         let closeOperation = BlockOperation {
+             Thread.current.name = (self.operationQueue.name ?? "") + "_close"
++            gfZapLog("\(self.url.lastPathComponent) close starts")
+             self.allPlayerItemTracks.forEach { $0.shutdown() }
+             KSLog("清空formatCtx")
+             // 自定义的协议才会av_class为空
+@@ -646,6 +684,9 @@ extension MEPlayerItem: MediaPlayback {
              self.formatCtx?.pointee.interrupt_callback.callback = nil
              avformat_close_input(&self.formatCtx)
              avformat_close_input(&self.outputFormatCtx)
 +            // Lume GF: the input is closed; the item replacing this one may open now
++            gfZapLog("\(self.url.lastPathComponent) input closed")
 +            self.inputClosed.signal()
              self.duration = 0
              self.closeOperation = nil
