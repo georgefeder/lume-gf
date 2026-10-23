@@ -22,9 +22,14 @@ build() {  # $1 = simulator id, $2 = products folder; prints the built .app
 }
 
 start() {  # $1 = simulator id, $2 = app; prints the bundle id
-  xcrun simctl boot "$1" >/dev/null 2>&1 || true
-  xcrun simctl bootstatus "$1" -b >/dev/null
-  xcrun simctl install "$1" "$2"
+  # a second boot when the first one goes down: Xcode 27.1's simulator was "Shutdown" by install time (run 39984530532)
+  for TRY in 1 2; do
+    xcrun simctl boot "$1" >/dev/null 2>&1 || true
+    xcrun simctl bootstatus "$1" -b >/dev/null && xcrun simctl install "$1" "$2" && break
+    [ "$TRY" = 1 ] || return 1
+    echo "screenshots: the simulator went down while starting; booting it again" >&2
+    xcrun simctl shutdown "$1" >/dev/null 2>&1 || true
+  done
   plutil -extract CFBundleIdentifier raw -o - "$2/Info.plist"
 }
 
