@@ -32,7 +32,7 @@ final class GuideStatus {
 
     /// A time today, "yesterday" and a time, or the date and a time: a bare "21:48" read as later today when it was
     /// yesterday's (Georgs, 23 Oct).
-    static func when(_ date: Date) -> String {
+    nonisolated static func when(_ date: Date) -> String {
         let time = date.formatted(date: .omitted, time: .shortened)
         if Calendar.current.isDateInToday(date) { return time }
         if Calendar.current.isDateInYesterday(date) { return "yesterday \(time)" }

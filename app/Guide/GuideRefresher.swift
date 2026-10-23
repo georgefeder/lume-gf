@@ -73,11 +73,17 @@ nonisolated final class GuideRefresher {
             }
             let started = Date()
             let applier = GuideListingApplier(container: container)
-            let index = index ?? Self.readStored(applier, now: now())
-            self.index = index
+            let at = now()
+            let index: GuideStoredIndex
+            if let read = self.index {
+                index = read
+            } else {
+                index = readStored(applier, file: file, state: state, now: at)
+                if Task.isCancelled { throw CancellationError() } // a partly read store is no index
+                self.index = index
+            }
             // a stale stored guide (a phone not opened for a day, a first import): what is on now goes in first
             let mine = state.channelIDs.intersection(knownChannelIDs)
-            let at = now()
             let stale = GuideDiffPlanner.wantsNowFirst(stored: index.rows,
                                                        channels: mine.isEmpty ? knownChannelIDs : mine, now: at)
             let nowFirst = stale ? DateInterval(start: at, duration: GuideDiffPlanner.nowFirstSpan) : nil
@@ -89,12 +95,12 @@ nonisolated final class GuideRefresher {
             }
             let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: at,
                                        allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: logged)
-            if Task.isCancelled || !result.completed {
-                let text = "Guide: import stopped after \(Self.seconds(since: started)) s, \(result.inserted) in so far"
-                Logger.database.info("\(text, privacy: .public)")
-            }
-            if Task.isCancelled { throw CancellationError() }
+            // a complete import counts even when a stop came at its very end: the next run must not do it again
             guard result.completed else {
+                let why = Task.isCancelled ? "stopped" : "file not read to the end"
+                let text = "Guide: import \(why) after \(Self.seconds(since: started)) s, \(result.inserted) in so far"
+                Logger.database.info("\(text, privacy: .public)")
+                if Task.isCancelled { throw CancellationError() }
                 states.update(sourceID) { $0.recordFailure("guide file incomplete", at: now()) }
                 throw Failure.incompleteFile
             }
@@ -110,13 +116,22 @@ nonisolated final class GuideRefresher {
         }
     }
 
-    /// The stored guide, read once per run, after the programmes long over have gone
-    /// (`GuideListingApplier.deleteEnded`). Logged with its size: Lume's diagnostic report shows where the time goes.
-    private static func readStored(_ applier: GuideListingApplier, now: Date) -> GuideStoredIndex {
+    /// The stored guide, read once per run and logged with its size (Lume's diagnostic report shows where the time
+    /// goes). A source with no complete import for a day first clears the programmes long over: they ended before a
+    /// day ago and before the new file's earliest programme, so nothing the file carries goes (its catch-up days stay).
+    /// Another source's may go too; its next check then downloads and imports in full.
+    private func readStored(_ applier: GuideListingApplier, file: URL, state: GuideSourceState,
+                            now: Date) -> GuideStoredIndex {
         let started = Date()
-        let removed = applier.deleteEnded(before: now.addingTimeInterval(-GuideListingApplier.pruneAfter))
+        var removed = 0
+        let behind = state.lastUpdate.map { now.timeIntervalSince($0) > GuideListingApplier.pruneAfter } ?? true
+        if behind, let earliest = GuideListingApplier.earliestStart(inFileAt: file) {
+            let dayAgo = now.addingTimeInterval(-GuideListingApplier.pruneAfter)
+            removed = applier.deleteEnded(before: min(earliest, dayAgo))
+            if removed > 0 { states.forgetFiles() }
+        }
         let index = GuideStoredIndex(rows: applier.loadStored())
-        let took = seconds(since: started)
+        let took = Self.seconds(since: started)
         let text = "Guide: \(removed) long-over programmes removed, \(index.rows.count) read in \(took) s"
         Logger.database.info("\(text, privacy: .public)")
         return index

@@ -93,6 +93,13 @@ struct GuideListingApplierTests {
         #expect(applier.deleteEnded(before: cutoff) == 0)
     }
 
+    @Test func `a guide file's earliest programme is found without parsing it`() throws {
+        let earlier = now.addingTimeInterval(-7200)
+        let file = try writeGuideFile(hourly("c1", from: now, count: 3) + hourly("c2", from: earlier, count: 1))
+        #expect(GuideListingApplier.earliestStart(inFileAt: file) == earlier)
+        #expect(GuideListingApplier.earliestStart(inFileAt: try writeGuideFile([])) == nil)
+    }
+
     @Test func `a full-size guide imports, a stopped import resumes, and a rerun writes nothing`() throws {
         let container = try makeTestContainer()
         let programmes = (0 ..< 3000).flatMap { hourly("ch\($0)", from: now, count: 5) } // 15,000
