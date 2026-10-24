@@ -1,6 +1,7 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import CoreVideo
+import Foundation
 import KSPlayer
 import Metal
 import OSLog
@@ -347,6 +348,8 @@ struct GFVideoReflection: View {
         private var lastBuffer: CVPixelBuffer?
         private var still: (number: Int, image: CIImage)?
         private var fading: (from: CIImage, start: CFTimeInterval)?
+        /// The still as last drawn (part way through a dissolve, perhaps): the next one dissolves from it.
+        private var shownStill: CIImage?
         private var stretch: CGFloat?
         private var lastTick: CFTimeInterval?
         /// Something changed that the next tick must draw.
@@ -426,7 +429,10 @@ struct GFVideoReflection: View {
             let area = CGRect(origin: .zero, size: size)
             let black = CIImage(color: .black).cropped(to: area)
             let drawn = source.image.map { reflected($0, in: area, stretch: length).composited(over: black) } ?? black
-            gpu.context.render(drawn, to: drawable.texture, commandBuffer: commands, bounds: area, colorSpace: Self.sRGB)
+            let destination = CIRenderDestination(mtlTexture: drawable.texture, commandBuffer: commands)
+            destination.colorSpace = Self.sRGB
+            destination.isDithered = true // the long fade to black would band in 8 bits
+            _ = try? gpu.context.startTask(toRender: drawn, to: destination)
             commands.present(drawable)
             inFlight += 1
             commands.addCompletedHandler { @Sendable [weak self] _ in
@@ -442,36 +448,44 @@ struct GFVideoReflection: View {
             if reflection.isLive {
                 still = nil
                 fading = nil
+                shownStill = nil
                 let buffer = reflection.currentFrame()?.cvPixelBuffer
                 let changed = buffer !== lastBuffer
                 lastBuffer = buffer
-                return (buffer.map { CIImage(cvPixelBuffer: $0) }, changed)
+                // HDR channels toned down to the drawable's range rather than clipped
+                return (buffer.map { CIImage(cvPixelBuffer: $0, options: [.toneMapHDRtoSDR: true]) }, changed)
             }
             lastBuffer = nil
             guard let image = reflection.image else {
                 let changed = still != nil
                 still = nil
                 fading = nil
+                shownStill = nil
                 return (nil, changed)
             }
             var changed = false
             if still?.number != reflection.number {
-                fading = still.map { (from: $0.image, start: now) }
+                fading = shownStill.map { (from: $0, start: now) }
                 still = (number: reflection.number, image: CIImage(cgImage: image))
                 changed = true
             }
             guard let still else { return (nil, changed) }
-            guard let fading else { return (still.image, changed) }
-            let progress = (now - fading.start) / 0.8
-            if progress >= 1 {
-                self.fading = nil
-                return (still.image, true)
+            var shown = still.image
+            if let fading {
+                let progress = (now - fading.start) / 0.8
+                if progress >= 1 {
+                    self.fading = nil
+                } else {
+                    let dissolve = CIFilter.dissolveTransition()
+                    dissolve.inputImage = fading.from
+                    dissolve.targetImage = still.image
+                    dissolve.time = Float(progress * progress * (3 - 2 * progress)) // eased in and out
+                    shown = dissolve.outputImage ?? still.image
+                }
+                changed = true
             }
-            let dissolve = CIFilter.dissolveTransition()
-            dissolve.inputImage = fading.from
-            dissolve.targetImage = still.image
-            dissolve.time = Float(progress * progress * (3 - 2 * progress)) // eased in and out
-            return (dissolve.outputImage, true)
+            shownStill = shown
+            return (shown, changed)
         }
 
         /// `frame` upside down from the top of `area` (the fold) across the picture's width, `stretch` times the
@@ -490,40 +504,44 @@ struct GFVideoReflection: View {
             blurMask.color0 = Self.grey(Self.sharpness)
             blurMask.point1 = CGPoint(x: 0, y: fold - length * Self.blurReach)
             blurMask.color1 = Self.grey(1)
+            let mirrored = frame.transformed(by: mirror).clampedToExtent() // no dark rim from the blur
             let blur = CIFilter.maskedVariableBlur()
-            blur.inputImage = frame.transformed(by: mirror).clampedToExtent() // no dark rim from the blur
+            blur.inputImage = mirrored
             blur.mask = blurMask.outputImage
             blur.radius = Float(across.width * Self.blurShare)
-            let body = Self.light(Self.body), boost = Self.light(Self.contact) - body
-            let light = Self.fade(from: fold, over: length * Self.contactShare, boost)
-                .applyingFilter("CIAdditionCompositing",
-                                parameters: [kCIInputBackgroundImageKey: Self.fade(from: fold, over: length, body)])
-                .applyingFilter("CIColorClamp") // the sum's alpha back to 1
-            return (blur.outputImage ?? frame)
+            // the brightness from the fold down, stretched over the reflection's length
+            let light = Self.brightness.transformed(by: CGAffineTransform(scaleX: 1, y: length / Self.steps)
+                .concatenating(CGAffineTransform(translationX: 0, y: fold - length)))
+            return (blur.outputImage ?? mirrored)
                 .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: light])
                 .cropped(to: across)
         }
 
-        /// Grey `level` at `top`, easing to black `length` further down.
-        private static func fade(from top: CGFloat, over length: CGFloat, _ level: CGFloat) -> CIImage {
-            let gradient = CIFilter.smoothLinearGradient()
-            gradient.point0 = CGPoint(x: 0, y: top)
-            gradient.color0 = grey(level)
-            gradient.point1 = CGPoint(x: 0, y: top - max(1, length))
-            gradient.color1 = grey(0)
-            return gradient.outputImage ?? CIImage(color: .black)
-        }
-
-        /// A grey Core Image works with as it is (it adds, multiplies and reads masks in linear light).
+        /// A grey as Core Image works with it (it reads masks in linear light).
         private static func grey(_ level: CGFloat) -> CIColor {
             linear.flatMap { CIColor(red: level, green: level, blue: level, alpha: 1, colorSpace: $0) }
                 ?? CIColor(red: level, green: level, blue: level)
         }
 
-        /// The linear light that looks `share` as bright (the screen's gamma).
-        private static func light(_ share: CGFloat) -> CGFloat {
-            pow(share, 2.2)
-        }
+        /// The reflection's brightness as it looks, from where it meets the picture (the top row) to its end, `steps`
+        /// rows of grey a pixel wide, endless sideways and beyond its ends.
+        private static let steps: CGFloat = 256
+        private static let brightness: CIImage = {
+            let ease = { (t: CGFloat) in 1 - min(1, t) * min(1, t) * (3 - 2 * min(1, t)) }
+            let view = GFMirrorView.self
+            let rows = (0 ..< Int(view.steps)).map { row -> UInt8 in
+                let t = CGFloat(row) / (view.steps - 1)
+                let level = view.body * ease(t) + (view.contact - view.body) * ease(t / view.contactShare)
+                return UInt8((level * 255).rounded())
+            }
+            guard let grey = CGColorSpace(name: CGColorSpace.genericGrayGamma2_2),
+                  let data = CGDataProvider(data: Data(rows) as CFData),
+                  let image = CGImage(width: 1, height: rows.count, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: 1,
+                                      space: grey, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+                                      provider: data, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+            else { return CIImage(color: .black) }
+            return CIImage(cgImage: image).clampedToExtent()
+        }()
     }
 
     /// The display link's target, holding the mirror weakly (a display link keeps its target).
@@ -549,8 +567,8 @@ extension KSPlayerEngineView {
 
     /// Keeps the reflection going while the player is split (only KSMEPlayer): its frames live when they are on the
     /// GPU; otherwise the frame on screen about once a second, shrunk off the main thread, only while the stream plays
-    /// in the foreground. Also the picture's shape, so it stands on the fold (looked for four times a second until a
-    /// frame tells). Nothing once the player is whole again.
+    /// in the foreground. Also the picture's shape, four times a second, so the picture stands on the fold from its
+    /// first frame and takes a new channel's shape as it starts. Nothing once the player is whole again.
     func gfFollowReflection() async {
         guard gfTabletop != nil else {
             gfReflection.currentFrame = { nil }
@@ -560,21 +578,25 @@ extension KSPlayerEngineView {
         }
         let coordinator = coordinator
         gfReflection.currentFrame = { (coordinator.playerLayer?.player as? KSMEPlayer)?.videoOutput?.pixelBuffer }
+        var quarters = 0
         while !Task.isCancelled {
-            if gfDrawn, let player = coordinator.playerLayer?.player as? KSMEPlayer {
-                let frame = player.videoOutput?.pixelBuffer
-                gfReflection.setAspect(frame.flatMap(GFReflection.aspect(of:)))
+            let player = coordinator.playerLayer?.player as? KSMEPlayer
+            let frame = player?.videoOutput?.pixelBuffer
+            gfReflection.setAspect(frame.flatMap(GFReflection.aspect(of:))) // known before the black cover lifts
+            quarters &+= 1
+            if gfDrawn, let player {
                 if frame?.cvPixelBuffer != nil {
                     // the mirror follows every frame by itself, and keeps a paused one
                     gfReflection.setLive(true)
-                } else if isPlaying, Self.gfInForeground, let frame = await player.thumbnailImageAtCurrentTime() {
+                } else if quarters % 4 == 1, isPlaying, Self.gfInForeground,
+                          let frame = await player.thumbnailImageAtCurrentTime() {
                     let small = await Task.detached(priority: .utility) { GFReflection.shrunk(frame) }.value
                     guard !Task.isCancelled else { return }
                     gfReflection.show(small) // the new picture first, then off the live mirror: no stale one between
                     gfReflection.setLive(false)
                 }
             }
-            try? await Task.sleep(for: gfReflection.videoAspect == nil ? .milliseconds(250) : .seconds(1))
+            try? await Task.sleep(for: .milliseconds(250))
         }
     }
 

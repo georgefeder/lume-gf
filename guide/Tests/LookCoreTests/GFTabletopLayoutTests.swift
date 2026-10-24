@@ -31,7 +31,8 @@ struct GFTabletopLayoutTests {
         let above = CGRect(x: 0, y: 0, width: 669, height: 470)
         #expect(GFTabletopLayout.picture(in: above, aspect: 2) == CGRect(x: 0, y: 135.5, width: 669, height: 334.5))
         #expect(GFTabletopLayout.picture(in: above, aspect: nil) == above)
-        #expect(GFTabletopLayout.picture(in: above, aspect: 1) == above) // taller than the room: all of it
+        // narrower than the room (as a 4:3 channel on the Duo): all of its height, centred
+        #expect(GFTabletopLayout.picture(in: above, aspect: 1) == CGRect(x: 99.5, y: 0, width: 470, height: 470))
     }
 
     @Test func `the reflection follows the hinge`() {

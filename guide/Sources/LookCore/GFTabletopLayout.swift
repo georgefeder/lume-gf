@@ -27,12 +27,13 @@ nonisolated enum GFTabletopLayout {
                      panel: CGRect(x: 0, y: fold.maxY, width: size.width, height: size.height - fold.maxY))
     }
 
-    /// The picture above the fold, standing on it: as wide as `video` and as tall as its shape allows (Georgs, 24 Oct:
+    /// The picture above the fold, standing on it: as big as its shape fits in `video`, centred across (Georgs, 24 Oct:
     /// Netflix's picture meets its reflection at the fold). All of `video` while the shape is unknown.
     static func picture(in video: CGRect, aspect: CGFloat?) -> CGRect {
         guard let aspect, aspect > 0 else { return video }
         let height = min(video.height, video.width / aspect)
-        return CGRect(x: video.minX, y: video.maxY - height, width: video.width, height: height)
+        let width = min(video.width, height * aspect)
+        return CGRect(x: video.midX - width / 2, y: video.maxY - height, width: width, height: height)
     }
 
     /// How long the reflection below the fold is, as a share of the picture's height, at a hinge angle in degrees (0
