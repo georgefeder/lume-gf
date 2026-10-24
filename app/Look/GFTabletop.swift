@@ -7,6 +7,7 @@ import Metal
 import OSLog
 import QuartzCore
 import SwiftUI
+import VideoToolbox
 #if canImport(UIKit)
     import UIKit
 #endif
@@ -204,17 +205,20 @@ extension View {
     }
 
     /// Pins a layer of the player to one band of the split screen, across its whole width: the rows of `rect`
-    /// (whole-screen coordinates), with `bottomInset` kept clear for the home indicator. Unchanged when the player is
-    /// not split. Heights only: given exact widths too, the layers widened the player, the fold was read on the wider
-    /// player, and round it went until the controls hung 84 points off the left (CI runs 40080430709, 40083149143).
-    func gfTabletopArea(_ rect: CGRect?, bottomInset: CGFloat = 0) -> some View {
+    /// (whole-screen coordinates), in the half by the screen's `edge`, with `bottomInset` kept clear for the home
+    /// indicator. Unchanged when the player is not split.
+    /// Nothing here may be as wide or as tall as the screen: the layers then grew the player, the fold was read on the
+    /// bigger player, and round it went until the controls hung 84 points off the left (CI runs 40080430709 to
+    /// 40085607543). So a band above the fold hangs from the top by its bottom row, one below stands on the bottom.
+    func gfTabletopArea(_ rect: CGRect?, from edge: VerticalEdge, bottomInset: CGFloat = 0) -> some View {
         padding(.bottom, rect == nil ? 0 : bottomInset)
             .frame(height: rect?.height)
             #if GF_DEMO
                 .background { GFDemoLanding(rect: rect) }
             #endif
-            .frame(height: rect?.maxY, alignment: .bottom) // the band ends `maxY` from the top
-            .frame(maxWidth: rect == nil ? nil : .infinity, maxHeight: rect == nil ? nil : .infinity, alignment: .top)
+            .frame(height: edge == .top ? rect?.maxY : nil, alignment: .bottom)
+            .frame(maxWidth: rect == nil ? nil : .infinity, maxHeight: rect == nil ? nil : .infinity,
+                   alignment: edge == .top ? .top : .bottom)
             .ignoresSafeArea(edges: rect == nil ? [] : .all)
     }
 }
@@ -381,6 +385,10 @@ struct GFVideoReflection: View {
 
         private var link: CADisplayLink?
         private var lastBuffer: CVPixelBuffer?
+        /// The last frame as Core Image reads it (`readable`), kept for redraws while the hinge moves.
+        private var lastImage: CIImage?
+        private var transfer: VTPixelTransferSession?
+        private var pool: (buffers: CVPixelBufferPool, width: Int, height: Int)?
         private var still: (number: Int, image: CIImage)?
         private var fading: (from: CIImage, start: CFTimeInterval)?
         /// The still as last drawn (part way through a dissolve, perhaps): the next one dissolves from it.
@@ -438,6 +446,7 @@ struct GFVideoReflection: View {
             lastTick = nil
             guard window != nil else {
                 lastBuffer = nil
+                lastImage = nil
                 still = nil
                 fading = nil
                 return
@@ -530,12 +539,15 @@ struct GFVideoReflection: View {
                 fading = nil
                 shownStill = nil
                 let buffer = reflection.currentFrame()?.cvPixelBuffer
-                let changed = buffer !== lastBuffer
+                guard buffer !== lastBuffer else { return (lastImage, false) }
                 lastBuffer = buffer
                 // HDR channels toned down to the drawable's range rather than clipped
-                return (buffer.map { CIImage(cvPixelBuffer: $0, options: [.toneMapHDRtoSDR: true]) }, changed)
+                lastImage = buffer.flatMap(readable)
+                    .map { CIImage(cvPixelBuffer: $0, options: [.toneMapHDRtoSDR: true]) }
+                return (lastImage, true)
             }
             lastBuffer = nil
+            lastImage = nil
             guard let image = reflection.image else {
                 let changed = still != nil
                 still = nil
@@ -566,6 +578,42 @@ struct GFVideoReflection: View {
             }
             shownStill = shown
             return (shown, changed)
+        }
+
+        /// The player's frame in a form Core Image reads, made small (it is blurred anyway) by VideoToolbox: KSPlayer
+        /// has most channels (8-bit 4:2:0) decoded into three-plane buffers, which Core Image cannot read at all (CI run
+        /// 40085607543: a pixel buffer every frame, never an image). A new buffer from a pool each time, so one the GPU
+        /// is still reading is never written over.
+        private func readable(_ buffer: CVPixelBuffer) -> CVPixelBuffer? {
+            let sourceWidth = CVPixelBufferGetWidth(buffer), sourceHeight = CVPixelBufferGetHeight(buffer)
+            guard sourceWidth > 0, sourceHeight > 0 else { return nil }
+            let width = min(sourceWidth, 640) & ~1, height = max(2, sourceHeight * width / sourceWidth) & ~1
+            if pool?.width != width || pool?.height != height {
+                let attributes: [CFString: Any] = [
+                    kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+                    kCVPixelBufferWidthKey: width,
+                    kCVPixelBufferHeightKey: height,
+                    kCVPixelBufferIOSurfacePropertiesKey: [CFString: Any](),
+                    kCVPixelBufferMetalCompatibilityKey: true
+                ]
+                var made: CVPixelBufferPool?
+                CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attributes as CFDictionary, &made)
+                pool = made.map { (buffers: $0, width: width, height: height) }
+            }
+            if transfer == nil {
+                VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transfer)
+            }
+            var small: CVPixelBuffer?
+            guard let pool, let transfer,
+                  CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool.buffers, &small) == kCVReturnSuccess,
+                  let small, VTPixelTransferSessionTransferImage(transfer, from: buffer, to: small) == noErr
+            else {
+                #if GF_DEMO
+                    tell("could not convert a \(CVPixelBufferGetPixelFormatType(buffer)) frame")
+                #endif
+                return nil
+            }
+            return small
         }
 
         /// `frame` upside down from the top of `area` (the fold) across the picture's width, `stretch` times the
