@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index fbcdc5a..d1e47dc 100644
+index fbcdc5a..e805a86 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -83,6 +83,10 @@ struct KSPlayerEngineView: View {
@@ -40,9 +40,9 @@ index fbcdc5a..d1e47dc 100644
                  // indicator stands in for a player that would otherwise look
                  // paused behind its Play button.
 -                if isControlsVisible, hasStartedPlayback, !loadFailed {
-+                // Lume GF: below the fold they cover nothing, so they stay (and the demo's fold shows them for its
-+                // screenshot, though its made-up channel never plays)
-+                if isControlsVisible || gfTabletop != nil, hasStartedPlayback && !loadFailed || GFTabletop.demoFold {
++                // Lume GF: below the fold they go after a while too, leaving the reflection; a tap there brings them
++                // back (Georgs, 24 Oct). The demo's fold shows them though its made-up channel never plays.
++                if isControlsVisible, hasStartedPlayback && !loadFailed || GFTabletop.demoFold {
                      controlsOverlay
 +                        .gfTabletopArea(gfTabletop?.panel, alignment: .bottom,
 +                                        bottomInset: gfTabletop?.bottomInset ?? 0)
