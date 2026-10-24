@@ -107,6 +107,11 @@
             #endif
         }
 
+        /// For the screenshots' logs: what the split player (GFTabletop) did.
+        static func logTabletop(_ line: String) {
+            log("tabletop: " + line)
+        }
+
         private static func log(_ line: String) {
             FileHandle.standardError.write(Data(("GFDemo " + line + "\n").utf8))
         }

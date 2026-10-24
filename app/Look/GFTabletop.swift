@@ -79,6 +79,13 @@ final class GFTabletop {
     /// A line in Lume's diagnostic report ("Duo fold: ..."): what iOS reported and what the player did with it.
     static func log(_ text: String) {
         Logger.player.info("\("Duo fold: " + text, privacy: .public)")
+        #if GF_DEMO
+            GFDemo.logTabletop(text)
+        #endif
+    }
+
+    static func text(_ rect: CGRect) -> String {
+        "\(Int(rect.minX)),\(Int(rect.minY)) \(Int(rect.width))x\(Int(rect.height))"
     }
 
     /// What the reader saw, for the diagnostic report.
@@ -193,14 +200,37 @@ extension View {
     /// Pins a layer of the player to one part of the split screen: `rect` (whole-screen coordinates), with
     /// `bottomInset` kept clear for the home indicator. Unchanged when the player is not split.
     func gfTabletopArea(_ rect: CGRect?, bottomInset: CGFloat = 0) -> some View {
+        // placed by padding: placed by offset, the controls came out shifted left with the close button off screen
+        // (CI run 40080430709)
         padding(.bottom, rect == nil ? 0 : bottomInset)
             .frame(width: rect?.width, height: rect?.height)
-            .offset(x: rect?.minX ?? 0, y: rect?.minY ?? 0)
+            #if GF_DEMO
+                .background { GFDemoLanding(rect: rect) }
+            #endif
+            .padding(.leading, rect?.minX ?? 0)
+            .padding(.top, rect?.minY ?? 0)
             .frame(maxWidth: rect == nil ? nil : .infinity, maxHeight: rect == nil ? nil : .infinity,
                    alignment: .topLeading)
             .ignoresSafeArea(edges: rect == nil ? [] : .all)
     }
 }
+
+#if GF_DEMO
+    /// Screenshot builds: where a layer meant for `rect` really landed on screen.
+    private struct GFDemoLanding: View {
+        let rect: CGRect?
+
+        var body: some View {
+            GeometryReader { proxy in
+                let landed = proxy.frame(in: .global)
+                Color.clear.onChange(of: landed, initial: true) { _, landed in
+                    guard let rect else { return }
+                    GFTabletop.log("layer for \(GFTabletop.text(rect)) landed at \(GFTabletop.text(landed))")
+                }
+            }
+        }
+    }
+#endif
 
 private struct GFFoldReader: ViewModifier {
     @Binding var frames: GFTabletopFrames?
@@ -356,6 +386,16 @@ struct GFVideoReflection: View {
         private var stale = true
         private var drewPicture = false
         private var inFlight = 0
+        #if GF_DEMO
+            /// What the screenshots' log last heard from this mirror, so each state is told once.
+            private var told = ""
+
+            private func tell(_ state: String) {
+                guard state != told else { return }
+                told = state
+                GFTabletop.log("mirror: " + state)
+            }
+        #endif
 
         init(reflection: GFReflection) {
             self.reflection = reflection
@@ -417,22 +457,45 @@ struct GFVideoReflection: View {
                 stretch = length
                 stale = true
             }
+            #if GF_DEMO
+                if Self.gpu == nil { tell("no Metal device") }
+            #endif
             guard stale, inFlight < 2, let gpu = Self.gpu else { return }
             if source.image == nil, !drewPicture { // black already
+                #if GF_DEMO
+                    tell("nothing to show (live \(reflection.isLive), still \(reflection.image != nil))")
+                #endif
                 stale = false
                 return
             }
             let size = metalLayer.drawableSize
             guard size.width >= 1, size.height >= 1, let drawable = metalLayer.nextDrawable(),
                   let commands = gpu.queue.makeCommandBuffer()
-            else { return }
+            else {
+                #if GF_DEMO
+                    tell("no drawable at \(Int(size.width))x\(Int(size.height))")
+                #endif
+                return
+            }
             let area = CGRect(origin: .zero, size: size)
             let black = CIImage(color: .black).cropped(to: area)
             let drawn = source.image.map { reflected($0, in: area, stretch: length).composited(over: black) } ?? black
             let destination = CIRenderDestination(mtlTexture: drawable.texture, commandBuffer: commands)
             destination.colorSpace = Self.sRGB
             destination.isDithered = true // the long fade to black would band in 8 bits
-            _ = try? gpu.context.startTask(toRender: drawn, to: destination)
+            do {
+                _ = try gpu.context.startTask(toRender: drawn, to: destination)
+                #if GF_DEMO
+                    let place = GFTabletop.text(convert(bounds, to: nil))
+                    let kind = reflection.isLive ? "live" : "still"
+                    tell("drawing \(kind) frames, \(Int(size.width))x\(Int(size.height)) at \(place), "
+                        + "picture \(GFTabletop.text(picture)), stretch \(String(format: "%.2f", length))")
+                #endif
+            } catch {
+                #if GF_DEMO
+                    tell("Core Image failed: \(error.localizedDescription)")
+                #endif
+            }
             commands.present(drawable)
             inFlight += 1
             commands.addCompletedHandler { @Sendable [weak self] _ in
