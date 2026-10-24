@@ -1,4 +1,6 @@
 import AVFoundation
+import CoreMedia
+import CoreVideo
 import KSPlayer
 import OSLog
 import SwiftUI
@@ -99,22 +101,24 @@ nonisolated struct GFTabletopFrames: Equatable {
 }
 
 /// What the reflection shows, kept out of the player's own state (a change redraws only the reflection, not the
-/// player, whose open menus would flicker and drop taps): the player's frames live (`GFLiveMirror`) when they are on
-/// the GPU, as with hardware decoding (Georgs, 24 Oct: once a second "is like 2 fps", Netflix's moves with the
-/// picture); otherwise a picture about once a second, cross-faded.
+/// player, whose open menus would flicker and drop taps): the player's frames live (`GFLiveMirror`) when they are
+/// pixel buffers, as from hardware decoding and 8-bit software decoding (Georgs, 24 Oct: once a second "is like 2 fps",
+/// Netflix's moves with the picture); otherwise (10-bit software decoding) a picture about once a second, cross-faded.
 @MainActor
 @Observable
 final class GFReflection {
     private(set) var image: CGImage?
     /// Changes with every picture, for the cross-fade.
     private(set) var number = 0
-    /// The player's frames are on the GPU: the live mirror shows them.
+    /// The player's frames are pixel buffers: the live mirror shows them.
     private(set) var isLive = false
     /// The frame the player shows now, for the live mirror.
     @ObservationIgnored var currentFrame: () -> PixelBufferProtocol? = { nil }
 
     func setLive(_ live: Bool) {
-        if live != isLive { isLive = live }
+        guard live != isLive else { return }
+        isLive = live
+        if live { image = nil } // no stale picture shows when the live mirror ends
     }
 
     func show(_ next: CGImage?) {
@@ -234,13 +238,13 @@ struct GFVideoReflection: View {
             .overlay {
                 if reflection.isLive {
                     #if canImport(UIKit)
-                        // the live mirror under Apple's dark frosted material: a blur that also works on video
+                        // the live mirror under Apple's dark frosted material (a blur that also works on video), dimmed
+                        // by a layer of black rather than a group opacity, which would render the video offscreen
                         ZStack {
                             GFLiveMirror(frame: reflection.currentFrame)
                             Rectangle().fill(.ultraThinMaterial)
+                            Color.black.opacity(0.4)
                         }
-                        .environment(\.colorScheme, .dark)
-                        .opacity(0.6)
                     #endif
                 } else if let image = reflection.image {
                     Image(decorative: image, scale: 1)
@@ -263,7 +267,7 @@ struct GFVideoReflection: View {
 
 #if canImport(UIKit)
     /// The player's frames, live and upside down: a display layer that gets each new frame as the player shows it (the
-    /// same GPU buffer; nothing is copied or converted).
+    /// same pixel buffer; nothing is copied or converted).
     struct GFLiveMirror: UIViewRepresentable {
         let frame: () -> PixelBufferProtocol?
 
@@ -281,6 +285,7 @@ struct GFVideoReflection: View {
         private let video = AVSampleBufferDisplayLayer()
         private var link: CADisplayLink?
         private var last: CVPixelBuffer?
+        private var format: CMVideoFormatDescription?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -298,8 +303,12 @@ struct GFVideoReflection: View {
 
         override func layoutSubviews() {
             super.layoutSubviews()
+            // at once: an implicit animation would trail the panel as the hinge moves
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             video.bounds = bounds
             video.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            CATransaction.commit()
         }
 
         override func didMoveToWindow() {
@@ -311,21 +320,27 @@ struct GFVideoReflection: View {
                 last = nil
                 return
             }
-            let link = CADisplayLink(target: GFMirrorTick(self), selector: #selector(GFMirrorTick.tick))
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 24, maximum: 60, preferred: 60)
+            let link = CADisplayLink(target: GFMirrorTick(self), selector: #selector(GFMirrorTick.tick(_:)))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 24, maximum: 60, preferred: nil)
             link.add(to: .main, forMode: .common)
             self.link = link
         }
 
         /// A new frame on the player's screen goes on the mirror at once.
         fileprivate func showLatest() {
+            let renderer = video.sampleBufferRenderer
+            if renderer.status == .failed { // after a trip to the background: start again, the frame on screen too
+                renderer.flush()
+                last = nil
+            }
             guard let buffer = source()?.cvPixelBuffer, buffer !== last else { return }
             last = buffer
-            var format: CMVideoFormatDescription?
-            guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: buffer,
-                                                               formatDescriptionOut: &format) == noErr,
-                let format
-            else { return }
+            if format.map({ !CMVideoFormatDescriptionMatchesImageBuffer($0, imageBuffer: buffer) }) ?? true {
+                format = nil
+                CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: buffer,
+                                                             formatDescriptionOut: &format)
+            }
+            guard let format else { return }
             var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: .zero, decodeTimeStamp: .invalid)
             var sample: CMSampleBuffer?
             guard CMSampleBufferCreateReadyWithImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: buffer,
@@ -339,8 +354,6 @@ struct GFVideoReflection: View {
                 let key = Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque()
                 CFDictionarySetValue(first, key, Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
             }
-            let renderer = video.sampleBufferRenderer
-            if renderer.status == .failed { renderer.flush() }
             renderer.enqueue(sample)
         }
     }
@@ -353,8 +366,9 @@ struct GFVideoReflection: View {
             self.view = view
         }
 
-        @objc func tick() {
-            view?.showLatest()
+        @objc func tick(_ link: CADisplayLink) {
+            guard let view else { return link.invalidate() }
+            view.showLatest()
         }
     }
 #endif
@@ -365,6 +379,7 @@ extension KSPlayerEngineView {
     /// in the foreground. Nothing once the player is whole again.
     func gfFollowReflection() async {
         guard gfTabletop != nil else {
+            gfReflection.currentFrame = { nil }
             gfReflection.setLive(false)
             gfReflection.show(nil)
             return
@@ -372,14 +387,15 @@ extension KSPlayerEngineView {
         let coordinator = coordinator
         gfReflection.currentFrame = { (coordinator.playerLayer?.player as? KSMEPlayer)?.videoOutput?.pixelBuffer }
         while !Task.isCancelled {
-            if gfDrawn, isPlaying, Self.gfInForeground, let player = coordinator.playerLayer?.player as? KSMEPlayer {
+            if gfDrawn, let player = coordinator.playerLayer?.player as? KSMEPlayer {
                 if player.videoOutput?.pixelBuffer?.cvPixelBuffer != nil {
-                    gfReflection.setLive(true) // the mirror follows every frame by itself
-                } else if let frame = await player.thumbnailImageAtCurrentTime() {
-                    gfReflection.setLive(false)
+                    // the mirror follows every frame by itself, and keeps a paused one
+                    gfReflection.setLive(true)
+                } else if isPlaying, Self.gfInForeground, let frame = await player.thumbnailImageAtCurrentTime() {
                     let small = await Task.detached(priority: .utility) { GFReflection.shrunk(frame) }.value
                     guard !Task.isCancelled else { return }
-                    gfReflection.show(small)
+                    gfReflection.show(small) // the new picture first, then off the live mirror: no stale one between
+                    gfReflection.setLive(false)
                 }
             }
             try? await Task.sleep(for: .seconds(1))
