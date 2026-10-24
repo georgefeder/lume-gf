@@ -9,7 +9,7 @@ CI=$(cd "$(dirname "$0")" && pwd); LUME=$(cd "$LUME" && pwd); mkdir -p "$OUT"; O
 DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_SHOT_WAIT:-15}"
 SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"; REC_GRACE="${GF_REC_GRACE:-20}"
 REC_PAUSE="${GF_REC_PAUSE:-5}"
-LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0  # the app's own output, kept with the pictures
+LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0; NOPIC=0  # the app's own output, kept with the pictures
 SHOT_DISPLAYS=""  # "<id>:<name> ..." while shooting a simulator with more than one display
 # Apple's public HLS test stream (bipbop), for the shots that need a playing picture
 TEST_STREAM="https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8"
@@ -35,6 +35,18 @@ start() {  # $1 = simulator id, $2 = app; prints the bundle id
   plutil -extract CFBundleIdentifier raw -o - "$2/Info.plist"
 }
 
+picture() {  # $1 = simulator id, $2 = file, rest = simctl options; three tries, then on with the next picture
+  # simctl's screenshot itself failed whole runs: "Timeout waiting for screen surfaces", SimError 405 (run 40088243506)
+  # once one never came, one try each: a simulator that went down would otherwise add half a minute a picture
+  PSIM="$1"; PFILE="$2"; shift 2; PTRIES="1 2 3"; [ "$NOPIC" -eq 0 ] || PTRIES="1"
+  for PTRY in $PTRIES; do
+    xcrun simctl io "$PSIM" screenshot "$@" "$PFILE" >/dev/null 2>"$LOGS/picture.err" && return 0
+    [ "$PTRIES" = "1" ] || sleep 10
+  done
+  echo "screenshots: $(basename "$PFILE"): no picture after three tries: $(tail -n 1 "$LOGS/picture.err")"; NOPIC=1
+  return 1
+}
+
 shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch arguments
   SIM="$1"; BID="$2"; NAME="$3"; shift 3
   xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
@@ -44,11 +56,10 @@ shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch ar
   sleep "$WAIT"
   if [ -n "$SHOT_DISPLAYS" ]; then  # a simulator with two displays (the iPhone Duo): one picture each
     for D in $SHOT_DISPLAYS; do
-      xcrun simctl io "$SIM" screenshot --display="${D%%:*}" "$OUT/$NAME-${D#*:}.png" >/dev/null \
-        || echo "screenshots: $NAME: no picture of the ${D#*:} display"
+      picture "$SIM" "$OUT/$NAME-${D#*:}.png" --display="${D%%:*}" || true
     done
   else
-    xcrun simctl io "$SIM" screenshot "$OUT/$NAME.png" >/dev/null
+    picture "$SIM" "$OUT/$NAME.png" || true
   fi
   # a picture of the home screen is no picture of Lume: say so, with the app's last words
   if xcrun simctl spawn "$SIM" launchctl list 2>/dev/null | grep -q "UIKitApplication:$BID"; then
@@ -118,10 +129,14 @@ print(max(r, key=lambda x: v(x["version"]))["identifier"] if r else "")')
   xcrun simctl create "GF iPhone Duo" "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" "$RT"
 }
 duo_displays() {  # $1 = simulator id; "<id>:inner <id>:outer", from the list simctl gives when asked without one
-  xcrun simctl io "$1" screenshot "$LOGS/duo-probe.png" 2>&1 | python3 -c 'import re, sys
+  for PROBE in 1 2 3; do  # the same screenshot command, so the same "Timeout waiting for screen surfaces" can hit it
+    FOUND=$(xcrun simctl io "$1" screenshot "$LOGS/duo-probe.png" 2>&1 | python3 -c 'import re, sys
 d = sorted(((int(w) * int(h), i) for i, w, h in re.findall(r"--display=(\d+)\s.*?\b(\d+)x(\d+)\b", sys.stdin.read())),
            reverse=True)
-print(" ".join(f"{i}:{n}" for (_, i), n in zip(d, ["inner", "outer"])))' || true
+print(" ".join(f"{i}:{n}" for (_, i), n in zip(d, ["inner", "outer"])))' || true)
+    [ -z "$FOUND" ] || { echo "$FOUND"; return 0; }
+    sleep 10
+  done
 }
 
 IOS=$(sh "$CI/pick-simulator.sh" iOS)
@@ -165,8 +180,12 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
   shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
   # stood up half folded (a pretend fold: nothing folds the simulator): the picture above, the controls below over its
-  # reflection; Apple's public test stream plays, the demo's made-up channels never do
-  shoot "$DUO" "$DBID" duo-player-folded -GFDemo list -GFDemoMoves play -GFDemoFold 1 -GFDemoStream "$TEST_STREAM"
+  # reflection; Apple's public test stream plays, the demo's made-up channels never do. Leaning back a little, then
+  # opened further: the reflection is shorter
+  shoot "$DUO" "$DBID" duo-player-folded -GFDemo list -GFDemoMoves play -GFDemoFold 1 -GFDemoHinge 95 \
+    -GFDemoStream "$TEST_STREAM"
+  shoot "$DUO" "$DBID" duo-player-opened -GFDemo list -GFDemoMoves play -GFDemoFold 1 -GFDemoHinge 125 \
+    -GFDemoStream "$TEST_STREAM"
   SHOT_DISPLAYS=""
   xcrun simctl shutdown "$DUO" >/dev/null 2>&1 || true
 else
@@ -191,5 +210,6 @@ shoot "$TV" "$BID" tv-list -GFDemo list
 echo "screenshots: done"
 # the dark flash Georgs saw on opening a channel must not come back
 [ "$FLASHED" -eq 0 ] || { echo "screenshots: the screen flashed when a channel opened (see film-*/luma.csv)"; exit 1; }
+[ "$NOPIC" -eq 0 ] || { echo "screenshots: the simulator gave no picture three times running (see above)"; exit 1; }
 # a film the recorder never gave twice is a flash check not done
 [ "$NOFILM" -eq 0 ] || { echo "screenshots: the simulator's recorder gave no film twice running (see above)"; exit 1; }

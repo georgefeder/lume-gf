@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index fbcdc5a..e805a86 100644
+index fbcdc5a..f7bfa24 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -83,6 +83,10 @@ struct KSPlayerEngineView: View {
@@ -13,28 +13,28 @@ index fbcdc5a..e805a86 100644
      /// True while the engine is preparing or (re)buffering, so the spinner shows
      /// both on first open and on a mid-stream stall.
      @State var isBuffering = true
-@@ -475,27 +479,44 @@ struct KSPlayerEngineView: View {
+@@ -475,27 +479,43 @@ struct KSPlayerEngineView: View {
                      }
                  }
                  .ignoresSafeArea()
-+                .gfTabletopArea(gfTabletop?.video, alignment: .top) // Lume GF: above the fold when stood up
++                .gfTabletopArea(gfPicture, from: .top) // Lume GF: standing on the fold when stood up
  
                  gfUndrawnCover
-+                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
++                    .gfTabletopArea(gfTabletop?.video, from: .top)
                  zapFrameOverlay
-+                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
++                    .gfTabletopArea(gfPicture, from: .top)
 +
 +                // Lume GF: below the fold, the controls sit over a reflection of the picture
-+                if let gfTabletop {
-+                    GFVideoReflection(reflection: gfReflection)
-+                        .gfTabletopArea(gfTabletop.panel, alignment: .bottom)
++                if let gfTabletop, let gfPicture {
++                    GFVideoReflection(reflection: gfReflection, picture: gfPicture, area: gfTabletop.reflection)
++                        .gfTabletopArea(gfTabletop.reflection, from: .bottom)
 +                }
  
                  // KSPlayer decodes the selected subtitle into
                  // `subtitleModel.parts`, but the bare `KSVideoPlayer` above draws
                  // only video — this overlay renders those parts on screen.
                  KSSubtitleOverlay(subtitleModel: coordinator.subtitleModel)
-+                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
++                    .gfTabletopArea(gfTabletop?.video, from: .top)
  
                  // Hold the controls back until the stream starts, so the loading
                  // indicator stands in for a player that would otherwise look
@@ -44,27 +44,26 @@ index fbcdc5a..e805a86 100644
 +                // back (Georgs, 24 Oct). The demo's fold shows them though its made-up channel never plays.
 +                if isControlsVisible, hasStartedPlayback && !loadFailed || GFTabletop.demoFold {
                      controlsOverlay
-+                        .gfTabletopArea(gfTabletop?.panel, alignment: .bottom,
-+                                        bottomInset: gfTabletop?.bottomInset ?? 0)
++                        .gfTabletopArea(gfTabletop?.panel, from: .bottom, bottomInset: gfTabletop?.bottomInset ?? 0)
                          .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                  }
  
 -                episodeOverlays(controlsVisible: isControlsVisible) { coordinator.seek(time: $0) }
 +                // Lume GF: controls below the fold leave Skip Intro room on the picture
 +                episodeOverlays(controlsVisible: isControlsVisible && gfTabletop == nil) { coordinator.seek(time: $0) }
-+                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
++                    .gfTabletopArea(gfTabletop?.video, from: .top)
  
                  if isBuffering {
                      PlayerLoadingIndicator(title: hasStartedPlayback ? nil : media.title)
-+                        .gfTabletopArea(gfTabletop?.video, alignment: .top)
++                        .gfTabletopArea(gfTabletop?.video, from: .top)
                          .transition(.opacity)
                  }
  
-@@ -505,9 +526,12 @@ struct KSPlayerEngineView: View {
+@@ -505,9 +525,12 @@ struct KSPlayerEngineView: View {
                          onRetry: { retryPlayback() },
                          onClose: { closePlayer() }
                      )
-+                    .gfTabletopArea(gfTabletop?.video, alignment: .top)
++                    .gfTabletopArea(gfTabletop?.video, from: .top)
                      .transition(.opacity)
                  }
              }
