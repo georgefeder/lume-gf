@@ -14,7 +14,8 @@
     /// `-GFDemo home`, `movies` or `series` shows Lume's own Home, Movies or Series screen over made-up films and
     /// series (some with long titles) and a few watched channels. `-GFDemo banner` shows Home with the continue banner
     /// over it, as when another device played BBC One three minutes ago. `-GFDemoFold 1` stands the player up half
-    /// folded like an iPhone Duo on a table (GFTabletop); `-GFDemoStream <url>` gives the played channel a real stream.
+    /// folded like an iPhone Duo on a table (GFTabletop), `-GFDemoHinge 100` open that far; `-GFDemoStream <url>`
+    /// gives the played channel a real stream.
     enum GFDemo {
         static var mode: String? {
             value(after: "-GFDemo")
@@ -36,6 +37,11 @@
         /// (no simulator command folds one).
         static var fold: Bool {
             value(after: "-GFDemoFold") == "1"
+        }
+
+        /// `-GFDemoHinge 100`: how far open the pretend fold is, in degrees (the reflection's length follows it).
+        static var hinge: Double? {
+            value(after: "-GFDemoHinge").flatMap(Double.init)
         }
 
         /// `-GFDemoStream <url>`: the channel `-GFDemoMoves play` opens plays this instead of its made-up address

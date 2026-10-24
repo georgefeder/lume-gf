@@ -27,6 +27,24 @@ struct GFTabletopLayoutTests {
         #expect(GFTabletopLayout.split(size: duo, folds: [CGRect(x: 0, y: 600, width: 669, height: 11)]) != nil)
     }
 
+    @Test func `the picture stands on the fold`() {
+        let above = CGRect(x: 0, y: 0, width: 669, height: 470)
+        #expect(GFTabletopLayout.picture(in: above, aspect: 2) == CGRect(x: 0, y: 135.5, width: 669, height: 334.5))
+        #expect(GFTabletopLayout.picture(in: above, aspect: nil) == above)
+        #expect(GFTabletopLayout.picture(in: above, aspect: 1) == above) // taller than the room: all of it
+    }
+
+    @Test func `the reflection follows the hinge`() {
+        let upright = GFTabletopLayout.reflectionStretch(hingeDegrees: 90)
+        #expect(abs(upright - 1.053) < 0.01)
+        #expect(GFTabletopLayout.reflectionStretch(hingeDegrees: 75) > upright)
+        #expect(GFTabletopLayout.reflectionStretch(hingeDegrees: 110) < upright)
+        let opened = GFTabletopLayout.reflectionStretch(hingeDegrees: 110)
+        #expect(GFTabletopLayout.reflectionStretch(hingeDegrees: 130) < opened)
+        #expect(GFTabletopLayout.reflectionStretch(hingeDegrees: 170) == 0.15)
+        #expect(GFTabletopLayout.reflectionStretch(hingeDegrees: nil) == 1)
+    }
+
     @Test func `the pretend fold splits the screen in the middle`() {
         let split = GFTabletopLayout.split(size: duo, folds: [GFTabletopLayout.demoFold(size: duo)])
         #expect(split?.video.height == 463.5 && split?.panel.height == 463.5)

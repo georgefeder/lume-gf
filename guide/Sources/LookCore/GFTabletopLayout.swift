@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 /// The iPhone Duo stood up half folded like a small laptop (Georgs, 23 Oct 2026: "like Netflix"): the picture goes above
 /// the fold and the player's controls below it. iOS 27.1 reports the fold as a reserved region of kind `.division`
@@ -24,6 +25,27 @@ nonisolated enum GFTabletopLayout {
         else { return nil }
         return Split(video: CGRect(x: 0, y: 0, width: size.width, height: fold.minY),
                      panel: CGRect(x: 0, y: fold.maxY, width: size.width, height: size.height - fold.maxY))
+    }
+
+    /// The picture above the fold, standing on it: as wide as `video` and as tall as its shape allows (Georgs, 24 Oct:
+    /// Netflix's picture meets its reflection at the fold). All of `video` while the shape is unknown.
+    static func picture(in video: CGRect, aspect: CGFloat?) -> CGRect {
+        guard let aspect, aspect > 0 else { return video }
+        let height = min(video.height, video.width / aspect)
+        return CGRect(x: video.minX, y: video.maxY - height, width: video.width, height: height)
+    }
+
+    /// How long the reflection below the fold is, as a share of the picture's height, at a hinge angle in degrees (0
+    /// closed, 180 flat; nil unknown: 1). What a mirror lying where the lower half lies would show of the upper half to
+    /// someone in front of the phone (eye 5 heights of the upper half in front of the fold and 3.75 above the table):
+    /// about as long as the picture when it stands upright, longer as it leans forward, shorter as it opens, gone near
+    /// flat (Georgs, 24 Oct: Netflix's "stretches depending on the hinge, constantly reacts").
+    static func reflectionStretch(hingeDegrees: Double?) -> CGFloat {
+        guard let hingeDegrees else { return 1 }
+        let angle = hingeDegrees * .pi / 180
+        let eyeOut = 5.0, eyeUp = 3.75
+        let reach = eyeOut + eyeUp * (cos(angle) - eyeOut) / (eyeUp + sin(angle))
+        return CGFloat(min(1.6, max(0.15, reach)))
     }
 
     /// A pretend fold across the middle, for test builds' screenshots (no simulator command folds an iPhone Duo).

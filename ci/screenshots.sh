@@ -165,8 +165,12 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
   shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
   # stood up half folded (a pretend fold: nothing folds the simulator): the picture above, the controls below over its
-  # reflection; Apple's public test stream plays, the demo's made-up channels never do
-  shoot "$DUO" "$DBID" duo-player-folded -GFDemo list -GFDemoMoves play -GFDemoFold 1 -GFDemoStream "$TEST_STREAM"
+  # reflection; Apple's public test stream plays, the demo's made-up channels never do. Leaning back a little, then
+  # opened further: the reflection is shorter
+  shoot "$DUO" "$DBID" duo-player-folded -GFDemo list -GFDemoMoves play -GFDemoFold 1 -GFDemoHinge 95 \
+    -GFDemoStream "$TEST_STREAM"
+  shoot "$DUO" "$DBID" duo-player-opened -GFDemo list -GFDemoMoves play -GFDemoFold 1 -GFDemoHinge 125 \
+    -GFDemoStream "$TEST_STREAM"
   SHOT_DISPLAYS=""
   xcrun simctl shutdown "$DUO" >/dev/null 2>&1 || true
 else
