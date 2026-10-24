@@ -1,4 +1,5 @@
 import KSPlayer
+import OSLog
 import SwiftUI
 #if canImport(UIKit)
     import UIKit
@@ -46,9 +47,23 @@ final class GFTabletop {
     private func set(_ open: Bool) {
         guard open != isPartlyOpen else { return }
         isPartlyOpen = open
+        Self.log(open ? "partly open" : "open flat, closed or player gone")
         #if os(iOS)
             PlayerOrientationLock.gfFoldChanged()
         #endif
+    }
+
+    /// A line in Lume's diagnostic report ("Duo fold: ..."): what iOS reported and what the player did with it.
+    static func log(_ text: String) {
+        Logger.player.info("\("Duo fold: " + text, privacy: .public)")
+    }
+
+    /// What the reader saw, for the diagnostic report.
+    static func describe(folds: [CGRect], size: CGSize, split: GFTabletopFrames?) -> String {
+        let regions = folds.map { "\(Int($0.width))x\(Int($0.height)) at \(Int($0.minX)),\(Int($0.minY))" }
+        let shape = split.map { "split \(Int($0.video.height)) above, \(Int($0.panel.height)) below" } ?? "whole"
+        let screen = "\(Int(size.width))x\(Int(size.height))"
+        return "\(folds.count) fold region(s) [\(regions.joined(separator: "; "))] on \(screen): \(shape)"
     }
 
     /// Test builds' `-GFDemoFold 1`: a pretend fold across the middle (no simulator command folds an iPhone Duo).
@@ -147,7 +162,10 @@ private struct GFFoldReader: ViewModifier {
                         GFTabletopFrames(video: $0.video, panel: $0.panel, bottomInset: proxy.safeAreaInsets.bottom)
                     }
                     Color.clear
-                        .onChange(of: split, initial: true) { _, value in frames = value }
+                        .onChange(of: split, initial: true) { _, value in
+                            frames = value
+                            GFTabletop.log(GFTabletop.describe(folds: folds, size: proxy.size, split: value))
+                        }
                         .onChange(of: !folds.isEmpty, initial: true) { _, open in
                             GFTabletop.shared.foldChanged(partlyOpen: open)
                         }
@@ -156,6 +174,12 @@ private struct GFFoldReader: ViewModifier {
                 .ignoresSafeArea()
             }
             .modifier(GFHingeMoves(count: $hingeMoves))
+            #if os(iOS)
+                // which way up the phone is held only reaches UIDevice while someone asks for it; the lock asks it
+                // whether the phone stands upright (PlayerOrientationLock.gfHeld)
+                .onAppear { UIDevice.current.beginGeneratingDeviceOrientationNotifications() }
+                .onDisappear { UIDevice.current.endGeneratingDeviceOrientationNotifications() }
+            #endif
     }
 }
 
@@ -167,7 +191,18 @@ private struct GFHingeMoves: ViewModifier {
     func body(content: Content) -> some View {
         #if os(iOS) && GF_FOLD_API
             if #available(iOS 27.1, *) {
-                content.onHingeChange { _, _ in count &+= 1 }
+                content.onHingeChange { old, new in
+                    count &+= 1
+                    if old.hinge?.status != new.hinge?.status {
+                        let status = new.hinge.map { hinge -> String in
+                            let state = hinge.status == .partiallyOpen ? "partly open"
+                                : hinge.status == .fullyOpen ? "fully open"
+                                : hinge.status == .closed ? "closed" : "other"
+                            return "\(state), \(Int(hinge.angle.degrees))°"
+                        } ?? "none"
+                        GFTabletop.log("hinge \(status)")
+                    }
+                }
             } else {
                 content
             }
