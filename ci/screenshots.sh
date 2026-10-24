@@ -37,10 +37,11 @@ start() {  # $1 = simulator id, $2 = app; prints the bundle id
 
 picture() {  # $1 = simulator id, $2 = file, rest = simctl options; three tries, then on with the next picture
   # simctl's screenshot itself failed whole runs: "Timeout waiting for screen surfaces", SimError 405 (run 40088243506)
-  PSIM="$1"; PFILE="$2"; shift 2
-  for PTRY in 1 2 3; do
+  # once one never came, one try each: a simulator that went down would otherwise add half a minute a picture
+  PSIM="$1"; PFILE="$2"; shift 2; PTRIES="1 2 3"; [ "$NOPIC" -eq 0 ] || PTRIES="1"
+  for PTRY in $PTRIES; do
     xcrun simctl io "$PSIM" screenshot "$@" "$PFILE" >/dev/null 2>"$LOGS/picture.err" && return 0
-    sleep 10
+    [ "$PTRIES" = "1" ] || sleep 10
   done
   echo "screenshots: $(basename "$PFILE"): no picture after three tries: $(tail -n 1 "$LOGS/picture.err")"; NOPIC=1
   return 1
@@ -128,10 +129,14 @@ print(max(r, key=lambda x: v(x["version"]))["identifier"] if r else "")')
   xcrun simctl create "GF iPhone Duo" "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" "$RT"
 }
 duo_displays() {  # $1 = simulator id; "<id>:inner <id>:outer", from the list simctl gives when asked without one
-  xcrun simctl io "$1" screenshot "$LOGS/duo-probe.png" 2>&1 | python3 -c 'import re, sys
+  for PROBE in 1 2 3; do  # the same screenshot command, so the same "Timeout waiting for screen surfaces" can hit it
+    FOUND=$(xcrun simctl io "$1" screenshot "$LOGS/duo-probe.png" 2>&1 | python3 -c 'import re, sys
 d = sorted(((int(w) * int(h), i) for i, w, h in re.findall(r"--display=(\d+)\s.*?\b(\d+)x(\d+)\b", sys.stdin.read())),
            reverse=True)
-print(" ".join(f"{i}:{n}" for (_, i), n in zip(d, ["inner", "outer"])))' || true
+print(" ".join(f"{i}:{n}" for (_, i), n in zip(d, ["inner", "outer"])))' || true)
+    [ -z "$FOUND" ] || { echo "$FOUND"; return 0; }
+    sleep 10
+  done
 }
 
 IOS=$(sh "$CI/pick-simulator.sh" iOS)

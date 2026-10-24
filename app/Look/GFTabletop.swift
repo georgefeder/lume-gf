@@ -39,6 +39,14 @@ final class GFTabletop {
 
     /// The hinge moved: its angle counts while the phone is partly open (closed, the simulator says 0°). Test builds
     /// keep their `-GFDemoHinge`.
+    private func forgetHinge() {
+        #if GF_DEMO
+            if GFDemo.hinge != nil { return }
+        #endif
+        hingeDegrees = nil
+        loggedTens = nil
+    }
+
     func hingeMoved(degrees: Double?, partlyOpen: Bool) {
         #if GF_DEMO
             if GFDemo.hinge != nil { return }
@@ -62,6 +70,7 @@ final class GFTabletop {
             closing = Task { [weak self] in
                 try? await Task.sleep(for: Self.settle)
                 guard !Task.isCancelled else { return }
+                self?.forgetHinge() // opened flat or closed: the angle it stood at is gone
                 self?.set(false)
             }
         }
@@ -385,8 +394,12 @@ struct GFVideoReflection: View {
 
         private var link: CADisplayLink?
         private var lastBuffer: CVPixelBuffer?
-        /// The last frame as Core Image reads it (`readable`), kept for redraws while the hinge moves.
+        /// The last frame as Core Image reads it, made when first drawn (`image()`) and kept for redraws while the
+        /// hinge moves, and the buffer it was made from.
         private var lastImage: CIImage?
+        private var madeFrom: CVPixelBuffer?
+        /// A frame could not be made readable: told once (the first on-device sign was a silently black reflection).
+        private var toldUnreadable = false
         private var transfer: VTPixelTransferSession?
         private var pool: (buffers: CVPixelBufferPool, width: Int, height: Int)?
         private var still: (number: Int, image: CIImage)?
@@ -447,6 +460,10 @@ struct GFVideoReflection: View {
             guard window != nil else {
                 lastBuffer = nil
                 lastImage = nil
+                madeFrom = nil
+                if let transfer { VTPixelTransferSessionInvalidate(transfer) }
+                transfer = nil
+                pool = nil
                 still = nil
                 fading = nil
                 return
@@ -470,7 +487,7 @@ struct GFVideoReflection: View {
                     let kind = frame == nil ? "none" : frame?.cvPixelBuffer == nil ? "no pixel buffer" : "pixel buffer"
                     let size = metalLayer.drawableSize
                     GFTabletop.log("mirror tick \(ticks): live \(reflection.isLive), frame \(kind), "
-                        + "image \(source.image != nil), stale \(stale), in flight \(inFlight), "
+                        + "image \(lastImage != nil), stale \(stale), in flight \(inFlight), "
                         + "drawable \(Int(size.width))x\(Int(size.height)), window \(window != nil)")
                 }
             #endif
@@ -487,7 +504,7 @@ struct GFVideoReflection: View {
                 if Self.gpu == nil { tell("no Metal device") }
             #endif
             guard stale, inFlight < 2, let gpu = Self.gpu else { return }
-            if source.image == nil, !drewPicture { // black already
+            if !source.present, !drewPicture { // black already
                 #if GF_DEMO
                     tell("nothing to show (live \(reflection.isLive), still \(reflection.image != nil))")
                 #endif
@@ -505,7 +522,8 @@ struct GFVideoReflection: View {
             }
             let area = CGRect(origin: .zero, size: size)
             let black = CIImage(color: .black).cropped(to: area)
-            let drawn = source.image.map { reflected($0, in: area, stretch: length).composited(over: black) } ?? black
+            let shown = source.present ? image() : nil
+            let drawn = shown.map { reflected($0, in: area, stretch: length).composited(over: black) } ?? black
             let destination = CIRenderDestination(mtlTexture: drawable.texture, commandBuffer: commands)
             destination.colorSpace = Self.sRGB
             destination.isDithered = true // the long fade to black would band in 8 bits
@@ -529,31 +547,34 @@ struct GFVideoReflection: View {
             }
             commands.commit()
             stale = false
-            drewPicture = source.image != nil
+            drewPicture = shown != nil
         }
 
-        /// What to mirror now: the player's frame, or its still (dissolving from the last one), and whether it is new.
-        private func nextSource(at now: CFTimeInterval) -> (image: CIImage?, changed: Bool) {
+        /// Whether there is anything to mirror now (the player's frame, or its still dissolving from the last one) and
+        /// whether it is new. Its picture is made only when drawn (`image()`).
+        private func nextSource(at now: CFTimeInterval) -> (present: Bool, changed: Bool) {
             if reflection.isLive {
                 still = nil
                 fading = nil
                 shownStill = nil
                 let buffer = reflection.currentFrame()?.cvPixelBuffer
-                guard buffer !== lastBuffer else { return (lastImage, false) }
+                guard buffer !== lastBuffer else { return (buffer != nil, false) }
                 lastBuffer = buffer
-                // HDR channels toned down to the drawable's range rather than clipped
-                lastImage = buffer.flatMap(readable)
-                    .map { CIImage(cvPixelBuffer: $0, options: [.toneMapHDRtoSDR: true]) }
-                return (lastImage, true)
+                if buffer == nil {
+                    lastImage = nil
+                    madeFrom = nil
+                }
+                return (buffer != nil, true)
             }
             lastBuffer = nil
             lastImage = nil
+            madeFrom = nil
             guard let image = reflection.image else {
                 let changed = still != nil
                 still = nil
                 fading = nil
                 shownStill = nil
-                return (nil, changed)
+                return (false, changed)
             }
             var changed = false
             if still?.number != reflection.number {
@@ -561,7 +582,7 @@ struct GFVideoReflection: View {
                 still = (number: reflection.number, image: CIImage(cgImage: image))
                 changed = true
             }
-            guard let still else { return (nil, changed) }
+            guard let still else { return (false, changed) }
             var shown = still.image
             if let fading {
                 let progress = (now - fading.start) / 0.8
@@ -577,17 +598,49 @@ struct GFVideoReflection: View {
                 changed = true
             }
             shownStill = shown
-            return (shown, changed)
+            return (true, changed)
         }
 
-        /// The player's frame in a form Core Image reads, made small (it is blurred anyway) by VideoToolbox: KSPlayer
-        /// has most channels (8-bit 4:2:0) decoded into three-plane buffers, which Core Image cannot read at all (CI run
-        /// 40085607543: a pixel buffer every frame, never an image). A new buffer from a pool each time, so one the GPU
-        /// is still reading is never written over.
+        /// The picture to mirror: the still, or the player's newest frame as Core Image reads it (the last one that
+        /// could be read, if this one cannot).
+        private func image() -> CIImage? {
+            guard reflection.isLive else { return shownStill }
+            guard let buffer = lastBuffer else { return nil }
+            if madeFrom !== buffer {
+                madeFrom = buffer
+                if let readable = readable(buffer) {
+                    // HDR channels toned down to the drawable's range rather than clipped
+                    lastImage = CIImage(cvPixelBuffer: readable, options: [.toneMapHDRtoSDR: true])
+                } else if !toldUnreadable {
+                    toldUnreadable = true
+                    let format = Self.fourCC(CVPixelBufferGetPixelFormatType(buffer))
+                    GFTabletop.log("mirror: could not read a \(format) frame")
+                }
+            }
+            return lastImage
+        }
+
+        private static func fourCC(_ code: OSType) -> String {
+            String((0 ..< 4).map { Character(UnicodeScalar(UInt8(truncatingIfNeeded: code >> (24 - 8 * $0)))) })
+        }
+
+        /// The formats Core Image reads as they are: KSPlayer's two-plane 4:2:0 (full-range and 10-bit channels, HDR
+        /// among them, which keep their depth for the tone mapping) and BGRA.
+        private static let readableFormats: Set<OSType> = [
+            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+            kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange, kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
+            kCVPixelFormatType_32BGRA
+        ]
+
+        /// The player's frame in a form Core Image reads: as it is when it can, otherwise made small (it is blurred
+        /// anyway) by VideoToolbox. KSPlayer has most channels (8-bit 4:2:0 at video range) decoded into three-plane
+        /// buffers, which Core Image cannot read at all (CI run 40085607543: a pixel buffer every frame, never an
+        /// image). A new buffer from a pool each time, so one the GPU is still reading is never written over.
         private func readable(_ buffer: CVPixelBuffer) -> CVPixelBuffer? {
+            if Self.readableFormats.contains(CVPixelBufferGetPixelFormatType(buffer)) { return buffer }
             let sourceWidth = CVPixelBufferGetWidth(buffer), sourceHeight = CVPixelBufferGetHeight(buffer)
             guard sourceWidth > 0, sourceHeight > 0 else { return nil }
-            let width = min(sourceWidth, 640) & ~1, height = max(2, sourceHeight * width / sourceWidth) & ~1
+            let width = max(2, min(sourceWidth, 640) & ~1), height = max(2, sourceHeight * width / sourceWidth & ~1)
             if pool?.width != width || pool?.height != height {
                 let attributes: [CFString: Any] = [
                     kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
@@ -602,17 +655,15 @@ struct GFVideoReflection: View {
             }
             if transfer == nil {
                 VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transfer)
+                if let transfer { // keep up with the picture rather than do it best
+                    VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_RealTime, value: kCFBooleanTrue)
+                }
             }
             var small: CVPixelBuffer?
             guard let pool, let transfer,
                   CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool.buffers, &small) == kCVReturnSuccess,
                   let small, VTPixelTransferSessionTransferImage(transfer, from: buffer, to: small) == noErr
-            else {
-                #if GF_DEMO
-                    tell("could not convert a \(CVPixelBufferGetPixelFormatType(buffer)) frame")
-                #endif
-                return nil
-            }
+            else { return nil }
             return small
         }
 
