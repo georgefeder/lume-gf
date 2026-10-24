@@ -36,7 +36,13 @@ final class GFTabletop {
         #endif
     }
 
-    func hingeMoved(degrees: Double?) {
+    /// The hinge moved: its angle counts while the phone is partly open (closed, the simulator says 0°). Test builds
+    /// keep their `-GFDemoHinge`.
+    func hingeMoved(degrees: Double?, partlyOpen: Bool) {
+        #if GF_DEMO
+            if GFDemo.hinge != nil { return }
+        #endif
+        guard partlyOpen else { return }
         hingeDegrees = degrees
         let tens = degrees.map { Int(($0 / 10).rounded()) }
         guard tens != loggedTens else { return }
@@ -197,20 +203,18 @@ extension View {
         modifier(GFFoldReader(frames: frames))
     }
 
-    /// Pins a layer of the player to one part of the split screen: `rect` (whole-screen coordinates), with
-    /// `bottomInset` kept clear for the home indicator. Unchanged when the player is not split.
+    /// Pins a layer of the player to one band of the split screen, across its whole width: the rows of `rect`
+    /// (whole-screen coordinates), with `bottomInset` kept clear for the home indicator. Unchanged when the player is
+    /// not split. Heights only: given exact widths too, the layers widened the player, the fold was read on the wider
+    /// player, and round it went until the controls hung 84 points off the left (CI runs 40080430709, 40083149143).
     func gfTabletopArea(_ rect: CGRect?, bottomInset: CGFloat = 0) -> some View {
-        // placed by padding: placed by offset, the controls came out shifted left with the close button off screen
-        // (CI run 40080430709)
         padding(.bottom, rect == nil ? 0 : bottomInset)
-            .frame(width: rect?.width, height: rect?.height)
+            .frame(height: rect?.height)
             #if GF_DEMO
                 .background { GFDemoLanding(rect: rect) }
             #endif
-            .padding(.leading, rect?.minX ?? 0)
-            .padding(.top, rect?.minY ?? 0)
-            .frame(maxWidth: rect == nil ? nil : .infinity, maxHeight: rect == nil ? nil : .infinity,
-                   alignment: .topLeading)
+            .frame(height: rect?.maxY, alignment: .bottom) // the band ends `maxY` from the top
+            .frame(maxWidth: rect == nil ? nil : .infinity, maxHeight: rect == nil ? nil : .infinity, alignment: .top)
             .ignoresSafeArea(edges: rect == nil ? [] : .all)
     }
 }
@@ -278,7 +282,8 @@ private struct GFHingeMoves: ViewModifier {
             if #available(iOS 27.1, *) {
                 content.onHingeChange { old, new in
                     count &+= 1
-                    GFTabletop.shared.hingeMoved(degrees: new.hinge?.angle.degrees)
+                    GFTabletop.shared.hingeMoved(degrees: new.hinge?.angle.degrees,
+                                                 partlyOpen: new.hinge?.status == .partiallyOpen)
                     if old.hinge?.status != new.hinge?.status {
                         let status = new.hinge.map { hinge -> String in
                             let state = hinge.status == .partiallyOpen ? "partly open"
@@ -389,6 +394,7 @@ struct GFVideoReflection: View {
         #if GF_DEMO
             /// What the screenshots' log last heard from this mirror, so each state is told once.
             private var told = ""
+            private var ticks = 0
 
             private func tell(_ state: String) {
                 guard state != told else { return }
@@ -448,6 +454,17 @@ struct GFVideoReflection: View {
         fileprivate func tick(at now: CFTimeInterval) {
             let source = nextSource(at: now)
             if source.changed { stale = true }
+            #if GF_DEMO
+                ticks += 1
+                if ticks % 120 == 1, ticks < 1500 { // every two seconds or so, for the first twenty
+                    let frame = reflection.currentFrame()
+                    let kind = frame == nil ? "none" : frame?.cvPixelBuffer == nil ? "no pixel buffer" : "pixel buffer"
+                    let size = metalLayer.drawableSize
+                    GFTabletop.log("mirror tick \(ticks): live \(reflection.isLive), frame \(kind), "
+                        + "image \(source.image != nil), stale \(stale), in flight \(inFlight), "
+                        + "drawable \(Int(size.width))x\(Int(size.height)), window \(window != nil)")
+                }
+            #endif
             let target = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
             let elapsed = lastTick.map { now - $0 } ?? 0
             lastTick = now
