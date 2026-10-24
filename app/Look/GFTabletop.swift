@@ -142,9 +142,10 @@ nonisolated struct GFTabletopFrames: Equatable {
     /// The home indicator's room at the bottom of the panel.
     var bottomInset: CGFloat
 
-    /// The reflection: the panel and the fold above it, so it meets the picture with no black band between.
+    /// The reflection: the panel, below the crease, which stays black (Georgs, 24 Oct, on build 74 drawn across the
+    /// crease: on Netflix it "faintly starts only at the top of the bottom screen, already kind of after the crease").
     var reflection: CGRect {
-        CGRect(x: panel.minX, y: video.maxY, width: panel.width, height: panel.maxY - video.maxY)
+        panel
     }
 }
 
@@ -316,10 +317,10 @@ private struct GFHingeMoves: ViewModifier {
     }
 }
 
-/// Under the split player's picture: black, with the picture mirrored into it from where the picture stands on the
-/// fold, like a screen's reflection on a glossy table (Apple has no such material; Netflix draws its own). It meets the
-/// picture bright and nearly sharp, then blurs and fades into black over a length that follows the hinge (Georgs,
-/// 24 Oct: "fades, morphs at the middle", "stretches depending on the hinge").
+/// Under the split player's crease: black, with the picture mirrored faintly into it, like a screen's reflection on a
+/// glossy table (Apple has no such material; Netflix draws its own). It starts faint at the top of the bottom screen,
+/// rises a little, then blurs and fades into black over a length that follows the hinge (Georgs, 24 Oct: "fades,
+/// morphs at the middle", "stretches depending on the hinge", "faintly starts only at the top of the bottom screen").
 struct GFVideoReflection: View {
     let reflection: GFReflection
     /// The picture above and this view, in the whole screen's coordinates.
@@ -378,13 +379,15 @@ struct GFVideoReflection: View {
 
         private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
         private static let linear = CGColorSpace(name: CGColorSpace.linearSRGB)
-        /// How the reflection is drawn. Brightness: `contact` where it meets the picture, falling to `body` within the
-        /// first `contactShare` of its length, then to black at its end. Blur: from `sharpness` of `blurShare` of the
-        /// picture's width where it meets the picture to all of it `blurReach` of the way down.
-        private static let contact: CGFloat = 0.7, body: CGFloat = 0.45, contactShare: CGFloat = 0.15
-        private static let blurShare: CGFloat = 1.0 / 28, sharpness: CGFloat = 0.1, blurReach: CGFloat = 0.6
-        /// How quickly the length follows the hinge (seconds to get about two thirds of the way).
-        private static let follow: Double = 0.15
+        /// How the reflection is drawn. Brightness, as it looks: `faint` at the top of the panel, rising to `peak`
+        /// `crest` of the way down, then easing to black at its end (build 74 started at 0.7 and was "bonded" to the
+        /// picture). Blur: from `sharpness` of `blurShare` of the picture's width at the top to all of it `blurReach`
+        /// of the way down.
+        private static let faint: CGFloat = 0.06, peak: CGFloat = 0.3, crest: CGFloat = 0.25
+        private static let blurShare: CGFloat = 1.0 / 28, sharpness: CGFloat = 0.3, blurReach: CGFloat = 0.6
+        /// How quickly the length follows the hinge: a critically damped spring this stiff trails a moving hinge by
+        /// about 2 / `springRate` seconds (0.05 s; build 74 eased over 0.15 s and was "delayed" moving fast).
+        private static let springRate: Double = 40
         private static let pixelsPerPoint: CGFloat = 1
 
         private var metalLayer: CAMetalLayer {
@@ -407,6 +410,8 @@ struct GFVideoReflection: View {
         /// The still as last drawn (part way through a dissolve, perhaps): the next one dissolves from it.
         private var shownStill: CIImage?
         private var stretch: CGFloat?
+        /// How fast `stretch` is moving, per second (the spring's).
+        private var stretchSpeed: Double = 0
         private var lastTick: CFTimeInterval?
         /// Something changed that the next tick must draw.
         private var stale = true
@@ -466,6 +471,8 @@ struct GFVideoReflection: View {
                 pool = nil
                 still = nil
                 fading = nil
+                stretch = nil // back on screen, it takes the hinge's length at once
+                stretchSpeed = 0
                 return
             }
             contentScaleFactor = Self.pixelsPerPoint // a window sets its screen's
@@ -494,8 +501,11 @@ struct GFVideoReflection: View {
             let target = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
             let elapsed = lastTick.map { now - $0 } ?? 0
             lastTick = now
-            var length = stretch.map { $0 + (target - $0) * CGFloat(1 - exp(-elapsed / Self.follow)) } ?? target
-            if abs(length - target) < 0.002 { length = target }
+            var length = stretch.map { followed(from: $0, to: target, over: elapsed) } ?? target
+            if abs(length - target) < 0.002, abs(stretchSpeed) < 0.02 {
+                length = target
+                stretchSpeed = 0
+            }
             if length != stretch {
                 stretch = length
                 stale = true
@@ -548,6 +558,17 @@ struct GFVideoReflection: View {
             commands.commit()
             stale = false
             drewPicture = shown != nil
+        }
+
+        /// `current` moved toward `target` for `elapsed` seconds by a critically damped spring (exact for any step, so a
+        /// late frame neither overshoots nor jumps), its speed kept in `stretchSpeed`: hinge angles come at whatever
+        /// rate the system allows (UIHinge.angle: "system policy"), and the spring carries the reflection between them.
+        private func followed(from current: CGFloat, to target: CGFloat, over elapsed: Double) -> CGFloat {
+            let rate = Self.springRate, t = min(elapsed, 0.25)
+            let offset = Double(current - target), drift = stretchSpeed + rate * offset
+            let decay = exp(-rate * t)
+            stretchSpeed = (drift - rate * (offset + drift * t)) * decay
+            return target + CGFloat((offset + drift * t) * decay)
         }
 
         /// Whether there is anything to mirror now (the player's frame, or its still dissolving from the last one) and
@@ -667,8 +688,9 @@ struct GFVideoReflection: View {
             return small
         }
 
-        /// `frame` upside down from the top of `area` (the fold) across the picture's width, `stretch` times the
-        /// picture's height long, blurred more and dimmed further down, in pixels (Core Image's y runs upwards).
+        /// `frame` upside down from the top of `area` (the top of the panel, below the crease) across the picture's
+        /// width, `stretch` times the picture's height long, blurred more and dimmed further down, in pixels (Core
+        /// Image's y runs upwards).
         private func reflected(_ frame: CIImage, in area: CGRect, stretch: CGFloat) -> CIImage {
             let scale = Self.pixelsPerPoint
             let across = CGRect(x: picture.minX * scale, y: 0, width: max(1, picture.width * scale), height: area.height)
@@ -688,7 +710,7 @@ struct GFVideoReflection: View {
             blur.inputImage = mirrored
             blur.mask = blurMask.outputImage
             blur.radius = Float(across.width * Self.blurShare)
-            // the brightness from the fold down, stretched over the reflection's length
+            // the brightness from the top of the panel down, stretched over the reflection's length
             let light = Self.brightness.transformed(by: CGAffineTransform(scaleX: 1, y: length / Self.steps)
                 .concatenating(CGAffineTransform(translationX: 0, y: fold - length)))
             return (blur.outputImage ?? mirrored)
@@ -702,15 +724,17 @@ struct GFVideoReflection: View {
                 ?? CIColor(red: level, green: level, blue: level)
         }
 
-        /// The reflection's brightness as it looks, from where it meets the picture (the top row) to its end, `steps`
-        /// rows of grey a pixel wide, endless sideways and beyond its ends.
+        /// The reflection's brightness as it looks, from the top of the panel (the top row) to its end, `steps` rows of
+        /// grey a pixel wide, endless sideways and beyond its ends.
         private static let steps: CGFloat = 256
         private static let brightness: CIImage = {
-            let ease = { (t: CGFloat) in 1 - min(1, t) * min(1, t) * (3 - 2 * min(1, t)) }
+            let smooth = { (t: CGFloat) in t * t * (3 - 2 * t) }
             let view = GFMirrorView.self
             let rows = (0 ..< Int(view.steps)).map { row -> UInt8 in
                 let t = CGFloat(row) / (view.steps - 1)
-                let level = view.body * ease(t) + (view.contact - view.body) * ease(t / view.contactShare)
+                let level = t < view.crest
+                    ? view.faint + (view.peak - view.faint) * smooth(t / view.crest)
+                    : view.peak * (1 - smooth((t - view.crest) / (1 - view.crest)))
                 return UInt8((level * 255).rounded())
             }
             guard let grey = CGColorSpace(name: CGColorSpace.genericGrayGamma2_2),
