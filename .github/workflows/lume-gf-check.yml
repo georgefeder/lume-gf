@@ -39,8 +39,9 @@ jobs:
             echo "Up to date: $WANT built $LAST"
             exit 0
           fi
-          RUNNING=$(gh run list -R "$REPO" --workflow lume-gf-build.yml --status in_progress --json displayTitle \
-                      --jq "[.[] | select(.displayTitle == \"$WANT\")] | length")
+          # queued counts too: a check while the last one's build still waited for a runner started it again (69/70)
+          RUNNING=$(gh run list -R "$REPO" --workflow lume-gf-build.yml --limit 20 --json displayTitle,status \
+                      --jq "[.[] | select(.displayTitle == \"$WANT\" and .status != \"completed\")] | length")
           if [ "$RUNNING" != "0" ]; then echo "Already building: $WANT"; exit 0; fi
           # two failed builds of the same thing need a person (build 51's Apple TV half failed on a missing App ID,
           # and every 6 hours a new try uploaded the same iPhone build again: 52 to 66); a manual run or a new commit
