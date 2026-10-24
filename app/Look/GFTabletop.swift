@@ -471,6 +471,8 @@ struct GFVideoReflection: View {
                 pool = nil
                 still = nil
                 fading = nil
+                stretch = nil // back on screen, it takes the hinge's length at once
+                stretchSpeed = 0
                 return
             }
             contentScaleFactor = Self.pixelsPerPoint // a window sets its screen's
@@ -686,8 +688,9 @@ struct GFVideoReflection: View {
             return small
         }
 
-        /// `frame` upside down from the top of `area` (the fold) across the picture's width, `stretch` times the
-        /// picture's height long, blurred more and dimmed further down, in pixels (Core Image's y runs upwards).
+        /// `frame` upside down from the top of `area` (the top of the panel, below the crease) across the picture's
+        /// width, `stretch` times the picture's height long, blurred more and dimmed further down, in pixels (Core
+        /// Image's y runs upwards).
         private func reflected(_ frame: CIImage, in area: CGRect, stretch: CGFloat) -> CIImage {
             let scale = Self.pixelsPerPoint
             let across = CGRect(x: picture.minX * scale, y: 0, width: max(1, picture.width * scale), height: area.height)
@@ -707,7 +710,7 @@ struct GFVideoReflection: View {
             blur.inputImage = mirrored
             blur.mask = blurMask.outputImage
             blur.radius = Float(across.width * Self.blurShare)
-            // the brightness from the fold down, stretched over the reflection's length
+            // the brightness from the top of the panel down, stretched over the reflection's length
             let light = Self.brightness.transformed(by: CGAffineTransform(scaleX: 1, y: length / Self.steps)
                 .concatenating(CGAffineTransform(translationX: 0, y: fold - length)))
             return (blur.outputImage ?? mirrored)
@@ -721,8 +724,8 @@ struct GFVideoReflection: View {
                 ?? CIColor(red: level, green: level, blue: level)
         }
 
-        /// The reflection's brightness as it looks, from where it meets the picture (the top row) to its end, `steps`
-        /// rows of grey a pixel wide, endless sideways and beyond its ends.
+        /// The reflection's brightness as it looks, from the top of the panel (the top row) to its end, `steps` rows of
+        /// grey a pixel wide, endless sideways and beyond its ends.
         private static let steps: CGFloat = 256
         private static let brightness: CIImage = {
             let smooth = { (t: CGFloat) in t * t * (3 - 2 * t) }
