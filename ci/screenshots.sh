@@ -9,7 +9,7 @@ CI=$(cd "$(dirname "$0")" && pwd); LUME=$(cd "$LUME" && pwd); mkdir -p "$OUT"; O
 DD="${GF_DERIVED_DATA:-${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gf-derived}"; WAIT="${GF_SHOT_WAIT:-15}"
 SETTLE="${GF_BOOT_SETTLE:-120}"; FILM="${GF_FILM_SECONDS:-9}"; REC_GRACE="${GF_REC_GRACE:-20}"
 REC_PAUSE="${GF_REC_PAUSE:-5}"
-LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0  # the app's own output, kept with the pictures
+LOGS="$OUT/logs"; mkdir -p "$LOGS"; DIED=0; FLASHED=0; NOFILM=0; NOPIC=0  # the app's own output, kept with the pictures
 SHOT_DISPLAYS=""  # "<id>:<name> ..." while shooting a simulator with more than one display
 # Apple's public HLS test stream (bipbop), for the shots that need a playing picture
 TEST_STREAM="https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8"
@@ -35,6 +35,17 @@ start() {  # $1 = simulator id, $2 = app; prints the bundle id
   plutil -extract CFBundleIdentifier raw -o - "$2/Info.plist"
 }
 
+picture() {  # $1 = simulator id, $2 = file, rest = simctl options; three tries, then on with the next picture
+  # simctl's screenshot itself failed whole runs: "Timeout waiting for screen surfaces", SimError 405 (run 40088243506)
+  PSIM="$1"; PFILE="$2"; shift 2
+  for PTRY in 1 2 3; do
+    xcrun simctl io "$PSIM" screenshot "$@" "$PFILE" >/dev/null 2>"$LOGS/picture.err" && return 0
+    sleep 10
+  done
+  echo "screenshots: $(basename "$PFILE"): no picture after three tries: $(tail -n 1 "$LOGS/picture.err")"; NOPIC=1
+  return 1
+}
+
 shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch arguments
   SIM="$1"; BID="$2"; NAME="$3"; shift 3
   xcrun simctl terminate "$SIM" "$BID" >/dev/null 2>&1 || true
@@ -44,11 +55,10 @@ shoot() {  # $1 = simulator id, $2 = bundle id, $3 = file name, rest = launch ar
   sleep "$WAIT"
   if [ -n "$SHOT_DISPLAYS" ]; then  # a simulator with two displays (the iPhone Duo): one picture each
     for D in $SHOT_DISPLAYS; do
-      xcrun simctl io "$SIM" screenshot --display="${D%%:*}" "$OUT/$NAME-${D#*:}.png" >/dev/null \
-        || echo "screenshots: $NAME: no picture of the ${D#*:} display"
+      picture "$SIM" "$OUT/$NAME-${D#*:}.png" --display="${D%%:*}" || true
     done
   else
-    xcrun simctl io "$SIM" screenshot "$OUT/$NAME.png" >/dev/null
+    picture "$SIM" "$OUT/$NAME.png" || true
   fi
   # a picture of the home screen is no picture of Lume: say so, with the app's last words
   if xcrun simctl spawn "$SIM" launchctl list 2>/dev/null | grep -q "UIKitApplication:$BID"; then
@@ -195,5 +205,6 @@ shoot "$TV" "$BID" tv-list -GFDemo list
 echo "screenshots: done"
 # the dark flash Georgs saw on opening a channel must not come back
 [ "$FLASHED" -eq 0 ] || { echo "screenshots: the screen flashed when a channel opened (see film-*/luma.csv)"; exit 1; }
+[ "$NOPIC" -eq 0 ] || { echo "screenshots: the simulator gave no picture three times running (see above)"; exit 1; }
 # a film the recorder never gave twice is a flash check not done
 [ "$NOFILM" -eq 0 ] || { echo "screenshots: the simulator's recorder gave no film twice running (see above)"; exit 1; }
