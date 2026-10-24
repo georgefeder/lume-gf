@@ -74,7 +74,7 @@ index fbcdc5a..d1e47dc 100644
              .gfPlayerContentDark() // Lume GF: dark without switching the app (see GFPlayerAppearance)
              .onAppear {
 diff --git a/Lume/Views/Player/PlayerOrientationLock.swift b/Lume/Views/Player/PlayerOrientationLock.swift
-index 66f15b3..9ca198a 100644
+index 66f15b3..87c8e5a 100644
 --- a/Lume/Views/Player/PlayerOrientationLock.swift
 +++ b/Lume/Views/Player/PlayerOrientationLock.swift
 @@ -23,7 +23,9 @@ import SwiftUI
@@ -88,7 +88,7 @@ index 66f15b3..9ca198a 100644
          }
  
          static func orientations(locked: Bool, idiom: UIUserInterfaceIdiom) -> UIInterfaceOrientationMask {
-@@ -39,7 +41,20 @@ import SwiftUI
+@@ -39,7 +41,23 @@ import SwiftUI
  
          static func acquire(_ holder: String) {
              guard holders.insert(holder).inserted, holders.count == 1 else { return }
@@ -99,7 +99,10 @@ index 66f15b3..9ca198a 100644
 +        /// Lume GF: the phone opened part way or all the way (GFTabletop): a held lock lets go, or takes hold again.
 +        static func gfFoldChanged() {
 +            guard !holders.isEmpty else { return }
-+            apply(requesting: gfHeld)
++            let held = gfHeld
++            let name = held == .landscape ? "landscape" : held == .portrait ? "portrait" : "any way up"
++            GFTabletop.log("player asks for \(name) (phone held \(UIDevice.current.orientation.rawValue))")
++            apply(requesting: held)
 +        }
 +
 +        /// Lume GF: landscape, or, while an iPhone Duo stands half folded, portrait when it stands upright (asking for
