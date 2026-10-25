@@ -1,0 +1,155 @@
+diff --git a/Lume/Models/Playlist.swift b/Lume/Models/Playlist.swift
+index 3c5dfa3..3885555 100644
+--- a/Lume/Models/Playlist.swift
++++ b/Lume/Models/Playlist.swift
+@@ -255,6 +255,20 @@ nonisolated enum PlaylistStreamFormat: String, CaseIterable, Identifiable, Codab
+         components.path = String(live.stem) + "." + target.rawValue
+         return components.url ?? url
+     }
++
++    /// Lume GF: an Xtream live URL (`…/live/<user>/<password>/<id>.m3u8` or `.ts`) in the other of the two
++    /// interchangeable containers, or nil for any other URL (an m3u's `video.m3u8`, a signed CDN address). The player
++    /// tries an HLS address once as TS when it will not start (`FullScreenPlayerView`).
++    static func gfOtherContainer(of url: URL) -> URL? {
++        let path = url.pathComponents
++        guard path.count >= 5, path[path.count - 4] == "live",
++              var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
++              let live = components.liveContainer
++        else { return nil }
++        let other: StreamFormat = live.format == .m3u8 ? .tsStream : .m3u8
++        components.path = String(live.stem) + "." + other.rawValue
++        return components.url
++    }
+ }
+ 
+ nonisolated extension URLComponents {
+diff --git a/Lume/Services/Network/XtreamClient.swift b/Lume/Services/Network/XtreamClient.swift
+index 7b76c31..65effac 100644
+--- a/Lume/Services/Network/XtreamClient.swift
++++ b/Lume/Services/Network/XtreamClient.swift
+@@ -510,8 +510,12 @@ final nonisolated class XtreamClient: Sendable {
+     /// Builds a playback URL for a live stream. `format` overrides the
+     /// playlist's own container preference; when omitted the playlist decides,
+     /// falling back to HLS.
++    /// Lume GF: on automatic, MPEG-TS whenever the account lists it. Georgs' provider added HLS to its formats on 25 Oct
++    /// 2026 with live HLS that never plays, and every device that synced switched to it (the TS it had always played
++    /// still works); HLS stays for accounts that don't list TS or don't say.
+     func buildLiveStreamURL(for stream: LiveStream, playlist: Playlist, format: StreamFormat? = nil) -> URL? {
+-        let ext = Self.resolvedFormat(format, playlist: playlist, fallback: .m3u8).rawValue
++        let listsTS = playlist.allowedOutputFormats?.contains(StreamFormat.tsStream.rawValue) == true
++        let ext = Self.resolvedFormat(format, playlist: playlist, fallback: listsTS ? .tsStream : .m3u8).rawValue
+         return URL(string: "\(playlist.serverURL)/live/\(playlist.username)/\(playlist.password)/\(stream.streamId).\(ext)")
+     }
+ 
+diff --git a/Lume/Views/Player/FullScreenPlayerView+Adoption.swift b/Lume/Views/Player/FullScreenPlayerView+Adoption.swift
+index 342d98d..bc98b83 100644
+--- a/Lume/Views/Player/FullScreenPlayerView+Adoption.swift
++++ b/Lume/Views/Player/FullScreenPlayerView+Adoption.swift
+@@ -73,7 +73,7 @@ extension FullScreenPlayerView {
+         return coordinator
+     }
+ 
+-    private var isAdoptedAttempt: Bool {
++    var isAdoptedAttempt: Bool { // Lume GF: internal, for the TS retry (FullScreenPlayerView.gfTryAsTS)
+         guard let adoption else { return false }
+         return adoption.engineAttempt == engineAttempt && adoption.mediaID == activeMedia.id
+     }
+diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
+index feb1c55..d1d0b09 100644
+--- a/Lume/Views/Player/FullScreenPlayerView.swift
++++ b/Lume/Views/Player/FullScreenPlayerView.swift
+@@ -92,6 +92,11 @@ struct FullScreenPlayerView: View {
+     /// resolution is in flight (the loading indicator shows). Engines that play a
+     /// directly usable URL (Xtream / m3u) bypass this entirely — see `displayMedia`.
+     @State var resolvedMedia: PlayableMedia?
++    /// Lume GF: the live stream (by media id) whose Xtream HLS address the first engine is trying as TS, after it
++    /// could not start it as HLS: a provider can list HLS it does not really serve (25 Oct 2026: answered with
++    /// something no engine could play, every engine retrying it every second). Only that attempt plays the TS
++    /// address; the engines after it start from the address as listed, as before.
++    @State var gfTSRetry: (mediaID: String, engineAttempt: Int)?
+ 
+     /// Set when Stalker `create_link` resolution fails, so the host shows the
+     /// failure overlay instead of an endless spinner.
+@@ -195,6 +200,7 @@ struct FullScreenPlayerView: View {
+     /// (the last engine shows its own error overlay instead), so there's nothing
+     /// to do here in that case.
+     private func fallBackToNextEngine() {
++        if gfTryAsTS() { return } // Lume GF
+         guard hasFallbackEngine else { return }
+         let failed = engine
+         engineAttempt += 1
+@@ -393,15 +399,38 @@ struct FullScreenPlayerView: View {
+     /// matching the active stream so a stale resolution from the previous stream
+     /// never reaches the engine during a channel/episode switch.
+     private var displayMedia: PlayableMedia? {
+-        guard StalkerLink.isPlaceholder(activeMedia.url) else { return activeMedia }
++        guard StalkerLink.isPlaceholder(activeMedia.url) else { return gfAsTS(activeMedia) }
+         guard let resolvedMedia, resolvedMedia.id == activeMedia.id else { return nil }
+         return resolvedMedia
+     }
+ 
++    /// Lume GF: `media` at its TS address while the first engine retries it so (`gfTSRetry`).
++    private func gfAsTS(_ media: PlayableMedia) -> PlayableMedia {
++        guard let retry = gfTSRetry, retry.mediaID == media.id, retry.engineAttempt == engineAttempt,
++              media.url.pathExtension.lowercased() == "m3u8",
++              let url = PlaylistStreamFormat.gfOtherContainer(of: media.url)
++        else { return media }
++        return media.replacingURL(url)
++    }
++
++    /// Lume GF: when the first engine cannot start a live Xtream channel as HLS, it tries it once as TS before the
++    /// next engine takes over. Not for a Stalker portal's short-lived links, nor for a session adopted from a preview.
++    private func gfTryAsTS() -> Bool {
++        guard engineAttempt == 0, !isAdoptedAttempt, !StalkerLink.isPlaceholder(activeMedia.url),
++              let media = displayMedia, media.isLive, media.url.pathExtension.lowercased() == "m3u8",
++              gfTSRetry?.mediaID != media.id || gfTSRetry?.engineAttempt != engineAttempt,
++              PlaylistStreamFormat.gfOtherContainer(of: media.url) != nil
++        else { return false }
++        gfTSRetry = (media.id, engineAttempt)
++        Logger.player.log("engine \(engine.rawValue, privacy: .public) could not start the stream as HLS; trying it as TS")
++        return true
++    }
++
+     @ViewBuilder
+     private var playerView: some View {
+         if let media = displayMedia {
+             engineView(for: media)
++                .id(gfTSRetry.map { "\($0.mediaID) \($0.engineAttempt)" }) // Lume GF: a fresh engine for the TS retry
+         } else if resolveError != nil {
+             // Stalker `create_link` failed — surface the failure with a retry
+             // rather than spinning forever.
+diff --git a/LumeTests/Models/PlaylistStreamFormatTests.swift b/LumeTests/Models/PlaylistStreamFormatTests.swift
+index 0032e74..6cd3df9 100644
+--- a/LumeTests/Models/PlaylistStreamFormatTests.swift
++++ b/LumeTests/Models/PlaylistStreamFormatTests.swift
+@@ -93,12 +93,29 @@ struct PlaylistStreamFormatTests {
+         #expect(url?.absoluteString == "http://example.com:8080/live/testuser/testpass/555.ts")
+     }
+ 
+-    @Test func `automatic keeps HLS when the account allows it`() {
++    // Lume GF: automatic prefers TS whenever the account lists it (a provider listed HLS it did not really serve)
++    @Test func `automatic prefers ts when the account allows both`() {
+         let stream = LiveStream(id: "l-9", streamId: 555, name: "Test Channel")
+         let url = makeClient().buildLiveStreamURL(for: stream, playlist: makePlaylist(allowed: ["m3u8", "ts", "rtmp"]))
++        #expect(url?.absoluteString.hasSuffix("/555.ts") == true)
++    }
++
++    @Test func `automatic keeps HLS when the account allows only HLS`() {
++        let stream = LiveStream(id: "l-9b", streamId: 555, name: "Test Channel")
++        let url = makeClient().buildLiveStreamURL(for: stream, playlist: makePlaylist(allowed: ["m3u8", "rtmp"]))
+         #expect(url?.absoluteString.hasSuffix("/555.m3u8") == true)
+     }
+ 
++    @Test func `the other live container swaps HLS and TS, and leaves anything else`() {
++        let hls = URL(string: "http://example.com:8080/live/u/p/555.m3u8?token=1")!
++        let ts = URL(string: "http://example.com:8080/live/u/p/555.ts?token=1")!
++        #expect(PlaylistStreamFormat.gfOtherContainer(of: hls) == ts)
++        #expect(PlaylistStreamFormat.gfOtherContainer(of: ts) == hls)
++        #expect(PlaylistStreamFormat.gfOtherContainer(of: URL(string: "http://cdn.example.com/channel/index")!) == nil)
++        #expect(PlaylistStreamFormat.gfOtherContainer(of: URL(string: "http://cdn.example.com/hls/news/video.m3u8")!) == nil)
++        #expect(PlaylistStreamFormat.gfOtherContainer(of: URL(string: "http://example.com/movie/u/p/1.mp4")!) == nil)
++    }
++
+     @Test func `automatic keeps HLS when no usable container is allowed`() {
+         let stream = LiveStream(id: "l-10", streamId: 555, name: "Test Channel")
+         let url = makeClient().buildLiveStreamURL(for: stream, playlist: makePlaylist(allowed: ["rtmp"]))
