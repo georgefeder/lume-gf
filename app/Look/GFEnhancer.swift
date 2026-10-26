@@ -58,6 +58,11 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
         var error: (any Error)?
     }
 
+    /// How a model's run on blank frames went: its time, why it failed, or still running after 2 seconds.
+    private nonisolated enum FirstRun {
+        case ran(Double), failed(String), late(Request)
+    }
+
     static let shared = GFEnhancer()
 
     /// KSPlayer's hook for one stream (one options object): its frames are counted as a stream of their own, and the
@@ -68,8 +73,10 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
     }
 
     /// A frame the upscaler may take this long before plain scaling stands in for it (a 50 fps frame lasts 20 ms);
-    /// it is left to finish, and a request it has not answered in `abandonAfter` is given up on.
+    /// it is left to finish, and a request it has not answered in `abandonAfter` gives the stream its own frames back.
     private static let frameTimeout = 40, abandonAfter: CFTimeInterval = 1
+    /// A newer stream that has drawn nothing for this long hands the counts back to an older one still drawing.
+    private static let ownerGone: CFTimeInterval = 2
     /// The stream gets its own frames back after `streakLimit` requests in a row missed (or frames made neither way),
     /// or two windows of `windowFrames` requests in a row slower than `slowAverage` or with `missLimit` missed: the
     /// picture would stutter otherwise. The first `warmUpFrames` requests after the model loads are not judged, and a
@@ -93,8 +100,10 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
     private var transfer: VTPixelTransferSession?
     private var frameNumber: Int64 = 0
 
-    /// The newest stream with frames, and the number the last hook was given.
+    /// The stream the counts are for (the newest drawing), the number the last hook was given, and when the stream
+    /// last drew.
     private var stream = 0, streams = 0
+    private var streamSeen: CFTimeInterval = 0
     /// The stream it could not keep up with: its frames go through as they are.
     private var gaveUp = false
     /// Shown again when a frame can be made neither way: a frame of another size would rebuild the display layer.
@@ -118,8 +127,10 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
     func process(_ buffer: CVPixelBuffer, stream: Int) -> CVPixelBuffer? {
         lock.lock()
         defer { lock.unlock() }
-        guard stream >= self.stream else { return nil }
-        if stream > self.stream { begin(stream) }
+        // an older player still drawing (as a zap overlaps) gets its own frames, unless the newer one stopped drawing
+        if stream < self.stream, CACurrentMediaTime() - streamSeen < Self.ownerGone { return nil }
+        if stream != self.stream { begin(stream) }
+        streamSeen = CACurrentMediaTime()
         let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
         if plan?.width != width || plan?.height != height {
             configure(width: width, height: height, format: CVPixelBufferGetPixelFormatType(buffer))
@@ -205,20 +216,31 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
         let description = "\(size) to \(made) (\(factor)x, \(GFEnhancePlan.name(of: sourceFormat)) to "
             + "\(GFEnhancePlan.name(of: outputFormat)))"
         let model = Model(width: width, height: height, factor: factor), ticket = generation
-        loader.async { [self] in
-            load(configuration, model: model, pools: (source: sourcePool, output: pool), ticket: ticket,
-                 description: description)
-        }
+        loader.async { [self] in load(configuration, model: model, ticket: ticket, description: description) }
     }
 
     /// On `loader`: loads `model` into an upscaler of its own (unless it is loaded already), runs it once, and hands it
     /// to the plan of `ticket`, if no other frame size came meanwhile.
-    private func load(_ configuration: VTLowLatencySuperResolutionScalerConfiguration, model: Model,
-                      pools: (source: CVPixelBufferPool, output: CVPixelBufferPool), ticket: Int,
+    private func load(_ configuration: VTLowLatencySuperResolutionScalerConfiguration, model: Model, ticket: Int,
                       description: String) {
-        guard lock.withLock({ ticket == generation }) else { return }
+        let pools: (source: CVPixelBufferPool, output: CVPixelBufferPool)? = lock.withLock {
+            guard ticket == generation, let source = plan?.sourcePool, let output = plan?.output?.pool else {
+                return nil
+            }
+            return (source: source, output: output)
+        }
+        guard let pools else { return }
+        func fail(_ reason: String) {
+            lock.withLock {
+                if ticket == generation { plan?.failed = true }
+            }
+            Self.log("\(description): \(reason)")
+        }
         var how = "already loaded"
-        if loaded?.model != model {
+        // a newly loaded upscaler's run on blank frames, if it is still on it
+        var late: Request?
+        let fresh = loaded?.model != model
+        if fresh {
             // no plan holds the old upscaler any more (a new size replaced it); this finishes what it was still on
             loaded?.processor.endSession()
             loaded = nil
@@ -226,33 +248,41 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
             do {
                 try processor.startSession(configuration: configuration)
             } catch {
-                lock.withLock {
-                    if ticket == generation { plan?.failed = true }
-                }
-                return Self.log("\(description): the upscaler did not start (\(error))")
+                return fail("the upscaler did not start (\(error))")
             }
-            let loading = CACurrentMediaTime() - start
-            let firstRun = Self.warmUp(processor, pools: pools).map { Self.milliseconds($0) } ?? "failed"
+            let loading = Self.milliseconds(CACurrentMediaTime() - start)
+            switch Self.warmUp(processor, pools: pools) {
+            case let .ran(seconds):
+                how = "ready in \(loading), first run \(Self.milliseconds(seconds))"
+            case let .failed(reason):
+                processor.endSession()
+                return fail("the upscaler's first run failed (\(reason))")
+            case let .late(request):
+                how = "ready in \(loading), first run over 2 s"
+                late = request
+            }
             loaded = (model: model, processor: processor)
-            how = "ready in \(Self.milliseconds(loading)), first run \(firstRun)"
         }
         guard let processor = loaded?.processor else { return }
         lock.withLock {
             guard ticket == generation else { return }
             plan?.processor = processor
             framesSinceReady = 0
+            // a request left from the old upscaler is over with it; a first run still going is the new one's
+            if fresh { pending = late }
         }
         Self.log("\(description), \(how)")
     }
 
-    /// One run on blank frames before any real one (a model's first run is its slowest): its time, or nil when it
-    /// failed or took over 2 seconds.
+    /// One run on blank frames before any real one (a model's first run is its slowest).
     private static func warmUp(_ processor: VTFrameProcessor,
-                               pools: (source: CVPixelBufferPool, output: CVPixelBufferPool)) -> Double? {
-        guard let source = buffer(from: pools.source), let destination = buffer(from: pools.output),
-              let sourceFrame = VTFrameProcessorFrame(buffer: source, presentationTimeStamp: .zero),
+                               pools: (source: CVPixelBufferPool, output: CVPixelBufferPool)) -> FirstRun {
+        guard let source = buffer(from: pools.source), let destination = buffer(from: pools.output) else {
+            return .failed("no blank frames")
+        }
+        guard let sourceFrame = VTFrameProcessorFrame(buffer: source, presentationTimeStamp: .zero),
               let destinationFrame = VTFrameProcessorFrame(buffer: destination, presentationTimeStamp: .zero)
-        else { return nil }
+        else { return .failed("it did not take the frames") }
         let parameters = VTLowLatencySuperResolutionScalerParameters(sourceFrame: sourceFrame,
                                                                     destinationFrame: destinationFrame)
         let request = Request()
@@ -260,8 +290,9 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
             request.error = error
             request.done.signal()
         }
-        guard request.done.wait(timeout: .now() + .seconds(2)) == .success, request.error == nil else { return nil }
-        return CACurrentMediaTime() - request.sent
+        guard request.done.wait(timeout: .now() + .seconds(2)) == .success else { return .late(request) }
+        if let error = request.error { return .failed("\(error)") }
+        return .ran(CACurrentMediaTime() - request.sent)
     }
 
     // MARK: - Frames
@@ -313,8 +344,10 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
             } else if CACurrentMediaTime() - pending.sent < Self.abandonAfter {
                 return (nil, .busy)
             } else {
+                // its first run is behind it (on blank frames), so this is no slow start: it has stopped answering
                 self.pending = nil
-                return missed("no answer in \(Int(Self.abandonAfter)) s")
+                giveUp("the upscaler gave no answer in \(Int(Self.abandonAfter)) s")
+                return missed("no answer")
             }
         }
         // the upscaler gets the decoder's own frame when it is in the right format and in shared memory
