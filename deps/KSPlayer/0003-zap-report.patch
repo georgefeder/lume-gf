@@ -1,0 +1,70 @@
+Lume GF: every build hands the channel-change log (gfZapLog, 0001) to KSOptions.gfZapReport, which Lume GF writes into
+its diagnostic report ("Zap: ..."), and two more steps are logged: a stream's first picture on screen and the moment
+it can play. The lines' times show where a channel change spends its time (Georgs, 26 Oct 2026: switching "feels like
+it could be faster"). Made against KSPlayer bdfa2da (deps/KSPlayer/REVISION) with 0001 and 0002 applied.
+
+diff --git a/Sources/KSPlayer/AVPlayer/KSOptions.swift b/Sources/KSPlayer/AVPlayer/KSOptions.swift
+index ba70c85..b3df891 100644
+--- a/Sources/KSPlayer/AVPlayer/KSOptions.swift
++++ b/Sources/KSPlayer/AVPlayer/KSOptions.swift
+@@ -468,6 +468,9 @@ public extension KSOptions {
+     static var maxBufferDuration = 30.0
+     /// 是否开启秒开
+     static var isSecondOpen = false
++    /// Lume GF: given each step of a channel change as it happens (`gfZapLog`), on KSPlayer's own threads; Lume GF
++    /// writes them into its diagnostic report, where each line's time shows how long the step took.
++    static var gfZapReport: (@Sendable (String) -> Void)?
+     /// 开启精确seek
+     static var isAccurateSeek = false
+     /// Applies to short videos only
+diff --git a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+index d9d00c0..119a2cf 100644
+--- a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
++++ b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+@@ -255,11 +255,16 @@ extension KSMEPlayer: MEPlayerDelegate {
+             if loadingState.isFirst {
+                 if videoOutput?.pixelBuffer == nil {
+                     videoOutput?.readNextFrame()
++                    // Lume GF: the stream's first picture is on screen (gfZapLog)
++                    if videoOutput?.pixelBuffer != nil {
++                        gfZapLog("\(playerItem.gfName) first picture")
++                    }
+                 }
+             }
+             var progress = 100
+             if loadingState.isPlayable {
+                 loadState = .playable
++                gfZapLog("\(playerItem.gfName) playable")
+             } else {
+                 if loadingState.progress.isInfinite {
+                     progress = 100
+diff --git a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
+index fc91308..10a0c6b 100644
+--- a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
++++ b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
+@@ -11,12 +11,14 @@ import Libavcodec
+ import Libavfilter
+ import Libavformat
+ 
+-/// Lume GF: when each step of a channel change happened (Debug builds only: CI's GFZapTests read it when the old
+-/// channel closes late). Names the stream by its last path part, never the whole address.
++/// Lume GF: when each step of a channel change happened. Debug builds print it (CI's GFZapTests read it when the old
++/// channel closes late), and every build hands it to `KSOptions.gfZapReport` (Lume GF's diagnostic report). Names the
++/// stream by its last path part, never the whole address.
+ func gfZapLog(_ message: @autoclosure () -> String) {
+     #if DEBUG
+         NSLog("GF zap %.3f %@", CACurrentMediaTime(), message())
+     #endif
++    KSOptions.gfZapReport?(message())
+ }
+ 
+ public final class MEPlayerItem: Sendable {
+@@ -36,6 +38,8 @@ public final class MEPlayerItem: Sendable {
+     /// Lume GF: the item this one replaces (`KSMEPlayer.replace`). It closes its input before this one opens, so a
+     /// channel change never holds two connections to the server at once; waited for at most 1.5 s.
+     var replacedItem: MEPlayerItem?
++    /// Lume GF: the stream's name in `gfZapLog`, its last path part.
++    var gfName: String { url.lastPathComponent }
+     /// Lume GF: whether FFmpeg has been told to stop yet (logged once, Debug builds).
+     private var gfInterruptNoted = false
+     private var seekingCompletionHandler: ((Bool) -> Void)?
