@@ -122,10 +122,10 @@ index ef03247..17d6379 100644
              if scope == .recentlyWatched, !channels.isEmpty {
                  clearHeader
 diff --git a/Lume/Views/LiveTV/EPG/EPGGuideView.swift b/Lume/Views/LiveTV/EPG/EPGGuideView.swift
-index e42a1d8..d83e18b 100644
+index a45a126..0df10d2 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGuideView.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGuideView.swift
-@@ -126,7 +126,7 @@ struct EPGGuideView: View {
+@@ -127,7 +127,7 @@ struct EPGGuideView: View {
          // Reload when the channel set changes or a guide import settles. Keyed on
          // `isSyncing` (which flips twice per sync) rather than observing the store,
          // so the grid rebuilds a handful of times — not on every batch write.
@@ -148,10 +148,10 @@ index 8ccf4ba..346574b 100644
              }
              .alert("Clear Recently Watched", isPresented: $confirmingClear) {
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index 9cc400a..4a840a0 100644
+index 74ce147..c1f121e 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
-@@ -180,6 +180,11 @@ struct MainTabView: View {
+@@ -181,6 +181,11 @@ struct MainTabView: View {
                  // Returning to the foreground re-checks staleness — for a long-lived
                  // app this is the practical equivalent of "on launch".
                  if phase == .active {
