@@ -2,8 +2,10 @@
 import Testing
 
 struct GFEnhancePlanTests {
-    @Test func `SD doubles, as 3x would be taller than 4K`() {
-        #expect(GFEnhancePlan.scale(width: 720, height: 576, supported: [2, 3, 4]) == 2)
+    @Test func `SD triples where it can, as 4x would be taller than 4K`() {
+        #expect(GFEnhancePlan.scale(width: 720, height: 576, supported: [2, 3, 4]) == 3)
+        #expect(GFEnhancePlan.scaled(width: 720, height: 576, by: 3) == (2160, 1728))
+        #expect(GFEnhancePlan.scale(width: 720, height: 576, supported: [2]) == 2)
         #expect(GFEnhancePlan.scaled(width: 720, height: 576, by: 2) == (1440, 1152))
     }
 

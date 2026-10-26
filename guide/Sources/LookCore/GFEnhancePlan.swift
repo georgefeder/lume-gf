@@ -10,7 +10,7 @@ nonisolated enum GFEnhancePlan {
     static let maximumWidth = 3840, maximumHeight = 2160
 
     /// The factor for a `width`×`height` frame, from the factors the upscaler supports for it: the largest whose
-    /// result still fits 4K (SD 2×, 720p 3×). Nil for 1080p and up, or when none fits.
+    /// result still fits 4K (SD and 720p up to 3×). Nil for 1080p and up, or when none fits.
     static func scale(width: Int, height: Int, supported: [Float]) -> Float? {
         guard width > 0, height > 0, height < fullHDLines else { return nil }
         return supported.filter { factor in
