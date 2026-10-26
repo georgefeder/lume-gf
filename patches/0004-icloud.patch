@@ -1,5 +1,5 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 4ce6eda..734d01e 100644
+index 66370c0..b1a1e94 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -14,7 +14,7 @@ struct LumeApp: App {
@@ -11,7 +11,7 @@ index 4ce6eda..734d01e 100644
  
      /// The local-only catalog store. The app's environment container — every
      /// browse `@Query` binds to it, so CloudKit's churn (which only touches the
-@@ -187,14 +187,14 @@ struct LumeApp: App {
+@@ -192,14 +192,14 @@ struct LumeApp: App {
      /// Real, properly-signed builds get full CloudKit sync.
      static let isCloudKitEnvironment: Bool = {
          #if SIDE_LOAD
@@ -32,9 +32,9 @@ index 4ce6eda..734d01e 100644
 +            let isUITest = CommandLine.arguments.contains("-ui-testing")
 +            return !(isPreview || isUnitTest || isUITest)
          #else
-             let environment = ProcessInfo.processInfo.environment
-             let isPreview = environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-@@ -273,6 +273,9 @@ struct LumeApp: App {
+             return !isTestOrPreviewHost
+         #endif
+@@ -293,6 +293,9 @@ struct LumeApp: App {
                      // write, and idempotent per process on the callee's side.
                      AppStoreReviewPrompt.shared.noteAppLaunched()
  

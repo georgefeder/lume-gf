@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-index 84fdb68..7c9063f 100644
+index d5e1f6b..05b6033 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 @@ -68,12 +68,13 @@ struct EPGChannelCell: View {
@@ -92,7 +92,7 @@ index 327e5e3..981ca99 100644
              )
              if sync.window != window {
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 9f1c757..0f40f47 100644
+index 0adc78b..31c3962 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -102,8 +102,22 @@ struct EPGGridScroller: View {
