@@ -1,14 +1,15 @@
 diff --git a/Sources/KSPlayer/AVPlayer/KSOptions.swift b/Sources/KSPlayer/AVPlayer/KSOptions.swift
-index 42c9c8f..28e02b7 100644
+index 42c9c8f..ba70c85 100644
 --- a/Sources/KSPlayer/AVPlayer/KSOptions.swift
 +++ b/Sources/KSPlayer/AVPlayer/KSOptions.swift
-@@ -77,6 +77,10 @@ open class KSOptions {
+@@ -77,6 +77,11 @@ open class KSOptions {
      public var display = DisplayEnum.plane
      public var videoDelay = 0.0 // s
      public var autoDeInterlace = false
 +    /// Lume GF: given each new frame just before it is shown on the display layer, returns the frame to show instead
-+    /// (Lume GF's upscaler), or nil to show it as it is. Called on the main thread; every frame of a stream must come
-+    /// back at one size, since a new size rebuilds the display layer.
++    /// (Lume GF's upscaler), or nil to show it as it is. Called on the main thread, and on a decoding thread for a
++    /// stream's first frame (`readNextFrame`); every frame of a stream must come back at one size, since a new size
++    /// rebuilds the display layer.
 +    public var gfProcessFrame: ((CVPixelBuffer) -> CVPixelBuffer?)?
      public var autoRotate = true
      public var destinationDynamicRange: DynamicRange?

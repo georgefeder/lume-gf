@@ -1,5 +1,21 @@
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Adoption.swift b/Lume/Views/Player/KSPlayerEngineView+Adoption.swift
+index 7484f46..e85b570 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Adoption.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Adoption.swift
+@@ -58,6 +58,11 @@ extension KSPlayerEngineView {
+             // The preview held the TV's display mode back; full screen is
+             // where the session matches it.
+             (coordinator.playerLayer?.options as? LumeKSOptions)?.beginMatchingDisplayCriteria()
++            // Lume GF: the preview was set up without the upscaler (embedded); full screen adds it (GFEnhancer)
++            if UserDefaults.standard.bool(forKey: GFEnhancePlan.settingKey), #available(tvOS 26.0, *),
++               let options = coordinator.playerLayer?.options, options.gfProcessFrame == nil {
++                options.gfProcessFrame = GFEnhancer.hook()
++            }
+             hasSeenReadyToPlay = true
+             let state = coordinator.state
+             isPlaying = state == .bufferFinished
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Options.swift b/Lume/Views/Player/KSPlayerEngineView+Options.swift
-index b06a008..8d063c4 100644
+index b06a008..dbb0cbe 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Options.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Options.swift
 @@ -190,6 +190,12 @@ enum KSPlayerOptionsFactory {
@@ -9,7 +25,7 @@ index b06a008..8d063c4 100644
 +        // Lume GF: Apple's super resolution on SD and 720p channels, full screen on Apple TV (GFEnhancer)
 +        #if os(tvOS)
 +            if !isEmbedded, UserDefaults.standard.bool(forKey: GFEnhancePlan.settingKey), #available(tvOS 26.0, *) {
-+                options.gfProcessFrame = GFEnhancer().process
++                options.gfProcessFrame = GFEnhancer.hook()
 +            }
 +        #endif
          return options
