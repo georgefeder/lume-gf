@@ -1,5 +1,5 @@
 diff --git a/Lume/Info.plist b/Lume/Info.plist
-index b58785f..c85fc02 100644
+index 5259bb8..0ed014a 100644
 --- a/Lume/Info.plist
 +++ b/Lume/Info.plist
 @@ -2,6 +2,11 @@
@@ -14,7 +14,7 @@ index b58785f..c85fc02 100644
  	<key>CFBundleAllowMixedLocalizations</key>
  	<true/>
  	<key>CFBundleLocalizations</key>
-@@ -57,6 +62,8 @@
+@@ -59,6 +64,8 @@
  	<array>
  		<string>audio</string>
  		<string>remote-notification</string>
@@ -24,10 +24,10 @@ index b58785f..c85fc02 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 75ce664..bb06e21 100644
+index c0bf863..eaa6982 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -32,11 +32,15 @@ struct LumeApp: App {
+@@ -32,6 +32,7 @@ struct LumeApp: App {
      #endif
  
      init() {
@@ -35,15 +35,17 @@ index 75ce664..bb06e21 100644
          // First, so the launch marker precedes anything the setup below logs.
          DiagnosticSession.start()
          let (catalog, cloud) = Self.makeModelContainers()
-         catalogContainer = catalog
-         cloudContainer = cloud
+@@ -42,6 +43,9 @@ struct LumeApp: App {
+             // can resume a Cast session, which may end before that task runs.
+             CastService.shared.progressCommitter = CastProgressCommitter(container: catalog)
+         #endif
 +        // Lume GF: set up before anything else can run, so a background launch (no scene yet) finds its guide data.
 +        EPGSyncService.shared.configure(container: catalog)
 +        GuideScheduler.shared.configure(container: catalog)
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -353,6 +357,8 @@ struct LumeApp: App {
+@@ -375,6 +379,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
@@ -52,8 +54,8 @@ index 75ce664..bb06e21 100644
  
                      // Seed the widget / Top Shelf snapshot once services are up
                      // (after profile bootstrap, so the catalog is profile-scoped).
-@@ -371,6 +377,7 @@ struct LumeApp: App {
-                     RecordingServerConfigService.shared.reload()
+@@ -397,6 +403,7 @@ struct LumeApp: App {
+                     exportWidgetSnapshot()
                  }
                  .onChange(of: scenePhase) { _, phase in
 +                    GuideScheduler.shared.scenePhaseChanged(to: phase)

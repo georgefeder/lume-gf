@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Playback.swift b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
-index 6852aad..a2b1611 100644
+index ea0a2aa..5d8fd62 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Playback.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
 @@ -73,6 +73,9 @@ extension KSPlayerEngineView {
@@ -54,7 +54,7 @@ index 4d9514d..8a157de 100644
      /// keep showing that the next channel is on its way.
      @ViewBuilder
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index 92ea061..fbcdc5a 100644
+index 5f151eb..02c3157 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -80,6 +80,9 @@ struct KSPlayerEngineView: View {

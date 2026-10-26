@@ -1,5 +1,5 @@
 diff --git a/Lume/Models/Playlist.swift b/Lume/Models/Playlist.swift
-index 3c5dfa3..3885555 100644
+index 4766212..a9ec178 100644
 --- a/Lume/Models/Playlist.swift
 +++ b/Lume/Models/Playlist.swift
 @@ -255,6 +255,20 @@ nonisolated enum PlaylistStreamFormat: String, CaseIterable, Identifiable, Codab
@@ -55,10 +55,10 @@ index 342d98d..bc98b83 100644
          return adoption.engineAttempt == engineAttempt && adoption.mediaID == activeMedia.id
      }
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index feb1c55..d1d0b09 100644
+index 673d523..cf5aaf1 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -92,6 +92,11 @@ struct FullScreenPlayerView: View {
+@@ -93,6 +93,11 @@ struct FullScreenPlayerView: View {
      /// resolution is in flight (the loading indicator shows). Engines that play a
      /// directly usable URL (Xtream / m3u) bypass this entirely — see `displayMedia`.
      @State var resolvedMedia: PlayableMedia?
@@ -70,18 +70,18 @@ index feb1c55..d1d0b09 100644
  
      /// Set when Stalker `create_link` resolution fails, so the host shows the
      /// failure overlay instead of an endless spinner.
-@@ -195,6 +200,7 @@ struct FullScreenPlayerView: View {
-     /// (the last engine shows its own error overlay instead), so there's nothing
-     /// to do here in that case.
+@@ -205,6 +210,7 @@ struct FullScreenPlayerView: View {
+     /// Jellyfin/Emby version that has others to try (see `reportsStartupFailure`);
+     /// otherwise the last engine shows its own error overlay instead.
      private func fallBackToNextEngine() {
 +        if gfTryAsTS() { return } // Lume GF
-         guard hasFallbackEngine else { return }
+         guard hasFallbackEngine else { return recoverWithAnotherSource() }
          let failed = engine
          engineAttempt += 1
-@@ -393,15 +399,38 @@ struct FullScreenPlayerView: View {
-     /// matching the active stream so a stale resolution from the previous stream
-     /// never reaches the engine during a channel/episode switch.
-     private var displayMedia: PlayableMedia? {
+@@ -411,17 +417,40 @@ struct FullScreenPlayerView: View {
+         case .pending: return nil
+         case .notSourced: break
+         }
 -        guard StalkerLink.isPlaceholder(activeMedia.url) else { return activeMedia }
 +        guard StalkerLink.isPlaceholder(activeMedia.url) else { return gfAsTS(activeMedia) }
          guard let resolvedMedia, resolvedMedia.id == activeMedia.id else { return nil }
@@ -112,12 +112,14 @@ index feb1c55..d1d0b09 100644
 +
      @ViewBuilder
      private var playerView: some View {
-         if let media = displayMedia {
+         if showsCastSurface {
+             castingSurface
+         } else if let media = displayMedia {
              engineView(for: media)
 +                .id(gfTSRetry.map { "\($0.mediaID) \($0.engineAttempt)" }) // Lume GF: a fresh engine for the TS retry
+         } else if JellyfinSourceResolver.itemId(for: activeMedia) != nil {
+             sourcePhaseView
          } else if resolveError != nil {
-             // Stalker `create_link` failed — surface the failure with a retry
-             // rather than spinning forever.
 diff --git a/LumeTests/Models/PlaylistStreamFormatTests.swift b/LumeTests/Models/PlaylistStreamFormatTests.swift
 index 0032e74..6cd3df9 100644
 --- a/LumeTests/Models/PlaylistStreamFormatTests.swift
