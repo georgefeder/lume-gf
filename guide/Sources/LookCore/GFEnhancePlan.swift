@@ -17,12 +17,16 @@ nonisolated enum GFEnhancePlan {
     }
 
     /// The factor for a `width`×`height` frame, from the factors the upscaler supports for it: the largest whose
-    /// result still fits 4K (SD and 720p up to 3×). Nil for full HD and up, or when none fits.
+    /// result still fits 4K in whole, even pixels (SD and 720p up to 3×). Nil for full HD and up, for an odd size (the
+    /// upscaler makes exactly `factor` times the frame, and 4:2:0 frames need even sizes), or when none fits.
     static func scale(width: Int, height: Int, supported: [Float]) -> Float? {
-        guard isBelowFullHD(width: width, height: height) else { return nil }
+        guard isBelowFullHD(width: width, height: height), width % 2 == 0, height % 2 == 0 else { return nil }
         return supported.filter { factor in
-            let size = scaled(width: width, height: height, by: factor)
-            return factor > 1 && size.width <= maximumWidth && size.height <= maximumHeight
+            func fits(_ side: Int, within limit: Int) -> Bool {
+                let scaled = Float(side) * factor
+                return scaled == scaled.rounded() && Int(scaled) % 2 == 0 && Int(scaled) <= limit
+            }
+            return factor > 1 && fits(width, within: maximumWidth) && fits(height, within: maximumHeight)
         }.max()
     }
 
@@ -42,13 +46,13 @@ nonisolated enum GFEnhancePlan {
 
     /// The format to hand the upscaler, or ask it for, with a `source` frame, from the formats it `offers`: 8-bit 4:2:0
     /// only (KSPlayer takes a 10-bit frame for HDR and would switch the TV's mode for an SD channel), the source's own
-    /// if offered, else the source's range (video range for anything else), two planes before three. Nil when it
-    /// offers no 8-bit 4:2:0 format.
+    /// if offered, else one in the source's range, two planes before three. Nil for a source that is not 8-bit 4:2:0
+    /// itself (a 10-bit one may be HDR, which 8 bits would spoil), or when it offers no 8-bit 4:2:0 format.
     static func format(for source: UInt32, from offers: [UInt32]) -> UInt32? {
-        let fullRange = source == fullRange420BiPlanar || source == fullRange420Planar
         let video = [videoRange420BiPlanar, videoRange420Planar], full = [fullRange420BiPlanar, fullRange420Planar]
-        let eightBit = fullRange ? full + video : video + full
-        return ([source] + eightBit).first { eightBit.contains($0) && offers.contains($0) }
+        guard (video + full).contains(source) else { return nil }
+        let eightBit = full.contains(source) ? full + video : video + full
+        return ([source] + eightBit).first { offers.contains($0) }
     }
 
     /// A four-character code as text ("420v"), for the diagnostic report.

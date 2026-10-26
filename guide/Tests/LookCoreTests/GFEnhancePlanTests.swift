@@ -41,8 +41,19 @@ struct GFEnhancePlanTests {
         #expect(GFEnhancePlan.format(for: y420, from: [y420, v420]) == y420)
         #expect(GFEnhancePlan.format(for: f420bi, from: [v420, f420bi]) == f420bi)
         #expect(GFEnhancePlan.format(for: v420, from: [tenBit, f420bi]) == f420bi)
-        #expect(GFEnhancePlan.format(for: 0x4247_5241, from: [f420bi, v420]) == v420) // BGRA
         #expect(GFEnhancePlan.format(for: v420, from: [tenBit]) == nil)
+    }
+
+    @Test func `only 8-bit 4:2:0 sources are upscaled`() {
+        #expect(GFEnhancePlan.format(for: tenBit, from: [v420, tenBit]) == nil) // may be HDR
+        #expect(GFEnhancePlan.format(for: 0x4247_5241, from: [v420]) == nil) // BGRA
+    }
+
+    @Test func `odd sizes and factors that miss whole even pixels are left alone`() {
+        #expect(GFEnhancePlan.scale(width: 853, height: 480, supported: [2, 3]) == nil)
+        #expect(GFEnhancePlan.scale(width: 722, height: 576, supported: [1.5]) == nil) // 1083 wide
+        #expect(GFEnhancePlan.scale(width: 704, height: 576, supported: [1.5]) == 1.5) // 1056x864
+        #expect(GFEnhancePlan.scale(width: 720, height: 576, supported: [1.5, 2.5]) == 2.5) // 1800x1440
     }
 
     @Test func `formats are named by their four characters`() {
