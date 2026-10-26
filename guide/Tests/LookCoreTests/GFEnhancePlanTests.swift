@@ -25,4 +25,29 @@ struct GFEnhancePlanTests {
     @Test func `odd results are made even`() {
         #expect(GFEnhancePlan.scaled(width: 704, height: 405, by: 1.5) == (1056, 608))
     }
+
+    @Test func `a letterboxed or anamorphic full HD frame is not upscaled`() {
+        #expect(GFEnhancePlan.scale(width: 1920, height: 800, supported: [2]) == nil)
+        #expect(GFEnhancePlan.scale(width: 1440, height: 1080, supported: [2]) == nil)
+        #expect(GFEnhancePlan.isBelowFullHD(width: 960, height: 540))
+        #expect(!GFEnhancePlan.isBelowFullHD(width: 0, height: 576))
+    }
+
+    private let v420 = GFEnhancePlan.videoRange420BiPlanar, f420bi = GFEnhancePlan.fullRange420BiPlanar
+    private let y420 = GFEnhancePlan.videoRange420Planar, tenBit: UInt32 = 0x7834_3230 // 'x420'
+
+    @Test func `the format keeps the source's own, else its range, and is never 10-bit`() {
+        #expect(GFEnhancePlan.format(for: y420, from: [v420, f420bi]) == v420) // KSPlayer's channels
+        #expect(GFEnhancePlan.format(for: y420, from: [y420, v420]) == y420)
+        #expect(GFEnhancePlan.format(for: f420bi, from: [v420, f420bi]) == f420bi)
+        #expect(GFEnhancePlan.format(for: v420, from: [tenBit, f420bi]) == f420bi)
+        #expect(GFEnhancePlan.format(for: 0x4247_5241, from: [f420bi, v420]) == v420) // BGRA
+        #expect(GFEnhancePlan.format(for: v420, from: [tenBit]) == nil)
+    }
+
+    @Test func `formats are named by their four characters`() {
+        #expect(GFEnhancePlan.name(of: v420) == "420v")
+        #expect(GFEnhancePlan.name(of: y420) == "y420")
+        #expect(GFEnhancePlan.name(of: 1) == "1")
+    }
 }

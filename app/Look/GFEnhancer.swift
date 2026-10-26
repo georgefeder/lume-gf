@@ -5,16 +5,18 @@ import OSLog
 import QuartzCore
 import VideoToolbox
 
-/// Lume GF: Apple's low-latency super resolution on SD and 720p channels, full screen on Apple TV with Settings ▸
+/// Lume GF: Apple's low-latency super resolution on SD and 720p pictures, full screen on Apple TV with Settings ▸
 /// KSPlayer ▸ "Enhance SD & 720p" on (Georgs, 26 Oct 2026: SD and 720p "definitely whack"). KSPlayer hands it each
 /// new frame just before showing it (`KSOptions.gfProcessFrame`, deps/KSPlayer/0002) and shows what it returns: the
-/// frame upscaled by the factor `GFEnhancePlan` picks, or nil for a frame left as it is (1080p and up).
+/// frame upscaled by the factor `GFEnhancePlan` picks, or nil for a frame left as it is (full HD and up).
 ///
 /// One shared upscaler: its model stays loaded from channel to channel (a load on every zap would slow it), and each
-/// stream's hook (`hook()`) starts that stream's counts afresh. Every frame of a stream comes back at one size, since a
-/// new size rebuilds KSPlayer's display layer: a frame the upscaler fails or is late with is scaled plainly to that
-/// size, and a stream it cannot keep up with goes back to its own frames for good (one rebuild; plain scaling all the
-/// way would look worse than none). How it went is in the diagnostic report ("Enhance: ...") every 30 seconds.
+/// stream's hook (`hook()`) starts that stream's counts afresh. The model loads on a queue of its own (Apple: a load can
+/// take longer than a frame, and the main thread shows frames too), and meanwhile frames are scaled plainly to the size
+/// the upscaler will make. Every frame of a stream comes back at that one size, since a new size rebuilds KSPlayer's
+/// display layer: a frame the upscaler is busy, late or failed with is scaled plainly, and a stream it cannot keep up
+/// with goes back to its own frames for good (one rebuild; plain scaling all the way would look no better than none).
+/// How it went is in the diagnostic report ("Enhance: ...") every 30 seconds.
 ///
 /// Only an Apple TV device build has it: the simulators' SDKs lack the upscaler, so they (and the iPhone, which never
 /// switches it on) get a stand-in that leaves every frame as it is. ci/device-typecheck.sh compiles the real one against
@@ -25,10 +27,31 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
     /// One frame size and what is done with it.
     private struct Plan {
         var width: Int, height: Int
-        /// The upscaler's session for this size, nil when frames of this size are passed through.
-        var configuration: VTLowLatencySuperResolutionScalerConfiguration?
-        /// The size frames come back at, and where they are made; nil when frames are passed through.
+        /// The size frames come back at, and where they are made; nil when frames of this size are passed through.
         var output: (width: Int, height: Int, pool: CVPixelBufferPool)?
+        /// The format the upscaler reads; frames in another are converted into `sourcePool` first.
+        var sourceFormat: OSType = 0
+        var sourcePool: CVPixelBufferPool?
+        /// The model for this size is loaded; until then frames are scaled plainly.
+        var ready = false
+        /// The model did not load: frames are passed through, until the next stream tries again.
+        var failed = false
+    }
+
+    /// The frame size and factor a model is loaded for.
+    private struct Model: Equatable {
+        let width: Int, height: Int
+        let factor: Float
+    }
+
+    /// What became of a frame: upscaled, scaled plainly as the upscaler was busy, late or failed (missed), or scaled
+    /// plainly while the model loads.
+    private enum Frame { case upscaled, missed, loading }
+
+    /// The upscaler's answer for one frame, read once it has signalled.
+    private final class Request: @unchecked Sendable {
+        let done = DispatchSemaphore(value: 0)
+        var error: (any Error)?
     }
 
     static let shared = GFEnhancer()
@@ -41,27 +64,37 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
 
     /// A frame the upscaler may take this long before plain scaling stands in for it (a 50 fps frame lasts 20 ms).
     private static let frameTimeout: DispatchTimeInterval = .milliseconds(40)
-    /// An average this slow over `windowFrames` frames, or this many failures, gives the stream its own frames back:
-    /// the picture would stutter otherwise. The first `warmUpFrames` after the model loads are not judged.
-    private static let slowAverage: Double = 0.014, failureLimit = 5, windowFrames = 50, warmUpFrames = 10
+    /// The stream gets its own frames back after `streakLimit` frames in a row missed (or made neither way), or two
+    /// windows of `windowFrames` in a row slower than `slowAverage` or with `missLimit` missed: the picture would
+    /// stutter otherwise. The first `warmUpFrames` after the model loads are not judged.
+    private static let streakLimit = 4, windowFrames = 50, missLimit = 5, warmUpFrames = 10
+    private static let slowAverage: Double = 0.014
     private static let reportEvery: CFTimeInterval = 30
 
     /// KSPlayer calls on the main thread, and from its decoding thread for a stream's first frame.
     private let lock = NSLock()
-    private lazy var processor = VTFrameProcessor()
+    private let processor = VTFrameProcessor()
+    /// Loads and unloads the model, away from the threads showing frames.
+    private let loader = DispatchQueue(label: "lv.georgefeder.lume.enhance", qos: .userInitiated)
+    /// The model loaded in `processor`; only `loader` touches it.
+    private var loaded: Model?
     private var plan: Plan?
-    private var sessionStarted = false
-    private var framesSinceStart = 0
+    /// Counts frame sizes, so a load another size overtook leaves the newer plan alone.
+    private var generation = 0
+    private var framesSinceReady = 0
+    /// A request the upscaler was late with and may still be working on: it gets one at a time.
+    private var pending: Request?
     private var transfer: VTPixelTransferSession?
-    /// Frames converted to a format the upscaler reads (KSPlayer's 8-bit 4:2:0 channels come as three planes).
-    private var sourcePool: CVPixelBufferPool?
     private var frameNumber: Int64 = 0
 
     private var stream: UUID?
     /// The stream it could not keep up with: its frames go through as they are.
     private var gaveUp = false
-    private var window = (frames: 0, seconds: 0.0, failures: 0)
-    private var report = (frames: 0, seconds: 0.0, worst: 0.0, plain: 0, since: CACurrentMediaTime())
+    /// Shown again when a frame can be made neither way: a frame of another size would rebuild the display layer.
+    private var lastShown: CVPixelBuffer?
+    private var streak = (missed: 0, lost: 0)
+    private var window = (frames: 0, seconds: 0.0, missed: 0, bad: 0)
+    private var report = (upscaled: 0, seconds: 0.0, worst: 0.0, plain: 0, since: CACurrentMediaTime())
 
     private init() {}
 
@@ -71,85 +104,133 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
         defer { lock.unlock() }
         if stream != self.stream { begin(stream) }
         let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
-        if plan?.width != width || plan?.height != height { configure(width: width, height: height) }
-        guard !gaveUp, let plan, let configuration = plan.configuration, let output = plan.output else { return nil }
-        let start = CACurrentMediaTime()
-        var result = upscaled(buffer, with: configuration, into: output.pool)
-        let upscaling = result != nil
-        if result == nil {
-            result = plainlyScaled(buffer, into: output.pool)
-            report.plain += 1
+        if plan?.width != width || plan?.height != height {
+            configure(width: width, height: height, format: CVPixelBufferGetPixelFormatType(buffer))
         }
-        guard let shown = result else { return nil }
-        Self.carryAttachments(from: buffer, to: shown)
-        note(seconds: CACurrentMediaTime() - start, upscaled: upscaling)
-        return shown
+        guard !gaveUp, let plan, !plan.failed, let output = plan.output else { return nil }
+        let start = CACurrentMediaTime()
+        var frame = Frame.loading
+        var shown: CVPixelBuffer?
+        if plan.ready {
+            shown = upscaled(buffer, plan: plan, into: output.pool)
+            frame = shown == nil ? .missed : .upscaled
+        }
+        if shown == nil { shown = plainlyScaled(buffer, into: output.pool) }
+        let lost = shown == nil
+        if let shown {
+            Self.carryAttachments(from: buffer, to: shown)
+            lastShown = shown
+        } else {
+            shown = lastShown
+        }
+        note(frame, lost: lost, seconds: CACurrentMediaTime() - start)
+        return gaveUp ? nil : shown
     }
 
-    // MARK: - Streams and frame sizes
+    // MARK: - Streams, frame sizes and the model
 
-    /// A new stream: its own counts, and another chance if the last one was given back its frames. The model and the
-    /// size it was set up for stay.
+    /// A new stream: its own counts, and another chance if the last one was given back its frames or the model did
+    /// not load. The model and the size it was set up for stay.
     private func begin(_ stream: UUID) {
         self.stream = stream
         gaveUp = false
-        window = (frames: 0, seconds: 0, failures: 0)
-        report = (frames: 0, seconds: 0, worst: 0, plain: 0, since: CACurrentMediaTime())
+        lastShown = nil
+        streak = (missed: 0, lost: 0)
+        window = (frames: 0, seconds: 0, missed: 0, bad: 0)
+        report = (upscaled: 0, seconds: 0, worst: 0, plain: 0, since: CACurrentMediaTime())
+        if plan?.failed == true { plan = nil }
     }
 
-    private func configure(width: Int, height: Int) {
-        if sessionStarted { processor.endSession() }
-        sessionStarted = false
-        sourcePool = nil
-        window = (frames: 0, seconds: 0, failures: 0)
+    /// A new frame size: its plan, and its model loaded on `loader` (unless it is loaded already).
+    private func configure(width: Int, height: Int, format: OSType) {
+        generation += 1
         plan = Plan(width: width, height: height)
+        pending = nil
+        lastShown = nil
+        streak = (missed: 0, lost: 0)
+        window = (frames: 0, seconds: 0, missed: 0, bad: 0)
         let size = "\(width)x\(height)"
+        guard GFEnhancePlan.isBelowFullHD(width: width, height: height) else { return }
         guard VTLowLatencySuperResolutionScalerConfiguration.isSupported else {
             return Self.log("\(size) left as it is: this device has no low-latency super resolution")
         }
         let factors = VTLowLatencySuperResolutionScalerConfiguration.supportedScaleFactors(frameWidth: width,
                                                                                            frameHeight: height)
         guard let factor = GFEnhancePlan.scale(width: width, height: height, supported: factors) else {
-            if height < GFEnhancePlan.fullHDLines {
-                let listed = factors.map { "\($0)" }.joined(separator: ", ")
-                Self.log("\(size) left as it is: no supported factor fits 4K (\(listed))")
-            }
-            return
+            let listed = factors.map { "\($0)" }.joined(separator: ", ")
+            return Self.log("\(size) left as it is: no supported factor fits 4K (\(listed))")
         }
         let target = GFEnhancePlan.scaled(width: width, height: height, by: factor)
         let configuration = VTLowLatencySuperResolutionScalerConfiguration(frameWidth: width, frameHeight: height,
                                                                            scaleFactor: factor)
-        guard let pool = Self.pool(configuration.destinationPixelBufferAttributes, width: target.width,
-                                   height: target.height)
-        else { return Self.log("\(size) left as it is: no buffers for \(target.width)x\(target.height)") }
-        // the model loads here, on the first frame of this size (Apple: it can take longer than a frame)
-        let loading = CACurrentMediaTime()
-        do {
-            try processor.startSession(configuration: configuration)
-        } catch {
-            return Self.log("\(size) left as it is: the upscaler did not start (\(error))")
+        let reads = configuration.supportedPixelFormats
+        let writes = Self.formats(in: configuration.destinationPixelBufferAttributes) ?? reads
+        guard let sourceFormat = GFEnhancePlan.format(for: format, from: reads),
+              let outputFormat = GFEnhancePlan.format(for: format, from: writes)
+        else {
+            return Self.log("\(size) left as it is: no 8-bit format (reads \(Self.names(reads)), "
+                + "writes \(Self.names(writes)))")
         }
-        sessionStarted = true
-        framesSinceStart = 0
-        plan?.configuration = configuration
+        let made = "\(target.width)x\(target.height)"
+        guard let pool = Self.pool(configuration.destinationPixelBufferAttributes, width: target.width,
+                                   height: target.height, format: outputFormat),
+              let sourcePool = Self.pool(configuration.sourcePixelBufferAttributes, width: width, height: height,
+                                         format: sourceFormat)
+        else { return Self.log("\(size) left as it is: no frames for \(made)") }
         plan?.output = (width: target.width, height: target.height, pool: pool)
-        sourcePool = Self.pool(configuration.sourcePixelBufferAttributes, width: width, height: height,
-                               format: configuration.supportedPixelFormats.first)
-        Self.log("\(size) to \(target.width)x\(target.height) (\(factor)x), ready in "
-            + Self.milliseconds(CACurrentMediaTime() - loading))
+        plan?.sourceFormat = sourceFormat
+        plan?.sourcePool = sourcePool
+        let description = "\(size) to \(made) (\(factor)x, \(GFEnhancePlan.name(of: sourceFormat)) to "
+            + "\(GFEnhancePlan.name(of: outputFormat)))"
+        let model = Model(width: width, height: height, factor: factor), ticket = generation
+        loader.async { [self] in load(configuration, model: model, ticket: ticket, description: description) }
     }
 
-    private static func pool(_ attributes: [String: Any], width: Int, height: Int, format: OSType? = nil)
+    /// On `loader`: loads `model` (unless it is loaded already) and readies the plan of `ticket`, if no other frame
+    /// size came meanwhile.
+    private func load(_ configuration: VTLowLatencySuperResolutionScalerConfiguration, model: Model, ticket: Int,
+                      description: String) {
+        guard lock.withLock({ ticket == generation }) else { return }
+        let start = CACurrentMediaTime()
+        let loads = loaded != model
+        if loads {
+            if loaded != nil { processor.endSession() }
+            loaded = nil
+            do {
+                try processor.startSession(configuration: configuration)
+            } catch {
+                lock.withLock {
+                    if ticket == generation { plan?.failed = true }
+                }
+                return Self.log("\(description): the upscaler did not start (\(error))")
+            }
+            loaded = model
+        }
+        lock.withLock {
+            guard ticket == generation else { return }
+            plan?.ready = true
+            framesSinceReady = 0
+        }
+        Self.log(loads ? "\(description), ready in \(Self.milliseconds(CACurrentMediaTime() - start))"
+            : "\(description), already loaded")
+    }
+
+    // MARK: - Frames
+
+    /// A pool of `width`×`height` frames in `format`, nil when it cannot make one (a pool can be made and still fail
+    /// at its first frame: found out here, not on every frame).
+    private static func pool(_ attributes: [String: Any], width: Int, height: Int, format: OSType)
         -> CVPixelBufferPool? {
         var settings = attributes
         settings[kCVPixelBufferWidthKey as String] = width
         settings[kCVPixelBufferHeightKey as String] = height
-        if let format { settings[kCVPixelBufferPixelFormatTypeKey as String] = format }
+        settings[kCVPixelBufferPixelFormatTypeKey as String] = format
         if settings[kCVPixelBufferIOSurfacePropertiesKey as String] == nil {
             settings[kCVPixelBufferIOSurfacePropertiesKey as String] = [String: Any]()
         }
         var pool: CVPixelBufferPool?
         CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, settings as CFDictionary, &pool)
+        guard let pool, buffer(from: pool) != nil else { return nil }
         return pool
     }
 
@@ -160,19 +241,30 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
         return buffer
     }
 
-    // MARK: - Per frame
-
-    /// Holds what the upscaler's completion handler reports, read once it has signalled.
-    private final class Outcome: @unchecked Sendable {
-        var error: (any Error)?
+    /// The pixel formats `attributes` ask for, if they name any.
+    private static func formats(in attributes: [String: Any]) -> [OSType]? {
+        switch attributes[kCVPixelBufferPixelFormatTypeKey as String] {
+        case let format as NSNumber: [format.uint32Value]
+        case let formats as [NSNumber]: formats.map(\.uint32Value)
+        default: nil
+        }
     }
 
-    private func upscaled(_ buffer: CVPixelBuffer, with configuration: VTLowLatencySuperResolutionScalerConfiguration,
-                          into pool: CVPixelBufferPool) -> CVPixelBuffer? {
-        let readable = configuration.supportedPixelFormats.contains(CVPixelBufferGetPixelFormatType(buffer))
-        guard let source = readable ? buffer : converted(buffer), let destination = Self.buffer(from: pool) else {
-            return nil
+    private static func names(_ formats: [OSType]) -> String {
+        formats.map { GFEnhancePlan.name(of: $0) }.joined(separator: ", ")
+    }
+
+    /// `buffer` upscaled into a frame from `pool`, or nil when the upscaler is busy, late or failed.
+    private func upscaled(_ buffer: CVPixelBuffer, plan: Plan, into pool: CVPixelBufferPool) -> CVPixelBuffer? {
+        // one request at a time: while the upscaler is still on a frame it was late with, frames are scaled plainly
+        if let pending {
+            guard pending.done.wait(timeout: .now()) == .success else { return nil }
+            self.pending = nil
         }
+        let readable = CVPixelBufferGetPixelFormatType(buffer) == plan.sourceFormat
+        guard let source = readable ? buffer : converted(buffer, into: plan.sourcePool),
+              let destination = Self.buffer(from: pool)
+        else { return nil }
         frameNumber += 1
         let time = CMTime(value: frameNumber, timescale: 600)
         guard let sourceFrame = VTFrameProcessorFrame(buffer: source, presentationTimeStamp: time),
@@ -180,20 +272,23 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
         else { return nil }
         let parameters = VTLowLatencySuperResolutionScalerParameters(sourceFrame: sourceFrame,
                                                                     destinationFrame: destinationFrame)
-        let done = DispatchSemaphore(value: 0), outcome = Outcome()
+        let request = Request()
         processor.process(parameters: parameters) { _, error in
-            outcome.error = error
-            done.signal()
+            request.error = error
+            request.done.signal()
         }
-        // a late frame is dropped from the upscaler (it may still write into `destination`, which nothing shows: the
-        // frame holds on to it, so the pool cannot hand it out again meanwhile)
-        guard done.wait(timeout: .now() + Self.frameTimeout) == .success, outcome.error == nil else { return nil }
-        return destination
+        // a late frame is left to the upscaler, which holds on to its buffers (the pool cannot hand them out
+        // meanwhile), and nothing new is asked of it until it is done
+        guard request.done.wait(timeout: .now() + Self.frameTimeout) == .success else {
+            pending = request
+            return nil
+        }
+        return request.error == nil ? destination : nil
     }
 
-    /// `buffer` in a format the upscaler reads, at its own size.
-    private func converted(_ buffer: CVPixelBuffer) -> CVPixelBuffer? {
-        guard let target = Self.buffer(from: sourcePool), pixelTransfer(buffer, to: target) else { return nil }
+    /// `buffer` in the format the upscaler reads, at its own size.
+    private func converted(_ buffer: CVPixelBuffer, into pool: CVPixelBufferPool?) -> CVPixelBuffer? {
+        guard let target = Self.buffer(from: pool), pixelTransfer(buffer, to: target) else { return nil }
         return target
     }
 
@@ -235,36 +330,57 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
 
     // MARK: - How it is going
 
-    private func note(seconds: Double, upscaled: Bool) {
-        report.frames += 1
-        report.seconds += seconds
-        report.worst = max(report.worst, seconds)
-        framesSinceStart += 1
-        if framesSinceStart > Self.warmUpFrames {
-            if upscaled {
-                window.frames += 1
-                window.seconds += seconds
-            } else {
-                window.failures += 1
-            }
+    private func note(_ frame: Frame, lost: Bool, seconds: Double) {
+        if frame == .upscaled {
+            report.upscaled += 1
+            report.seconds += seconds
+            report.worst = max(report.worst, seconds)
+        } else {
+            report.plain += 1
         }
-        if window.frames + window.failures >= Self.windowFrames {
-            let average = window.frames > 0 ? window.seconds / Double(window.frames) : 0
-            if average > Self.slowAverage || window.failures >= Self.failureLimit {
-                gaveUp = true
-                Self.log("this channel goes back to its own frames: \(Self.milliseconds(average)) a frame on "
-                    + "average, \(window.failures) failed of the last \(window.frames + window.failures)")
-            }
-            window = (frames: 0, seconds: 0, failures: 0)
-        }
+        judge(frame, lost: lost, seconds: seconds)
         let now = CACurrentMediaTime()
-        guard now - report.since >= Self.reportEvery, report.frames > 0, let plan, let output = plan.output else {
-            return
+        guard now - report.since >= Self.reportEvery, let plan, let output = plan.output else { return }
+        let average = report.upscaled > 0 ? report.seconds / Double(report.upscaled) : 0
+        Self.log("\(plan.width)x\(plan.height) to \(output.width)x\(output.height): \(report.upscaled) frames "
+            + "upscaled, \(Self.milliseconds(average)) average, \(Self.milliseconds(report.worst)) worst, "
+            + "\(report.plain) scaled plainly")
+        report = (upscaled: 0, seconds: 0, worst: 0, plain: 0, since: now)
+    }
+
+    /// Gives the stream its own frames back when the upscaler cannot keep up, or frames cannot be made at all.
+    private func judge(_ frame: Frame, lost: Bool, seconds: Double) {
+        streak.lost = lost ? streak.lost + 1 : 0
+        if streak.lost >= Self.streakLimit {
+            return giveUp("\(streak.lost) frames in a row could be made neither way")
         }
-        Self.log("\(plan.width)x\(plan.height) to \(output.width)x\(output.height): \(report.frames) frames, "
-            + "\(Self.milliseconds(report.seconds / Double(report.frames))) average, "
-            + "\(Self.milliseconds(report.worst)) worst, \(report.plain) scaled plainly")
-        report = (frames: 0, seconds: 0, worst: 0, plain: 0, since: now)
+        guard frame != .loading else { return }
+        framesSinceReady += 1
+        guard framesSinceReady > Self.warmUpFrames else { return }
+        if frame == .upscaled {
+            streak.missed = 0
+            window.frames += 1
+            window.seconds += seconds
+        } else {
+            streak.missed += 1
+            window.missed += 1
+        }
+        if streak.missed >= Self.streakLimit {
+            return giveUp("the upscaler missed \(streak.missed) frames in a row")
+        }
+        guard window.frames + window.missed >= Self.windowFrames else { return }
+        let average = window.frames > 0 ? window.seconds / Double(window.frames) : 0
+        let slow = average > Self.slowAverage || window.missed >= Self.missLimit
+        let summary = "\(Self.milliseconds(average)) a frame on average, \(window.missed) missed of the last "
+            + "\(window.frames + window.missed)"
+        window = (frames: 0, seconds: 0, missed: 0, bad: slow ? window.bad + 1 : 0)
+        if window.bad >= 2 { giveUp(summary + ", twice running") }
+    }
+
+    private func giveUp(_ reason: String) {
+        gaveUp = true
+        lastShown = nil
+        Self.log("this channel goes back to its own frames: " + reason)
     }
 
     private static func milliseconds(_ seconds: Double) -> String {
