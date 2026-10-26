@@ -63,6 +63,7 @@ enum GFSettingsCatalog {
         DownloadManager.autoDeleteKey, DownloadManager.maxConcurrentKey, PlaylistSelectionStore.key,
         ProfileSettings.askOnStartupKey, DebugLogSettings.enabledKey, "tv.quickSwitch.hintShown.v1",
         RecordingServerSetup.disclosureAcknowledgedKey,
-        LiveTVRailSettings.showsFavoritesKey, LiveTVRailSettings.showsRecentlyWatchedKey
+        LiveTVRailSettings.showsFavoritesKey, LiveTVRailSettings.showsRecentlyWatchedKey,
+        GFEnhancePlan.settingKey // an experiment, switched on one Apple TV at a time
     ]
 }

@@ -55,5 +55,7 @@ check "every TestFlight leg waits for production's iCloud layout" \
   'y=YAML.load_file(ARGV[0]); r=y["jobs"]["icloud-gate"]["steps"].map { |s| s["run"].to_s }.join; exit(Array(y["jobs"]["build"]["needs"]).include?("icloud-gate") && r.include?("schema-check.py") ? 0 : 1)'
 check "the app tests stop on a Lume setting without a sync group (after our sources, before the tests)" \
   'y=YAML.load_file(ARGV[0]); s=y["jobs"]["app"]["steps"]; f=->(n) { s.index { |x| x["run"].to_s.include?(n) } }; i, t, a = f["add-sources.sh"], f["settings-tripwire.sh gf Lume"], f["run-app-tests.sh"]; exit(i && t && a && i < t && t < a ? 0 : 1)' "$WT"
+check "the test run compiles the real upscaler for Apple TV (the simulators build only its stand-in)" \
+  'y=YAML.load_file(ARGV[0]); exit(y["jobs"]["core"]["steps"].any? { |x| x["run"].to_s.include?("device-typecheck.sh") } ? 0 : 1)' "$WT"
 [ "$fails" -eq 0 ] && echo "test_workflows: all passed" || echo "test_workflows: $fails failed"
 exit "$fails"

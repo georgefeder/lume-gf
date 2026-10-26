@@ -1,0 +1,54 @@
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Adoption.swift b/Lume/Views/Player/KSPlayerEngineView+Adoption.swift
+index 7484f46..e85b570 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Adoption.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Adoption.swift
+@@ -58,6 +58,11 @@ extension KSPlayerEngineView {
+             // The preview held the TV's display mode back; full screen is
+             // where the session matches it.
+             (coordinator.playerLayer?.options as? LumeKSOptions)?.beginMatchingDisplayCriteria()
++            // Lume GF: the preview was set up without the upscaler (embedded); full screen adds it (GFEnhancer)
++            if UserDefaults.standard.bool(forKey: GFEnhancePlan.settingKey), #available(tvOS 26.0, *),
++               let options = coordinator.playerLayer?.options, options.gfProcessFrame == nil {
++                options.gfProcessFrame = GFEnhancer.hook()
++            }
+             hasSeenReadyToPlay = true
+             let state = coordinator.state
+             isPlaying = state == .bufferFinished
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Options.swift b/Lume/Views/Player/KSPlayerEngineView+Options.swift
+index b06a008..dbb0cbe 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Options.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Options.swift
+@@ -190,6 +190,12 @@ enum KSPlayerOptionsFactory {
+         #if os(macOS)
+             options.automaticWindowResize = false
+         #endif
++        // Lume GF: Apple's super resolution on SD and 720p channels, full screen on Apple TV (GFEnhancer)
++        #if os(tvOS)
++            if !isEmbedded, UserDefaults.standard.bool(forKey: GFEnhancePlan.settingKey), #available(tvOS 26.0, *) {
++                options.gfProcessFrame = GFEnhancer.hook()
++            }
++        #endif
+         return options
+     }
+ }
+diff --git a/Lume/Views/Settings/PlayerEngineSettingsViews.swift b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
+index f512138..3598ed6 100644
+--- a/Lume/Views/Settings/PlayerEngineSettingsViews.swift
++++ b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
+@@ -336,6 +336,8 @@ import SwiftUI
+         @AppStorage(PlayerSettings.KSPlayer.liveBufferKey) private var liveBuffer = PlayerSettings.KSPlayer.liveBufferDefault
+         @AppStorage(PlayerSettings.KSPlayer.vodBufferKey) private var vodBuffer = PlayerSettings.KSPlayer.vodBufferDefault
+         @AppStorage(PlayerSettings.KSPlayer.maxBufferKey) private var maxBuffer = PlayerSettings.KSPlayer.maxBufferDefault
++        /// Lume GF: Apple's super resolution on SD and 720p channels (GFEnhancer), off until switched on.
++        @AppStorage(GFEnhancePlan.settingKey) private var gfEnhance = false
+ 
+         @State private var showResetConfirmation = false
+ 
+@@ -352,6 +354,7 @@ import SwiftUI
+                     TVOptionToggleRow(title: "Codec Low Delay", isOn: $codecLowDelay)
+                     TVOptionToggleRow(title: "Auto Deinterlace", isOn: $autoDeinterlace)
+                     TVOptionToggleRow(title: "Auto Rotate", isOn: $autoRotate)
++                    TVOptionToggleRow(title: "Enhance SD & 720p", isOn: $gfEnhance) // Lume GF (GFEnhancer)
+                 }
+ 
+                 VStack(alignment: .leading, spacing: 8) {
