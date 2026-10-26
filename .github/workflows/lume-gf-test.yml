@@ -50,6 +50,9 @@ jobs:
       - name: swift test
         working-directory: guide
         run: swift test
+      # the simulator builds compile only the upscaler's stand-in (their SDKs lack Apple's super resolution)
+      - name: Upscaler compiles for Apple TV
+        run: sh ci/device-typecheck.sh
       - name: iCloud layout is current
         run: |
           swift run --package-path guide gf-schema > "$RUNNER_TEMP/schema.ckdb"

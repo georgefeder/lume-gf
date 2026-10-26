@@ -15,7 +15,12 @@ import VideoToolbox
 /// new size rebuilds KSPlayer's display layer: a frame the upscaler fails or is late with is scaled plainly to that
 /// size, and a stream it cannot keep up with goes back to its own frames for good (one rebuild; plain scaling all the
 /// way would look worse than none). How it went is in the diagnostic report ("Enhance: ...") every 30 seconds.
-@available(iOS 26.0, tvOS 26.0, macOS 26.0, *)
+///
+/// Only an Apple TV device build has it: the simulators' SDKs lack the upscaler, so they (and the iPhone, which never
+/// switches it on) get a stand-in that leaves every frame as it is. ci/device-typecheck.sh compiles the real one against
+/// the Apple TV SDK on every test run, since no other CI build does.
+#if os(tvOS) && !targetEnvironment(simulator)
+@available(tvOS 26.0, *)
 nonisolated final class GFEnhancer: @unchecked Sendable {
     /// One frame size and what is done with it.
     private struct Plan {
@@ -270,3 +275,11 @@ nonisolated final class GFEnhancer: @unchecked Sendable {
         Logger.player.info("\("Enhance: " + text, privacy: .public)")
     }
 }
+#else
+nonisolated enum GFEnhancer {
+    /// Every frame shown as it is.
+    static func hook() -> (CVPixelBuffer) -> CVPixelBuffer? {
+        { _ in nil }
+    }
+}
+#endif
