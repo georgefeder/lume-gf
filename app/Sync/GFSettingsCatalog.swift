@@ -21,7 +21,9 @@ enum GFSettingsCatalog {
         SortStorageKey.movieContent, SortStorageKey.seriesCategories, SortStorageKey.seriesContent,
         SyncFrequency.storageKey, SyncFrequency.epgStorageKey, GuideSettings.followServerKey, GFChannelNames.settingKey,
         SportsSyncService.tabEnabledKey, SportsSyncService.hideScoresKey, RecommendationSettings.enabledKey,
-        RecommendationSettings.manualRecalculationKey, SearchSettings.searchAllPlaylistsKey
+        RecommendationSettings.manualRecalculationKey, SearchSettings.searchAllPlaylistsKey,
+        // Lume 2.8.0
+        PlayerSettings.Playback.chooseSourceBeforePlayingKey, PlayerSettings.Playback.liveQualitySwitchKey
     ]
 
     static let perKind: [String] = [
