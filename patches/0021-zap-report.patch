@@ -1,0 +1,14 @@
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Options.swift b/Lume/Views/Player/KSPlayerEngineView+Options.swift
+index dbb0cbe..c06d2b6 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Options.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Options.swift
+@@ -149,6 +149,9 @@ enum KSPlayerOptionsFactory {
+         // so setting it here takes effect for this playback.
+         KSOptions.useSystemHTTPProxy = settings.systemProxy
+         KSOptions.firstPlayerType = settings.primaryEngine == .ffmpeg ? KSMEPlayer.self : KSAVPlayer.self
++        // Lume GF: each step of a channel change, at the time it happened, in the diagnostic report ("Zap: ...";
++        // deps/KSPlayer/0003)
++        KSOptions.gfZapReport = { Logger.player.info("Zap: \($0, privacy: .public)") }
+ 
+         let options = LumeKSOptions(
+             preferredAudioLanguages: PlayerLanguageOptions.load().preferredAudioLanguages,
