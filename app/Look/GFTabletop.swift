@@ -313,11 +313,11 @@ private struct GFHingeMoves: ViewModifier {
 
 /// Under the split player's crease: a glow of the picture's colours, the way Netflix draws one under its controls. No
 /// Apple API draws it (Apple's iPhone Duo documentation, sessions and frameworks have nothing for it), so this is
-/// Video.js's recreation of Netflix's, one for one with SwiftUI's own modifiers
-/// (videojs.org/blog/iphone-duo-web-development: a tiny copy of each frame, `scale: 1 -1`, `filter: blur(24px)`,
-/// `opacity: 0.35`, a mask fading to transparent 80% of the way from the fold). The crease above stays black, and the
-/// glow's length follows the hinge by SwiftUI's spring (Georgs, 28 Oct, after builds 74 and 75's hand-made mirror:
-/// "build it with documentation that has already proven to work ... something a bit more robust").
+/// Video.js's recreation of Netflix's (videojs.org/blog/iphone-duo-web-development: a tiny copy of each frame,
+/// `scale: 1 -1`, `filter: blur(24px)`, `opacity: 0.35`, a mask fading to transparent 80% of the way from the fold),
+/// done on the tiny picture and shown by one Core Animation layer (`GFGlowView`). The crease above stays black, and the
+/// glow's length follows the hinge (Georgs, 28 Oct, after builds 74 and 75's hand-made mirror: "build it with
+/// documentation that has already proven to work ... something a bit more robust").
 struct GFVideoReflection: View {
     let reflection: GFReflection
     /// The picture above and this view, in the whole screen's coordinates.
@@ -330,6 +330,7 @@ struct GFVideoReflection: View {
                 #if canImport(UIKit)
                     // the picture's place across this view, and its size
                     GFGlowLayer(reflection: reflection, picture: picture.offsetBy(dx: -area.minX, dy: 0))
+                        .allowsHitTesting(false)
                 #endif
             }
             .clipped()
@@ -410,10 +411,10 @@ struct GFVideoReflection: View {
                 stretch = nil // back on screen, it takes the hinge's length at once
                 return
             }
-            let link = CADisplayLink(target: GFGlowTick(self), selector: #selector(GFGlowTick.tick(_:)))
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
-            link.add(to: .main, forMode: .common)
-            self.link = link
+            let fresh = CADisplayLink(target: GFGlowTick(self), selector: #selector(GFGlowTick.tick(_:)))
+            fresh.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+            fresh.add(to: .main, forMode: .common)
+            link = fresh
         }
 
         /// Each refresh: the newest picture, and the stretch a step nearer the hinge's.
@@ -430,6 +431,7 @@ struct GFVideoReflection: View {
                     let fade = CATransition()
                     fade.type = .fade
                     fade.duration = 0.8
+                    fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                     glow.add(fade, forKey: "still")
                 }
                 shown = image
@@ -441,7 +443,8 @@ struct GFVideoReflection: View {
             let target = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
             let elapsed = lastTick.map { min(now - $0, 0.1) } ?? 0
             lastTick = now
-            let length = stretch.map { $0 + (target - $0) * CGFloat(1 - exp(-Self.followRate * elapsed)) } ?? target
+            var length = stretch.map { $0 + (target - $0) * CGFloat(1 - exp(-Self.followRate * elapsed)) } ?? target
+            if abs(target - length) < 0.001 { length = target } // settled: no more steps too small to see
             guard length != stretch else { return }
             stretch = length
             glow.transform = CATransform3DMakeScale(1, length / GFTabletopLayout.longestStretch, 1)
