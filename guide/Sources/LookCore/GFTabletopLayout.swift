@@ -36,6 +36,9 @@ nonisolated enum GFTabletopLayout {
         return CGRect(x: video.midX - width / 2, y: video.maxY - height, width: width, height: height)
     }
 
+    /// The longest the reflection gets, leaning far forward: the glow is drawn this long and stretched to the hinge's.
+    static let longestStretch: CGFloat = 1.6
+
     /// How long the reflection below the fold is, as a share of the picture's height, at a hinge angle in degrees (0
     /// closed, 180 flat; nil unknown: 1). What a mirror lying where the lower half lies would show of the upper half to
     /// someone in front of the phone (eye 5 heights of the upper half in front of the fold and 3.75 above the table):
@@ -46,7 +49,7 @@ nonisolated enum GFTabletopLayout {
         let angle = hingeDegrees * .pi / 180
         let eyeOut = 5.0, eyeUp = 3.75
         let reach = eyeOut + eyeUp * (cos(angle) - eyeOut) / (eyeUp + sin(angle))
-        return CGFloat(min(1.6, max(0.15, reach)))
+        return min(longestStretch, max(0.15, CGFloat(reach)))
     }
 
     /// A pretend fold across the middle, for test builds' screenshots (no simulator command folds an iPhone Duo).
