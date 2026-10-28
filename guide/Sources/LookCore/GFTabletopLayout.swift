@@ -41,12 +41,15 @@ nonisolated enum GFTabletopLayout {
     /// someone in front of the phone (eye 5 heights of the upper half in front of the fold and 3.75 above the table):
     /// about as long as the picture when it stands upright, longer as it leans forward, shorter as it opens, gone near
     /// flat (Georgs, 24 Oct: Netflix's "stretches depending on the hinge, constantly reacts").
+    /// The longest the reflection gets, leaning far forward: the glow is drawn this long and stretched to the hinge's.
+    static let longestStretch: CGFloat = 1.6
+
     static func reflectionStretch(hingeDegrees: Double?) -> CGFloat {
         guard let hingeDegrees else { return 1 }
         let angle = hingeDegrees * .pi / 180
         let eyeOut = 5.0, eyeUp = 3.75
         let reach = eyeOut + eyeUp * (cos(angle) - eyeOut) / (eyeUp + sin(angle))
-        return CGFloat(min(1.6, max(0.15, reach)))
+        return min(longestStretch, max(0.15, CGFloat(reach)))
     }
 
     /// A pretend fold across the middle, for test builds' screenshots (no simulator command folds an iPhone Duo).

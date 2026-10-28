@@ -1,3 +1,4 @@
+import Accelerate
 import CoreGraphics
 import CoreVideo
 import Foundation
@@ -150,7 +151,7 @@ nonisolated struct GFTabletopFrames: Equatable {
 /// player, whose open menus would flicker and drop taps): the player's frames live when they are pixel buffers, as from
 /// hardware decoding and 8-bit software decoding (Georgs, 24 Oct: once a second "is like 2 fps", Netflix's moves with
 /// the picture); otherwise (10-bit software decoding) a picture about once a second, each dissolving into the next.
-/// The glow (`GFGlow`) reads what it shows 30 times a second; only the picture's shape redraws the player.
+/// The glow (`GFGlow`) reads what it shows 60 times a second; only the picture's shape redraws the player.
 @MainActor
 @Observable
 final class GFReflection {
@@ -188,21 +189,6 @@ final class GFReflection {
         return CGFloat(frame.width) * pixel.width / (CGFloat(frame.height) * pixel.height)
     }
 
-    /// The width a picture is shrunk to for the glow: it is blurred into one anyway (Video.js: "Same shape as the
-    /// video, just tiny. The blur hides the low resolution.").
-    nonisolated static let width = 48
-
-    nonisolated static func shrunk(_ image: CGImage) -> CGImage? {
-        guard image.width > width else { return image }
-        let height = max(1, image.height * width / image.width)
-        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-        else { return nil }
-        context.interpolationQuality = .low
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return context.makeImage()
-    }
 }
 
 extension View {
@@ -250,7 +236,9 @@ extension View {
 
 private struct GFFoldReader: ViewModifier {
     @Binding var frames: GFTabletopFrames?
-    /// Bumped by every hinge change, so the fold is read again even when the screen's size stays the same.
+    /// Bumped when the hinge's status changes (closed, partly open, flat), so the fold is read again even when the
+    /// screen's size stays the same. Not by its angle: that reread the player's layout on every degree and the picture
+    /// stuttered while the hinge moved (Georgs, 28 Oct, on build 81).
     @State private var hingeMoves = 0
 
     func body(content: Content) -> some View {
@@ -284,7 +272,7 @@ private struct GFFoldReader: ViewModifier {
     }
 }
 
-/// Counts the hinge's changes and passes on its angle (iOS 27.1, builds with Xcode 27.1).
+/// Counts the hinge's status changes and passes on its angle (iOS 27.1, builds with Xcode 27.1).
 private struct GFHingeMoves: ViewModifier {
     @Binding var count: Int
 
@@ -293,10 +281,10 @@ private struct GFHingeMoves: ViewModifier {
         #if os(iOS) && GF_FOLD_API
             if #available(iOS 27.1, *) {
                 content.onHingeChange { old, new in
-                    count &+= 1
                     GFTabletop.shared.hingeMoved(degrees: new.hinge?.angle.degrees,
                                                  partlyOpen: new.hinge?.status == .partiallyOpen)
                     if old.hinge?.status != new.hinge?.status {
+                        count &+= 1
                         let status = new.hinge.map { hinge -> String in
                             let state = hinge.status == .partiallyOpen ? "partly open"
                                 : hinge.status == .fullyOpen ? "fully open"
@@ -340,29 +328,32 @@ struct GFVideoReflection: View {
     }
 }
 
-/// The glow, redrawn 30 times a second from the player's newest frame (or its still, dissolving into the next).
+/// The glow, redrawn 60 times a second from the player's newest frame (or its still, dissolving into the next). Its
+/// picture comes blurred (`GFGlowImage`), so the screen only scales it up; the hinge only stretches it (a transform,
+/// redrawing nothing): blurring the whole panel on every frame, and laying it out again at every degree, made the
+/// picture above stutter and the glow lag while the hinge moved (Georgs, 28 Oct, on build 81).
 private struct GFGlow: View {
     let reflection: GFReflection
     /// The picture's size: the glow is as wide, and as long as the hinge makes it.
     let size: CGSize
     @State private var shrinker = GFFrameShrinker()
 
-    /// Video.js's numbers for Netflix's glow: its blur, its strength, and where its fade from the fold ends.
-    private static let blur: CGFloat = 24, strength: Double = 0.35, fadeEnd: CGFloat = 0.8
+    /// Video.js's numbers for Netflix's glow: its strength, and where its fade from the fold ends.
+    private static let strength: Double = 0.35, fadeEnd: CGFloat = 0.8
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let live = reflection.isLive
             let image = live ? shrinker.image(for: reflection.currentFrame()?.cvPixelBuffer) : reflection.image
             let stretch = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
             let still = live ? -1 : reflection.number
-            ZStack {
-                if let image {
+            if let image, let place = GFGlowPlace(image: image, picture: size, fadeEnd: Self.fadeEnd) {
+                ZStack {
                     // a still fades in over the last one, which stays whole until it is covered (both fading
                     // at once would dim the glow halfway through)
                     Image(decorative: image, scale: 1)
                         .resizable()
-                        .interpolation(.medium)
+                        .interpolation(.high)
                         .id(still)
                         .zIndex(Double(still))
                         .transition(AnyTransition.asymmetric(
@@ -370,27 +361,105 @@ private struct GFGlow: View {
                             removal: AnyTransition.opacity.animation(.linear(duration: 0.01).delay(0.8))
                         ))
                 }
+                .animation(.easeInOut(duration: 0.8), value: still)
+                .frame(width: place.size.width, height: place.size.height)
+                .mask {
+                    LinearGradient(stops: [Gradient.Stop(color: .black, location: place.contentTop),
+                                           Gradient.Stop(color: .clear, location: place.fadeEnd)],
+                                   startPoint: .top, endPoint: .bottom) // fading away from the fold
+                }
+                .opacity(Self.strength)
+                .scaleEffect(x: 1, y: stretch / GFTabletopLayout.longestStretch,
+                             anchor: UnitPoint(x: 0.5, y: place.contentTop)) // as long as the hinge makes it
+                .animation(.spring(duration: 0.1, bounce: 0), value: stretch)
+                .offset(place.offset)
             }
-            .animation(.easeInOut(duration: 0.8), value: still)
-            .frame(width: size.width, height: size.height * stretch)
-            .scaleEffect(x: 1, y: -1) // the mirror
-            .blur(radius: Self.blur) // the glow
-            .mask {
-                LinearGradient(stops: [Gradient.Stop(color: .black, location: 0),
-                                       Gradient.Stop(color: .clear, location: Self.fadeEnd)],
-                               startPoint: .top, endPoint: .bottom) // fading away from the fold
-            }
-            .opacity(Self.strength)
-            .animation(.spring(duration: 0.15, bounce: 0), value: stretch) // following the hinge
         }
         .allowsHitTesting(false)
     }
 }
 
-/// The player's frames shrunk to `GFReflection.width` pixels across for the glow (it is blurred anyway) by
-/// VideoToolbox, which reads every format KSPlayer decodes into (three-plane 4:2:0 and 10-bit among them) and gives HDR
-/// the usual colours, on a queue of its own: the main thread shows the picture and runs the controls, and never waits
-/// for it.
+/// Where the glow's picture goes under the picture above, as long as the longest stretch (the hinge's stretch
+/// shortens it): its content across the picture's width from the top of the panel, its blurred border round it.
+private struct GFGlowPlace {
+    let size: CGSize, offset: CGSize
+    /// Where in the image (top 0, bottom 1) its content starts, and where the fade ends.
+    let contentTop: CGFloat, fadeEnd: CGFloat
+
+    init?(image: CGImage, picture: CGSize, fadeEnd: CGFloat) {
+        let pad = CGFloat(GFGlowImage.padding)
+        let content = CGSize(width: CGFloat(image.width) - 2 * pad, height: CGFloat(image.height) - 2 * pad)
+        guard content.width > 0, content.height > 0, picture.width > 0, picture.height > 0 else { return nil }
+        let across = picture.width / content.width // points a pixel
+        let down = picture.height * GFTabletopLayout.longestStretch / content.height
+        size = CGSize(width: CGFloat(image.width) * across, height: CGFloat(image.height) * down)
+        offset = CGSize(width: -pad * across, height: -pad * down) // the content's top at the top of the panel
+        contentTop = pad / CGFloat(image.height)
+        self.fadeEnd = contentTop + fadeEnd * content.height / CGFloat(image.height)
+    }
+}
+
+/// The glow's picture: a frame made tiny, upside down (its bottom row first, by the fold), and blurred with a clear
+/// border round it so its edges fade too, as a blurred element's do on the web (Video.js's `filter: blur(24px)`), by
+/// Accelerate on the tiny picture: the screen then draws the glow with no blur of its own.
+nonisolated enum GFGlowImage {
+    /// Pixels across the picture: "Same shape as the video, just tiny. The blur hides the low resolution." (Video.js)
+    static let width = 64
+    /// The clear border, as far as the blur reaches: a tent 2 x 5 + 1 pixels wide spreads a 64-pixel picture about as
+    /// far as a 24-point blur spreads it across the Duo's panel.
+    static let padding = 5
+
+    /// The glow's picture from a tiny frame's BGRA pixels.
+    static func make(bgra base: UnsafeRawPointer, width: Int, height: Int, rowBytes: Int) -> CGImage? {
+        guard width > 0, height > 0 else { return nil }
+        let pad = padding, outWidth = width + 2 * pad, outHeight = height + 2 * pad, outRow = outWidth * 4
+        var bordered = [UInt8](repeating: 0, count: outRow * outHeight)
+        bordered.withUnsafeMutableBytes { target in
+            guard let start = target.baseAddress else { return }
+            for row in 0 ..< height { // upside down, inside the border
+                memcpy(start + (pad + height - 1 - row) * outRow + pad * 4, base + row * rowBytes, width * 4)
+            }
+        }
+        var blurred = [UInt8](repeating: 0, count: bordered.count)
+        let kernel = UInt32(2 * pad + 1), clear: [UInt8] = [0, 0, 0, 0]
+        let status = bordered.withUnsafeMutableBytes { source in
+            blurred.withUnsafeMutableBytes { target in
+                var input = vImage_Buffer(data: source.baseAddress, height: vImagePixelCount(outHeight),
+                                          width: vImagePixelCount(outWidth), rowBytes: outRow)
+                var output = vImage_Buffer(data: target.baseAddress, height: vImagePixelCount(outHeight),
+                                           width: vImagePixelCount(outWidth), rowBytes: outRow)
+                return vImageTentConvolve_ARGB8888(&input, &output, nil, 0, 0, kernel, kernel, clear,
+                                                   vImage_Flags(kvImageBackgroundColorFill))
+            }
+        }
+        guard status == kvImageNoError, let provider = CGDataProvider(data: Data(blurred) as CFData) else { return nil }
+        return CGImage(width: outWidth, height: outHeight, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: outRow,
+                       space: sRGB, bitmapInfo: bgra, provider: provider, decode: nil, shouldInterpolate: true,
+                       intent: .defaultIntent)
+    }
+
+    /// The glow's picture from a still (10-bit software decoding's).
+    static func make(from image: CGImage) -> CGImage? {
+        guard image.width > 0, image.height > 0 else { return nil }
+        let height = max(2, image.height * width / image.width)
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: sRGB, bitmapInfo: bgra.rawValue)
+        else { return nil }
+        context.interpolationQuality = .medium
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pixels = context.data else { return nil }
+        return make(bgra: pixels, width: width, height: height, rowBytes: context.bytesPerRow)
+    }
+
+    /// BGRA in memory, alpha premultiplied (opaque frames, a clear border).
+    private static let bgra = CGBitmapInfo(rawValue: CGBitmapInfo.byteOrder32Little.rawValue
+        | CGImageAlphaInfo.premultipliedFirst.rawValue)
+    private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+}
+
+/// The player's frames made into the glow's picture (`GFGlowImage`), shrunk first by VideoToolbox, which reads every
+/// format KSPlayer decodes into (three-plane 4:2:0 and 10-bit among them) and gives HDR the usual colours, on a queue
+/// of its own: the main thread shows the picture and runs the controls, and never waits for it.
 /// The glow shows the newest image made, a tick behind the picture at most.
 nonisolated final class GFFrameShrinker: @unchecked Sendable {
     /// A frame handed to the queue.
@@ -455,7 +524,7 @@ nonisolated final class GFFrameShrinker: @unchecked Sendable {
     private func makeImage(from frame: CVPixelBuffer) -> CGImage? {
         let sourceWidth = CVPixelBufferGetWidth(frame), sourceHeight = CVPixelBufferGetHeight(frame)
         guard sourceWidth > 0, sourceHeight > 0 else { return nil }
-        let width = GFReflection.width, height = max(2, sourceHeight * width / sourceWidth & ~1)
+        let width = GFGlowImage.width, height = max(2, sourceHeight * width / sourceWidth & ~1)
         if pool?.width != width || pool?.height != height {
             let attributes: [CFString: Any] = [
                 kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
@@ -486,8 +555,13 @@ nonisolated final class GFFrameShrinker: @unchecked Sendable {
             status = VTPixelTransferSessionTransferImage(transfer, from: frame, to: small)
         }
         var image: CGImage?
-        if status == noErr, let small {
-            VTCreateCGImageFromCVPixelBuffer(small, options: nil, imageOut: &image)
+        if status == noErr, let small, CVPixelBufferLockBaseAddress(small, .readOnly) == kCVReturnSuccess {
+            if let pixels = CVPixelBufferGetBaseAddress(small) {
+                image = GFGlowImage.make(bgra: pixels, width: CVPixelBufferGetWidth(small),
+                                         height: CVPixelBufferGetHeight(small),
+                                         rowBytes: CVPixelBufferGetBytesPerRow(small))
+            }
+            CVPixelBufferUnlockBaseAddress(small, .readOnly)
         }
         tell(image != nil, frame: frame, status: status)
         return image
@@ -537,7 +611,7 @@ extension KSPlayerEngineView {
                     gfReflection.setLive(true)
                 } else if quarters % 4 == 1, isPlaying, Self.gfInForeground,
                           let frame = await player.thumbnailImageAtCurrentTime() {
-                    let small = await Task.detached(priority: .utility) { GFReflection.shrunk(frame) }.value
+                    let small = await Task.detached(priority: .utility) { GFGlowImage.make(from: frame) }.value
                     guard !Task.isCancelled else { return }
                     gfReflection.show(small) // the new picture first, then off the live mirror: no stale one between
                     gfReflection.setLive(false)
