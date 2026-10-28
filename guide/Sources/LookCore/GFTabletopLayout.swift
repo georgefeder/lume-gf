@@ -36,14 +36,14 @@ nonisolated enum GFTabletopLayout {
         return CGRect(x: video.midX - width / 2, y: video.maxY - height, width: width, height: height)
     }
 
+    /// The longest the reflection gets, leaning far forward: the glow is drawn this long and stretched to the hinge's.
+    static let longestStretch: CGFloat = 1.6
+
     /// How long the reflection below the fold is, as a share of the picture's height, at a hinge angle in degrees (0
     /// closed, 180 flat; nil unknown: 1). What a mirror lying where the lower half lies would show of the upper half to
     /// someone in front of the phone (eye 5 heights of the upper half in front of the fold and 3.75 above the table):
     /// about as long as the picture when it stands upright, longer as it leans forward, shorter as it opens, gone near
     /// flat (Georgs, 24 Oct: Netflix's "stretches depending on the hinge, constantly reacts").
-    /// The longest the reflection gets, leaning far forward: the glow is drawn this long and stretched to the hinge's.
-    static let longestStretch: CGFloat = 1.6
-
     static func reflectionStretch(hingeDegrees: Double?) -> CGFloat {
         guard let hingeDegrees else { return 1 }
         let angle = hingeDegrees * .pi / 180
