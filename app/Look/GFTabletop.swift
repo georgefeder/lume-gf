@@ -4,6 +4,7 @@ import CoreVideo
 import Foundation
 import KSPlayer
 import OSLog
+import QuartzCore
 import SwiftUI
 import VideoToolbox
 #if canImport(UIKit)
@@ -151,7 +152,7 @@ nonisolated struct GFTabletopFrames: Equatable {
 /// player, whose open menus would flicker and drop taps): the player's frames live when they are pixel buffers, as from
 /// hardware decoding and 8-bit software decoding (Georgs, 24 Oct: once a second "is like 2 fps", Netflix's moves with
 /// the picture); otherwise (10-bit software decoding) a picture about once a second, each dissolving into the next.
-/// The glow (`GFGlow`) reads what it shows 60 times a second; only the picture's shape redraws the player.
+/// The glow (`GFGlowView`) reads what it shows at every screen refresh; only the picture's shape redraws the player.
 @MainActor
 @Observable
 final class GFReflection {
@@ -325,62 +326,155 @@ struct GFVideoReflection: View {
 
     var body: some View {
         Color.black
-            .overlay(alignment: .topLeading) {
-                GFGlow(reflection: reflection, size: picture.size)
-                    .offset(x: picture.minX - area.minX)
-                    .environment(\.layoutDirection, .leftToRight) // under the picture in every language
+            .overlay {
+                #if canImport(UIKit)
+                    // the picture's place across this view, and its size
+                    GFGlowLayer(reflection: reflection, picture: picture.offsetBy(dx: -area.minX, dy: 0))
+                #endif
             }
             .clipped()
             .contentShape(Rectangle()) // a tap here reaches the player: it brings the controls back
     }
 }
 
-/// The glow, redrawn 60 times a second from the player's newest frame (or its still, dissolving into the next). Its
-/// picture comes blurred and faded (`GFGlowImage`), so the screen only scales it up; the hinge only stretches it (a
-/// transform, redrawing nothing): blurring the whole panel on every frame, and laying it out again at every degree,
-/// made the picture above stutter and the glow lag while the hinge moved (Georgs, 28 Oct, on build 81).
-private struct GFGlow: View {
-    let reflection: GFReflection
-    /// The picture's size: the glow is as wide, and as long as the hinge makes it.
-    let size: CGSize
-    @State private var shrinker = GFFrameShrinker()
+#if canImport(UIKit)
+    private struct GFGlowLayer: UIViewRepresentable {
+        let reflection: GFReflection
+        let picture: CGRect
 
-    /// Video.js's strength for Netflix's glow (its fade is in the picture).
-    private static let strength: Double = 0.35
+        func makeUIView(context _: Context) -> GFGlowView {
+            GFGlowView(reflection: reflection)
+        }
 
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
+        func updateUIView(_ view: GFGlowView, context _: Context) {
+            view.reflection = reflection
+            view.picture = picture
+        }
+    }
+
+    /// The glow as one Core Animation layer: its picture (`GFGlowImage`, blurred and faded) set when the player's
+    /// frame changes, its stretch with the hinge set as the layer's transform, from a display link, with no implicit
+    /// animation. No SwiftUI view is redrawn or animated for it, so nothing it does competes with KSPlayer, which draws
+    /// the video from the main thread too (Georgs, 29 Oct, on build 82: moving the hinge, the video "starts to stutter"
+    /// and then "speeds up to get back with audio"; build 82 animated the stretch with SwiftUI at every refresh).
+    final class GFGlowView: UIView {
+        var reflection: GFReflection
+        /// The picture above, across this view.
+        var picture: CGRect = .zero {
+            didSet { if picture != oldValue { placed = nil } }
+        }
+
+        /// Video.js's strength for Netflix's glow.
+        private static let strength: Float = 0.35
+        /// How quickly the stretch catches up with the hinge, which reports at the system's pace: about
+        /// 1 / `followRate` seconds behind it, its steps smoothed.
+        private static let followRate: Double = 30
+
+        private let glow = CALayer()
+        private let shrinker = GFFrameShrinker()
+        private var link: CADisplayLink?
+        private var shown: CGImage?
+        private var still = -1
+        private var stretch: CGFloat?
+        private var lastTick: CFTimeInterval?
+        /// The picture and image size the layer was placed for.
+        private var placed: (picture: CGRect, image: CGSize)?
+
+        init(reflection: GFReflection) {
+            self.reflection = reflection
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+            clipsToBounds = true // the clear border above the fold
+            glow.opacity = Self.strength
+            glow.contentsGravity = .resize
+            glow.magnificationFilter = .linear
+            // nothing animates by itself: the stretch follows the hinge tick by tick
+            glow.actions = ["contents": NSNull(), "transform": NSNull(), "bounds": NSNull(), "position": NSNull(),
+                            "anchorPoint": NSNull()]
+            layer.addSublayer(glow)
+        }
+
+        @available(*, unavailable)
+        required init?(coder _: NSCoder) {
+            nil
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            link?.invalidate()
+            link = nil
+            lastTick = nil
+            guard window != nil else {
+                shown = nil
+                glow.contents = nil
+                stretch = nil // back on screen, it takes the hinge's length at once
+                return
+            }
+            let link = CADisplayLink(target: GFGlowTick(self), selector: #selector(GFGlowTick.tick(_:)))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+            link.add(to: .main, forMode: .common)
+            self.link = link
+        }
+
+        /// Each refresh: the newest picture, and the stretch a step nearer the hinge's.
+        fileprivate func tick(at now: CFTimeInterval) {
             let live = reflection.isLive
             let image = live ? shrinker.image(for: reflection.currentFrame()?.cvPixelBuffer) : reflection.image
-            let stretch = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
-            let still = live ? -1 : reflection.number
-            let place = image.flatMap { GFGlowPlace(image: $0, picture: size) }
-            ZStack {
-                if let image, place != nil {
-                    // a still fades in over the last one, which stays whole until it is covered (both fading
-                    // at once would dim the glow halfway through)
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .interpolation(.high)
-                        .id(still)
-                        .zIndex(Double(still))
-                        .transition(AnyTransition.asymmetric(
-                            insertion: .opacity,
-                            removal: AnyTransition.opacity.animation(.linear(duration: 0.01).delay(0.8))
-                        ))
+            let number = live ? -1 : reflection.number
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            defer { CATransaction.commit() }
+            if image !== shown {
+                if !live, number != still, shown != nil, image != nil {
+                    // a still dissolves into the next
+                    let fade = CATransition()
+                    fade.type = .fade
+                    fade.duration = 0.8
+                    glow.add(fade, forKey: "still")
                 }
+                shown = image
+                still = number
+                glow.contents = image
             }
-            .animation(.easeInOut(duration: 0.8), value: still)
-            .frame(width: place?.size.width ?? 0, height: place?.size.height ?? 0)
-            .opacity(Self.strength)
-            .scaleEffect(x: 1, y: stretch / GFTabletopLayout.longestStretch,
-                         anchor: UnitPoint(x: 0.5, y: place?.contentTop ?? 0)) // as long as the hinge makes it
-            .animation(.spring(duration: 0.1, bounce: 0), value: stretch)
-            .offset(place?.offset ?? .zero)
+            guard let image else { return }
+            place(for: image)
+            let target = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
+            let elapsed = lastTick.map { min(now - $0, 0.1) } ?? 0
+            lastTick = now
+            let length = stretch.map { $0 + (target - $0) * CGFloat(1 - exp(-Self.followRate * elapsed)) } ?? target
+            guard length != stretch else { return }
+            stretch = length
+            glow.transform = CATransform3DMakeScale(1, length / GFTabletopLayout.longestStretch, 1)
         }
-        .allowsHitTesting(false)
+
+        /// The layer across the picture's width, its content's top (the fold's row) at the top of this view, where it
+        /// stays as the hinge stretches the glow.
+        private func place(for image: CGImage) {
+            let size = CGSize(width: image.width, height: image.height)
+            guard placed?.picture != picture || placed?.image != size,
+                  let spot = GFGlowPlace(image: image, picture: picture.size)
+            else { return }
+            placed = (picture: picture, image: size)
+            glow.anchorPoint = CGPoint(x: 0.5, y: spot.contentTop)
+            glow.bounds = CGRect(origin: .zero, size: spot.size)
+            glow.position = CGPoint(x: picture.minX + spot.offset.width + spot.size.width / 2, y: 0)
+        }
     }
-}
+
+    /// The display link's target, holding the glow weakly (a display link keeps its target).
+    private final class GFGlowTick: NSObject {
+        weak var view: GFGlowView?
+
+        init(_ view: GFGlowView) {
+            self.view = view
+        }
+
+        @objc func tick(_ link: CADisplayLink) {
+            guard let view else { return link.invalidate() }
+            view.tick(at: link.timestamp)
+        }
+    }
+#endif
 
 /// Where the glow's picture goes under the picture above, as long as the longest stretch (the hinge's stretch
 /// shortens it): its content across the picture's width from the top of the panel, its blurred border round it.
