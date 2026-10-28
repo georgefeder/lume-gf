@@ -1,11 +1,8 @@
-import CoreImage
-import CoreImage.CIFilterBuiltins
+import CoreGraphics
 import CoreVideo
 import Foundation
 import KSPlayer
-import Metal
 import OSLog
-import QuartzCore
 import SwiftUI
 import VideoToolbox
 #if canImport(UIKit)
@@ -26,7 +23,7 @@ final class GFTabletop {
     @ObservationIgnored private var closing: Task<Void, Never>?
     private static let settle: Duration = .milliseconds(600)
     /// How far the phone is open, in degrees (assumed 0 closed, 180 flat; Apple does not say), nil until iOS tells:
-    /// the reflection's length follows it (`GFTabletopLayout.reflectionStretch`). Read by the mirror each frame.
+    /// the reflection's length follows it (`GFTabletopLayout.reflectionStretch`). Read by the glow each frame.
     @ObservationIgnored private(set) var hingeDegrees: Double?
     /// The last ten degrees logged, so the report shows the angles the phone stood at without a line per degree.
     @ObservationIgnored private var loggedTens: Int?
@@ -153,7 +150,7 @@ nonisolated struct GFTabletopFrames: Equatable {
 /// player, whose open menus would flicker and drop taps): the player's frames live when they are pixel buffers, as from
 /// hardware decoding and 8-bit software decoding (Georgs, 24 Oct: once a second "is like 2 fps", Netflix's moves with
 /// the picture); otherwise (10-bit software decoding) a picture about once a second, each dissolving into the next.
-/// The mirror (`GFMirrorView`) reads what it shows every frame; only the picture's shape redraws the player.
+/// The glow (`GFGlow`) reads what it shows 30 times a second; only the picture's shape redraws the player.
 @MainActor
 @Observable
 final class GFReflection {
@@ -162,7 +159,7 @@ final class GFReflection {
     @ObservationIgnored private(set) var number = 0
     /// The player's frames are pixel buffers: the mirror shows them.
     @ObservationIgnored private(set) var isLive = false
-    /// The frame the player shows now, for the mirror.
+    /// The frame the player shows now, for the glow.
     @ObservationIgnored var currentFrame: () -> PixelBufferProtocol? = { nil }
     /// The picture's shape (width over height as shown), nil until a frame tells: the picture stands on the fold with
     /// its reflection under it (`GFTabletopLayout.picture`).
@@ -191,8 +188,9 @@ final class GFReflection {
         return CGFloat(frame.width) * pixel.width / (CGFloat(frame.height) * pixel.height)
     }
 
-    /// The width a picture is shrunk to before it is kept: it is blurred into a glow anyway.
-    nonisolated static let width = 320
+    /// The width a picture is shrunk to for the glow: it is blurred into one anyway (Video.js: "Same shape as the
+    /// video, just tiny. The blur hides the low resolution.").
+    nonisolated static let width = 48
 
     nonisolated static func shrunk(_ image: CGImage) -> CGImage? {
         guard image.width > width else { return image }
@@ -317,10 +315,13 @@ private struct GFHingeMoves: ViewModifier {
     }
 }
 
-/// Under the split player's crease: black, with the picture mirrored faintly into it, like a screen's reflection on a
-/// glossy table (Apple has no such material; Netflix draws its own). It starts faint at the top of the bottom screen,
-/// rises a little, then blurs and fades into black over a length that follows the hinge (Georgs, 24 Oct: "fades,
-/// morphs at the middle", "stretches depending on the hinge", "faintly starts only at the top of the bottom screen").
+/// Under the split player's crease: a glow of the picture's colours, the way Netflix draws one under its controls. No
+/// Apple API draws it (Apple's iPhone Duo documentation, sessions and frameworks have nothing for it), so this is
+/// Video.js's recreation of Netflix's, one for one with SwiftUI's own modifiers
+/// (videojs.org/blog/iphone-duo-web-development: a tiny copy of each frame, `scale: 1 -1`, `filter: blur(24px)`,
+/// `opacity: 0.35`, a mask fading to transparent 80% of the way from the fold). The crease above stays black, and the
+/// glow's length follows the hinge by SwiftUI's spring (Georgs, 28 Oct, after builds 74 and 75's hand-made mirror:
+/// "build it with documentation that has already proven to work ... something a bit more robust").
 struct GFVideoReflection: View {
     let reflection: GFReflection
     /// The picture above and this view, in the whole screen's coordinates.
@@ -329,438 +330,106 @@ struct GFVideoReflection: View {
 
     var body: some View {
         Color.black
-            .overlay {
-                #if canImport(UIKit)
-                    // the picture's place across this view, and its height
-                    GFLiveMirror(reflection: reflection, picture: picture.offsetBy(dx: -area.minX, dy: -picture.minY))
-                #endif
+            .overlay(alignment: .topLeading) {
+                GFGlow(reflection: reflection, size: picture.size)
+                    .offset(x: picture.minX - area.minX)
             }
             .clipped()
             .contentShape(Rectangle()) // a tap here reaches the player: it brings the controls back
     }
 }
 
-#if canImport(UIKit)
-    struct GFLiveMirror: UIViewRepresentable {
-        let reflection: GFReflection
-        let picture: CGRect
+/// The glow, redrawn 30 times a second from the player's newest frame (or its still, dissolving into the next).
+private struct GFGlow: View {
+    let reflection: GFReflection
+    /// The picture's size: the glow is as wide, and as long as the hinge makes it.
+    let size: CGSize
+    @State private var shrinker = GFFrameShrinker()
 
-        func makeUIView(context _: Context) -> GFMirrorView {
-            GFMirrorView(reflection: reflection)
-        }
+    /// Video.js's numbers for Netflix's glow: its blur, its strength, and where its fade from the fold ends.
+    private static let blur: CGFloat = 24, strength = 0.35, fadeEnd = 0.8
 
-        func updateUIView(_ view: GFMirrorView, context _: Context) {
-            view.reflection = reflection
-            view.picture = picture
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+            let live = reflection.isLive
+            let image = live ? shrinker.shrunk(reflection.currentFrame()?.cvPixelBuffer) : reflection.image
+            let stretch = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
+            let still = live ? -1 : reflection.number
+            ZStack {
+                if let image {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .interpolation(.medium)
+                        .id(still)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.8), value: still)
+            .frame(width: size.width, height: size.height * stretch)
+            .scaleEffect(x: 1, y: -1) // the mirror
+            .blur(radius: Self.blur) // the glow
+            .mask {
+                LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .clear, location: Self.fadeEnd)],
+                               startPoint: .top, endPoint: .bottom) // fading away from the fold
+            }
+            .opacity(Self.strength)
+            .animation(.spring(duration: 0.15, bounce: 0), value: stretch) // following the hinge
         }
+        .allowsHitTesting(false)
+    }
+}
+
+/// The player's frame shrunk to `GFReflection.width` pixels across for the glow (it is blurred anyway) by VideoToolbox,
+/// which reads every format KSPlayer decodes into (three-plane 4:2:0 and 10-bit among them), kept until the frame
+/// changes. A frame that cannot be shrunk leaves the last one showing.
+nonisolated final class GFFrameShrinker {
+    private var transfer: VTPixelTransferSession?
+    private var pool: (buffers: CVPixelBufferPool, width: Int, height: Int)?
+    private var last: (frame: CVPixelBuffer, image: CGImage?)?
+
+    deinit {
+        if let transfer { VTPixelTransferSessionInvalidate(transfer) }
     }
 
-    /// Draws the reflection with Core Image on the GPU at every new frame of the player's (the same pixel buffer;
-    /// nothing is copied) and while the hinge moves, one pixel a point (a third of the screen's; it is blurred anyway).
-    final class GFMirrorView: UIView {
-        override class var layerClass: AnyClass {
-            CAMetalLayer.self
-        }
-
-        var reflection: GFReflection {
-            didSet { if reflection !== oldValue { stale = true } }
-        }
-
-        var picture: CGRect = .zero {
-            didSet { if picture != oldValue { stale = true } }
-        }
-
-        /// One GPU queue and Core Image context for every player (making them takes a while).
-        private static let gpu: (queue: any MTLCommandQueue, context: CIContext)? = {
-            guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { return nil }
-            return (queue, CIContext(mtlCommandQueue: queue, options: [.cacheIntermediates: false,
-                                                                        .name: "GF reflection"]))
-        }()
-
-        private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        private static let linear = CGColorSpace(name: CGColorSpace.linearSRGB)
-        /// How the reflection is drawn. Brightness, as it looks: `faint` at the top of the panel, rising to `peak`
-        /// `crest` of the way down, then easing to black at its end (build 74 started at 0.7 and was "bonded" to the
-        /// picture). Blur: from `sharpness` of `blurShare` of the picture's width at the top to all of it `blurReach`
-        /// of the way down.
-        private static let faint: CGFloat = 0.06, peak: CGFloat = 0.3, crest: CGFloat = 0.25
-        private static let blurShare: CGFloat = 1.0 / 28, sharpness: CGFloat = 0.3, blurReach: CGFloat = 0.6
-        /// How quickly the length follows the hinge: a critically damped spring this stiff trails a moving hinge by
-        /// about 2 / `springRate` seconds (0.05 s; build 74 eased over 0.15 s and was "delayed" moving fast).
-        private static let springRate: Double = 40
-        private static let pixelsPerPoint: CGFloat = 1
-
-        private var metalLayer: CAMetalLayer {
-            // swiftlint:disable:next force_cast
-            layer as! CAMetalLayer
-        }
-
-        private var link: CADisplayLink?
-        private var lastBuffer: CVPixelBuffer?
-        /// The last frame as Core Image reads it, made when first drawn (`image()`) and kept for redraws while the
-        /// hinge moves, and the buffer it was made from.
-        private var lastImage: CIImage?
-        private var madeFrom: CVPixelBuffer?
-        /// A frame could not be made readable: told once (the first on-device sign was a silently black reflection).
-        private var toldUnreadable = false
-        private var transfer: VTPixelTransferSession?
-        private var pool: (buffers: CVPixelBufferPool, width: Int, height: Int)?
-        private var still: (number: Int, image: CIImage)?
-        private var fading: (from: CIImage, start: CFTimeInterval)?
-        /// The still as last drawn (part way through a dissolve, perhaps): the next one dissolves from it.
-        private var shownStill: CIImage?
-        private var stretch: CGFloat?
-        /// How fast `stretch` is moving, per second (the spring's).
-        private var stretchSpeed: Double = 0
-        private var lastTick: CFTimeInterval?
-        /// Something changed that the next tick must draw.
-        private var stale = true
-        private var drewPicture = false
-        private var inFlight = 0
-        #if GF_DEMO
-            /// What the screenshots' log last heard from this mirror, so each state is told once.
-            private var told = ""
-            private var ticks = 0
-
-            private func tell(_ state: String) {
-                guard state != told else { return }
-                told = state
-                GFTabletop.log("mirror: " + state)
-            }
-        #endif
-
-        init(reflection: GFReflection) {
-            self.reflection = reflection
-            super.init(frame: .zero)
-            isUserInteractionEnabled = false
-            backgroundColor = .black
-            contentScaleFactor = Self.pixelsPerPoint
-            metalLayer.device = Self.gpu?.queue.device
-            metalLayer.pixelFormat = .bgra8Unorm
-            metalLayer.colorspace = Self.sRGB
-            metalLayer.framebufferOnly = false // Core Image may write the drawable from a compute pass
-            metalLayer.isOpaque = true
-        }
-
-        @available(*, unavailable)
-        required init?(coder _: NSCoder) {
-            nil
-        }
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            let size = CGSize(width: (bounds.width * Self.pixelsPerPoint).rounded(),
-                              height: (bounds.height * Self.pixelsPerPoint).rounded())
-            if metalLayer.drawableSize != size {
-                metalLayer.drawableSize = size
-                stale = true
-            }
-        }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            link?.invalidate()
-            link = nil
-            lastTick = nil
-            guard window != nil else {
-                lastBuffer = nil
-                lastImage = nil
-                madeFrom = nil
-                if let transfer { VTPixelTransferSessionInvalidate(transfer) }
-                transfer = nil
-                pool = nil
-                still = nil
-                fading = nil
-                stretch = nil // back on screen, it takes the hinge's length at once
-                stretchSpeed = 0
-                return
-            }
-            contentScaleFactor = Self.pixelsPerPoint // a window sets its screen's
-            stale = true
-            let link = CADisplayLink(target: GFMirrorTick(self), selector: #selector(GFMirrorTick.tick(_:)))
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 24, maximum: 60, preferred: nil)
-            link.add(to: .main, forMode: .common)
-            self.link = link
-        }
-
-        /// Each screen refresh: draws when the picture, its still, the hinge or the size changed.
-        fileprivate func tick(at now: CFTimeInterval) {
-            let source = nextSource(at: now)
-            if source.changed { stale = true }
-            #if GF_DEMO
-                ticks += 1
-                if ticks % 120 == 1, ticks < 1500 { // every two seconds or so, for the first twenty
-                    let frame = reflection.currentFrame()
-                    let kind = frame == nil ? "none" : frame?.cvPixelBuffer == nil ? "no pixel buffer" : "pixel buffer"
-                    let size = metalLayer.drawableSize
-                    GFTabletop.log("mirror tick \(ticks): live \(reflection.isLive), frame \(kind), "
-                        + "image \(lastImage != nil), stale \(stale), in flight \(inFlight), "
-                        + "drawable \(Int(size.width))x\(Int(size.height)), window \(window != nil)")
-                }
-            #endif
-            let target = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
-            let elapsed = lastTick.map { now - $0 } ?? 0
-            lastTick = now
-            var length = stretch.map { followed(from: $0, to: target, over: elapsed) } ?? target
-            if abs(length - target) < 0.002, abs(stretchSpeed) < 0.02 {
-                length = target
-                stretchSpeed = 0
-            }
-            if length != stretch {
-                stretch = length
-                stale = true
-            }
-            #if GF_DEMO
-                if Self.gpu == nil { tell("no Metal device") }
-            #endif
-            guard stale, inFlight < 2, let gpu = Self.gpu else { return }
-            if !source.present, !drewPicture { // black already
-                #if GF_DEMO
-                    tell("nothing to show (live \(reflection.isLive), still \(reflection.image != nil))")
-                #endif
-                stale = false
-                return
-            }
-            let size = metalLayer.drawableSize
-            guard size.width >= 1, size.height >= 1, let drawable = metalLayer.nextDrawable(),
-                  let commands = gpu.queue.makeCommandBuffer()
-            else {
-                #if GF_DEMO
-                    tell("no drawable at \(Int(size.width))x\(Int(size.height))")
-                #endif
-                return
-            }
-            let area = CGRect(origin: .zero, size: size)
-            let black = CIImage(color: .black).cropped(to: area)
-            let shown = source.present ? image() : nil
-            let drawn = shown.map { reflected($0, in: area, stretch: length).composited(over: black) } ?? black
-            let destination = CIRenderDestination(mtlTexture: drawable.texture, commandBuffer: commands)
-            destination.colorSpace = Self.sRGB
-            destination.isDithered = true // the long fade to black would band in 8 bits
-            do {
-                _ = try gpu.context.startTask(toRender: drawn, to: destination)
-                #if GF_DEMO
-                    let place = GFTabletop.text(convert(bounds, to: nil))
-                    let kind = reflection.isLive ? "live" : "still"
-                    tell("drawing \(kind) frames, \(Int(size.width))x\(Int(size.height)) at \(place), "
-                        + "picture \(GFTabletop.text(picture)), stretch \(String(format: "%.2f", length))")
-                #endif
-            } catch {
-                #if GF_DEMO
-                    tell("Core Image failed: \(error.localizedDescription)")
-                #endif
-            }
-            commands.present(drawable)
-            inFlight += 1
-            commands.addCompletedHandler { @Sendable [weak self] _ in
-                Task { @MainActor [weak self] in self?.inFlight -= 1 }
-            }
-            commands.commit()
-            stale = false
-            drewPicture = shown != nil
-        }
-
-        /// `current` moved toward `target` for `elapsed` seconds by a critically damped spring (exact for any step, so a
-        /// late frame neither overshoots nor jumps), its speed kept in `stretchSpeed`: hinge angles come at whatever
-        /// rate the system allows (UIHinge.angle: "system policy"), and the spring carries the reflection between them.
-        private func followed(from current: CGFloat, to target: CGFloat, over elapsed: Double) -> CGFloat {
-            let rate = Self.springRate, t = min(elapsed, 0.25)
-            let offset = Double(current - target), drift = stretchSpeed + rate * offset
-            let decay = exp(-rate * t)
-            stretchSpeed = (drift - rate * (offset + drift * t)) * decay
-            return target + CGFloat((offset + drift * t) * decay)
-        }
-
-        /// Whether there is anything to mirror now (the player's frame, or its still dissolving from the last one) and
-        /// whether it is new. Its picture is made only when drawn (`image()`).
-        private func nextSource(at now: CFTimeInterval) -> (present: Bool, changed: Bool) {
-            if reflection.isLive {
-                still = nil
-                fading = nil
-                shownStill = nil
-                let buffer = reflection.currentFrame()?.cvPixelBuffer
-                guard buffer !== lastBuffer else { return (buffer != nil, false) }
-                lastBuffer = buffer
-                if buffer == nil {
-                    lastImage = nil
-                    madeFrom = nil
-                }
-                return (buffer != nil, true)
-            }
-            lastBuffer = nil
-            lastImage = nil
-            madeFrom = nil
-            guard let image = reflection.image else {
-                let changed = still != nil
-                still = nil
-                fading = nil
-                shownStill = nil
-                return (false, changed)
-            }
-            var changed = false
-            if still?.number != reflection.number {
-                fading = shownStill.map { (from: $0, start: now) }
-                still = (number: reflection.number, image: CIImage(cgImage: image))
-                changed = true
-            }
-            guard let still else { return (false, changed) }
-            var shown = still.image
-            if let fading {
-                let progress = (now - fading.start) / 0.8
-                if progress >= 1 {
-                    self.fading = nil
-                } else {
-                    let dissolve = CIFilter.dissolveTransition()
-                    dissolve.inputImage = fading.from
-                    dissolve.targetImage = still.image
-                    dissolve.time = Float(progress * progress * (3 - 2 * progress)) // eased in and out
-                    shown = dissolve.outputImage ?? still.image
-                }
-                changed = true
-            }
-            shownStill = shown
-            return (true, changed)
-        }
-
-        /// The picture to mirror: the still, or the player's newest frame as Core Image reads it (the last one that
-        /// could be read, if this one cannot).
-        private func image() -> CIImage? {
-            guard reflection.isLive else { return shownStill }
-            guard let buffer = lastBuffer else { return nil }
-            if madeFrom !== buffer {
-                madeFrom = buffer
-                if let readable = readable(buffer) {
-                    // HDR channels toned down to the drawable's range rather than clipped
-                    lastImage = CIImage(cvPixelBuffer: readable, options: [.toneMapHDRtoSDR: true])
-                } else if !toldUnreadable {
-                    toldUnreadable = true
-                    let format = Self.fourCC(CVPixelBufferGetPixelFormatType(buffer))
-                    GFTabletop.log("mirror: could not read a \(format) frame")
-                }
-            }
-            return lastImage
-        }
-
-        private static func fourCC(_ code: OSType) -> String {
-            String((0 ..< 4).map { Character(UnicodeScalar(UInt8(truncatingIfNeeded: code >> (24 - 8 * $0)))) })
-        }
-
-        /// The formats Core Image reads as they are: KSPlayer's two-plane 4:2:0 (full-range and 10-bit channels, HDR
-        /// among them, which keep their depth for the tone mapping) and BGRA.
-        private static let readableFormats: Set<OSType> = [
-            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-            kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange, kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
-            kCVPixelFormatType_32BGRA
-        ]
-
-        /// The player's frame in a form Core Image reads: as it is when it can, otherwise made small (it is blurred
-        /// anyway) by VideoToolbox. KSPlayer has most channels (8-bit 4:2:0 at video range) decoded into three-plane
-        /// buffers, which Core Image cannot read at all (CI run 40085607543: a pixel buffer every frame, never an
-        /// image). A new buffer from a pool each time, so one the GPU is still reading is never written over.
-        private func readable(_ buffer: CVPixelBuffer) -> CVPixelBuffer? {
-            if Self.readableFormats.contains(CVPixelBufferGetPixelFormatType(buffer)) { return buffer }
-            let sourceWidth = CVPixelBufferGetWidth(buffer), sourceHeight = CVPixelBufferGetHeight(buffer)
-            guard sourceWidth > 0, sourceHeight > 0 else { return nil }
-            let width = max(2, min(sourceWidth, 640) & ~1), height = max(2, sourceHeight * width / sourceWidth & ~1)
-            if pool?.width != width || pool?.height != height {
-                let attributes: [CFString: Any] = [
-                    kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
-                    kCVPixelBufferWidthKey: width,
-                    kCVPixelBufferHeightKey: height,
-                    kCVPixelBufferIOSurfacePropertiesKey: [CFString: Any](),
-                    kCVPixelBufferMetalCompatibilityKey: true
-                ]
-                var made: CVPixelBufferPool?
-                CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attributes as CFDictionary, &made)
-                pool = made.map { (buffers: $0, width: width, height: height) }
-            }
-            if transfer == nil {
-                VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transfer)
-                if let transfer { // keep up with the picture rather than do it best
-                    VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_RealTime, value: kCFBooleanTrue)
-                }
-            }
-            var small: CVPixelBuffer?
-            guard let pool, let transfer,
-                  CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool.buffers, &small) == kCVReturnSuccess,
-                  let small, VTPixelTransferSessionTransferImage(transfer, from: buffer, to: small) == noErr
-            else { return nil }
-            return small
-        }
-
-        /// `frame` upside down from the top of `area` (the top of the panel, below the crease) across the picture's
-        /// width, `stretch` times the picture's height long, blurred more and dimmed further down, in pixels (Core
-        /// Image's y runs upwards).
-        private func reflected(_ frame: CIImage, in area: CGRect, stretch: CGFloat) -> CIImage {
-            let scale = Self.pixelsPerPoint
-            let across = CGRect(x: picture.minX * scale, y: 0, width: max(1, picture.width * scale), height: area.height)
-            let length = max(1, picture.height * scale * stretch)
-            let fold = area.maxY
-            let extent = frame.extent
-            let mirror = CGAffineTransform(translationX: -extent.minX, y: -extent.minY)
-                .concatenating(CGAffineTransform(scaleX: across.width / extent.width, y: -length / extent.height))
-                .concatenating(CGAffineTransform(translationX: across.minX, y: fold))
-            let blurMask = CIFilter.smoothLinearGradient()
-            blurMask.point0 = CGPoint(x: 0, y: fold)
-            blurMask.color0 = Self.grey(Self.sharpness)
-            blurMask.point1 = CGPoint(x: 0, y: fold - length * Self.blurReach)
-            blurMask.color1 = Self.grey(1)
-            let mirrored = frame.transformed(by: mirror).clampedToExtent() // no dark rim from the blur
-            let blur = CIFilter.maskedVariableBlur()
-            blur.inputImage = mirrored
-            blur.mask = blurMask.outputImage
-            blur.radius = Float(across.width * Self.blurShare)
-            // the brightness from the top of the panel down, stretched over the reflection's length
-            let light = Self.brightness.transformed(by: CGAffineTransform(scaleX: 1, y: length / Self.steps)
-                .concatenating(CGAffineTransform(translationX: 0, y: fold - length)))
-            return (blur.outputImage ?? mirrored)
-                .applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: light])
-                .cropped(to: across)
-        }
-
-        /// A grey as Core Image works with it (it reads masks in linear light).
-        private static func grey(_ level: CGFloat) -> CIColor {
-            linear.flatMap { CIColor(red: level, green: level, blue: level, alpha: 1, colorSpace: $0) }
-                ?? CIColor(red: level, green: level, blue: level)
-        }
-
-        /// The reflection's brightness as it looks, from the top of the panel (the top row) to its end, `steps` rows of
-        /// grey a pixel wide, endless sideways and beyond its ends.
-        private static let steps: CGFloat = 256
-        private static let brightness: CIImage = {
-            let smooth = { (t: CGFloat) in t * t * (3 - 2 * t) }
-            let view = GFMirrorView.self
-            let rows = (0 ..< Int(view.steps)).map { row -> UInt8 in
-                let t = CGFloat(row) / (view.steps - 1)
-                let level = t < view.crest
-                    ? view.faint + (view.peak - view.faint) * smooth(t / view.crest)
-                    : view.peak * (1 - smooth((t - view.crest) / (1 - view.crest)))
-                return UInt8((level * 255).rounded())
-            }
-            guard let grey = CGColorSpace(name: CGColorSpace.genericGrayGamma2_2),
-                  let data = CGDataProvider(data: Data(rows) as CFData),
-                  let image = CGImage(width: 1, height: rows.count, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: 1,
-                                      space: grey, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
-                                      provider: data, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
-            else { return CIImage(color: .black) }
-            return CIImage(cgImage: image).clampedToExtent()
-        }()
+    func shrunk(_ frame: CVPixelBuffer?) -> CGImage? {
+        guard let frame else { return nil }
+        if let last, last.frame === frame { return last.image }
+        let image = makeImage(from: frame) ?? last?.image
+        last = (frame: frame, image: image)
+        return image
     }
 
-    /// The display link's target, holding the mirror weakly (a display link keeps its target).
-    private final class GFMirrorTick: NSObject {
-        weak var view: GFMirrorView?
-
-        init(_ view: GFMirrorView) {
-            self.view = view
+    private func makeImage(from frame: CVPixelBuffer) -> CGImage? {
+        let sourceWidth = CVPixelBufferGetWidth(frame), sourceHeight = CVPixelBufferGetHeight(frame)
+        guard sourceWidth > 0, sourceHeight > 0 else { return nil }
+        let width = GFReflection.width, height = max(2, sourceHeight * width / sourceWidth & ~1)
+        if pool?.width != width || pool?.height != height {
+            let attributes: [CFString: Any] = [
+                kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey: width,
+                kCVPixelBufferHeightKey: height,
+                kCVPixelBufferIOSurfacePropertiesKey: [CFString: Any]()
+            ]
+            var made: CVPixelBufferPool?
+            CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attributes as CFDictionary, &made)
+            pool = made.map { (buffers: $0, width: width, height: height) }
         }
-
-        @objc func tick(_ link: CADisplayLink) {
-            guard let view else { return link.invalidate() }
-            view.tick(at: link.timestamp)
+        if transfer == nil {
+            VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transfer)
+            if let transfer { // keep up with the picture rather than do it best
+                VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_RealTime, value: kCFBooleanTrue)
+            }
         }
+        var small: CVPixelBuffer?
+        guard let pool, let transfer,
+              CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool.buffers, &small) == kCVReturnSuccess,
+              let small, VTPixelTransferSessionTransferImage(transfer, from: frame, to: small) == noErr
+        else { return nil }
+        var image: CGImage?
+        VTCreateCGImageFromCVPixelBuffer(small, options: nil, imageOut: &image)
+        return image
     }
-#endif
+}
 
 extension KSPlayerEngineView {
     /// Where the picture goes while the player is split: standing on the fold (`GFTabletopLayout.picture`).
