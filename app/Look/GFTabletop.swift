@@ -333,6 +333,7 @@ struct GFVideoReflection: View {
             .overlay(alignment: .topLeading) {
                 GFGlow(reflection: reflection, size: picture.size)
                     .offset(x: picture.minX - area.minX)
+                    .environment(\.layoutDirection, .leftToRight) // under the picture in every language
             }
             .clipped()
             .contentShape(Rectangle()) // a tap here reaches the player: it brings the controls back
@@ -347,21 +348,27 @@ private struct GFGlow: View {
     @State private var shrinker = GFFrameShrinker()
 
     /// Video.js's numbers for Netflix's glow: its blur, its strength, and where its fade from the fold ends.
-    private static let blur: CGFloat = 24, strength = 0.35, fadeEnd = 0.8
+    private static let blur: CGFloat = 24, strength: Double = 0.35, fadeEnd: CGFloat = 0.8
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
             let live = reflection.isLive
-            let image = live ? shrinker.shrunk(reflection.currentFrame()?.cvPixelBuffer) : reflection.image
+            let image = live ? shrinker.image(for: reflection.currentFrame()?.cvPixelBuffer) : reflection.image
             let stretch = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
             let still = live ? -1 : reflection.number
             ZStack {
                 if let image {
+                    // a still fades in over the last one, which stays whole until it is covered (both fading
+                    // at once would dim the glow halfway through)
                     Image(decorative: image, scale: 1)
                         .resizable()
                         .interpolation(.medium)
                         .id(still)
-                        .transition(.opacity)
+                        .zIndex(Double(still))
+                        .transition(AnyTransition.asymmetric(
+                            insertion: .opacity,
+                            removal: AnyTransition.opacity.animation(.linear(duration: 0.01).delay(0.8))
+                        ))
                 }
             }
             .animation(.easeInOut(duration: 0.8), value: still)
@@ -369,7 +376,8 @@ private struct GFGlow: View {
             .scaleEffect(x: 1, y: -1) // the mirror
             .blur(radius: Self.blur) // the glow
             .mask {
-                LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .clear, location: Self.fadeEnd)],
+                LinearGradient(stops: [Gradient.Stop(color: .black, location: 0),
+                                       Gradient.Stop(color: .clear, location: Self.fadeEnd)],
                                startPoint: .top, endPoint: .bottom) // fading away from the fold
             }
             .opacity(Self.strength)
@@ -379,26 +387,71 @@ private struct GFGlow: View {
     }
 }
 
-/// The player's frame shrunk to `GFReflection.width` pixels across for the glow (it is blurred anyway) by VideoToolbox,
-/// which reads every format KSPlayer decodes into (three-plane 4:2:0 and 10-bit among them), kept until the frame
-/// changes. A frame that cannot be shrunk leaves the last one showing.
-nonisolated final class GFFrameShrinker {
+/// The player's frames shrunk to `GFReflection.width` pixels across for the glow (it is blurred anyway) by
+/// VideoToolbox, which reads every format KSPlayer decodes into (three-plane 4:2:0 and 10-bit among them) and gives HDR
+/// the usual colours, on a queue of its own: the main thread shows the picture and runs the controls, and never waits
+/// for it.
+/// The glow shows the newest image made, a tick behind the picture at most.
+nonisolated final class GFFrameShrinker: @unchecked Sendable {
+    /// A frame handed to the queue.
+    private struct Frame: @unchecked Sendable {
+        let buffer: CVPixelBuffer
+    }
+
+    private let queue = DispatchQueue(label: "lv.georgefeder.lume.glow", qos: .userInitiated)
+    /// Guards `latest`, `busy` and `generation`.
+    private let lock = NSLock()
+    private var latest: CGImage?
+    /// A frame is being shrunk: the next waits for a later tick (one at a time).
+    private var busy = false
+    /// Bumped when the frames stop, so an image still being made then is not shown after.
+    private var generation = 0
+    /// The main thread's: the frame last handed over.
+    private var handedOver: CVPixelBuffer?
+    /// The queue's own.
     private var transfer: VTPixelTransferSession?
     private var pool: (buffers: CVPixelBufferPool, width: Int, height: Int)?
-    private var last: (frame: CVPixelBuffer, image: CGImage?)?
+    private var told = (made: false, failed: false)
 
     deinit {
         if let transfer { VTPixelTransferSessionInvalidate(transfer) }
     }
 
-    func shrunk(_ frame: CVPixelBuffer?) -> CGImage? {
-        guard let frame else { return nil }
-        if let last, last.frame === frame { return last.image }
-        let image = makeImage(from: frame) ?? last?.image
-        last = (frame: frame, image: image)
-        return image
+    /// The glow's image for the player's frame now: the newest one made, with `frame` handed over to be made next when
+    /// it is new. Nil without a frame.
+    func image(for frame: CVPixelBuffer?) -> CGImage? {
+        guard let frame else {
+            handedOver = nil
+            lock.withLock {
+                latest = nil
+                generation &+= 1
+            }
+            return nil
+        }
+        if frame !== handedOver, let ticket = claim() {
+            handedOver = frame
+            let handed = Frame(buffer: frame)
+            queue.async { [self] in
+                let image = makeImage(from: handed.buffer)
+                lock.withLock {
+                    if let image, ticket == generation { latest = image }
+                    busy = false
+                }
+            }
+        }
+        return lock.withLock { latest }
     }
 
+    /// The queue for the next frame, with the generation it belongs to, unless it is busy.
+    private func claim() -> Int? {
+        lock.withLock {
+            guard !busy else { return nil }
+            busy = true
+            return generation
+        }
+    }
+
+    /// On `queue`.
     private func makeImage(from frame: CVPixelBuffer) -> CGImage? {
         let sourceWidth = CVPixelBufferGetWidth(frame), sourceHeight = CVPixelBufferGetHeight(frame)
         guard sourceWidth > 0, sourceHeight > 0 else { return nil }
@@ -416,18 +469,40 @@ nonisolated final class GFFrameShrinker {
         }
         if transfer == nil {
             VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &transfer)
-            if let transfer { // keep up with the picture rather than do it best
+            if let transfer {
+                // keep up with the picture rather than do it best, in the usual colours (an HDR channel's too)
                 VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_RealTime, value: kCFBooleanTrue)
+                VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_DestinationColorPrimaries,
+                                     value: kCVImageBufferColorPrimaries_ITU_R_709_2)
+                VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_DestinationTransferFunction,
+                                     value: kCVImageBufferTransferFunction_ITU_R_709_2)
             }
         }
         var small: CVPixelBuffer?
-        guard let pool, let transfer,
-              CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool.buffers, &small) == kCVReturnSuccess,
-              let small, VTPixelTransferSessionTransferImage(transfer, from: frame, to: small) == noErr
-        else { return nil }
+        var status: OSStatus = kCVReturnError
+        if let pool, let transfer,
+           CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool.buffers, &small) == kCVReturnSuccess,
+           let small {
+            status = VTPixelTransferSessionTransferImage(transfer, from: frame, to: small)
+        }
         var image: CGImage?
-        VTCreateCGImageFromCVPixelBuffer(small, options: nil, imageOut: &image)
+        if status == noErr, let small {
+            VTCreateCGImageFromCVPixelBuffer(small, options: nil, imageOut: &image)
+        }
+        tell(image != nil, frame: frame, status: status)
         return image
+    }
+
+    /// The diagnostic report hears once that the glow works, and once if a frame could not be shrunk (the first sign
+    /// of a broken one on the phone was a silently black reflection).
+    private func tell(_ made: Bool, frame: CVPixelBuffer, status: OSStatus) {
+        guard made ? !told.made : !told.failed else { return }
+        if made { told.made = true } else { told.failed = true }
+        let format = GFEnhancePlan.name(of: CVPixelBufferGetPixelFormatType(frame))
+        let size = "\(CVPixelBufferGetWidth(frame))x\(CVPixelBufferGetHeight(frame))"
+        let text = made ? "glow from \(format) frames, \(size)"
+            : "glow could not shrink a \(format) frame, \(size) (\(status))"
+        Task { @MainActor in GFTabletop.log(text) }
     }
 }
 
