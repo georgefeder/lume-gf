@@ -188,7 +188,6 @@ final class GFReflection {
         guard frame.width > 0, frame.height > 0, pixel.width > 0, pixel.height > 0 else { return nil }
         return CGFloat(frame.width) * pixel.width / (CGFloat(frame.height) * pixel.height)
     }
-
 }
 
 extension View {
@@ -285,6 +284,14 @@ private struct GFHingeMoves: ViewModifier {
                                                  partlyOpen: new.hinge?.status == .partiallyOpen)
                     if old.hinge?.status != new.hinge?.status {
                         count &+= 1
+                        // and again a moment later: iOS may report the fold region just after the hinge's status
+                        // (the angle's changes used to read it again; they no longer do)
+                        Task { @MainActor in
+                            for wait in [300, 700] {
+                                try? await Task.sleep(for: .milliseconds(wait))
+                                count &+= 1
+                            }
+                        }
                         let status = new.hinge.map { hinge -> String in
                             let state = hinge.status == .partiallyOpen ? "partly open"
                                 : hinge.status == .fullyOpen ? "fully open"
@@ -329,17 +336,17 @@ struct GFVideoReflection: View {
 }
 
 /// The glow, redrawn 60 times a second from the player's newest frame (or its still, dissolving into the next). Its
-/// picture comes blurred (`GFGlowImage`), so the screen only scales it up; the hinge only stretches it (a transform,
-/// redrawing nothing): blurring the whole panel on every frame, and laying it out again at every degree, made the
-/// picture above stutter and the glow lag while the hinge moved (Georgs, 28 Oct, on build 81).
+/// picture comes blurred and faded (`GFGlowImage`), so the screen only scales it up; the hinge only stretches it (a
+/// transform, redrawing nothing): blurring the whole panel on every frame, and laying it out again at every degree,
+/// made the picture above stutter and the glow lag while the hinge moved (Georgs, 28 Oct, on build 81).
 private struct GFGlow: View {
     let reflection: GFReflection
     /// The picture's size: the glow is as wide, and as long as the hinge makes it.
     let size: CGSize
     @State private var shrinker = GFFrameShrinker()
 
-    /// Video.js's numbers for Netflix's glow: its strength, and where its fade from the fold ends.
-    private static let strength: Double = 0.35, fadeEnd: CGFloat = 0.8
+    /// Video.js's strength for Netflix's glow (its fade is in the picture).
+    private static let strength: Double = 0.35
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
@@ -347,8 +354,9 @@ private struct GFGlow: View {
             let image = live ? shrinker.image(for: reflection.currentFrame()?.cvPixelBuffer) : reflection.image
             let stretch = GFTabletopLayout.reflectionStretch(hingeDegrees: GFTabletop.shared.hingeDegrees)
             let still = live ? -1 : reflection.number
-            if let image, let place = GFGlowPlace(image: image, picture: size, fadeEnd: Self.fadeEnd) {
-                ZStack {
+            let place = image.flatMap { GFGlowPlace(image: $0, picture: size) }
+            ZStack {
+                if let image, place != nil {
                     // a still fades in over the last one, which stays whole until it is covered (both fading
                     // at once would dim the glow halfway through)
                     Image(decorative: image, scale: 1)
@@ -361,19 +369,14 @@ private struct GFGlow: View {
                             removal: AnyTransition.opacity.animation(.linear(duration: 0.01).delay(0.8))
                         ))
                 }
-                .animation(.easeInOut(duration: 0.8), value: still)
-                .frame(width: place.size.width, height: place.size.height)
-                .mask {
-                    LinearGradient(stops: [Gradient.Stop(color: .black, location: place.contentTop),
-                                           Gradient.Stop(color: .clear, location: place.fadeEnd)],
-                                   startPoint: .top, endPoint: .bottom) // fading away from the fold
-                }
-                .opacity(Self.strength)
-                .scaleEffect(x: 1, y: stretch / GFTabletopLayout.longestStretch,
-                             anchor: UnitPoint(x: 0.5, y: place.contentTop)) // as long as the hinge makes it
-                .animation(.spring(duration: 0.1, bounce: 0), value: stretch)
-                .offset(place.offset)
             }
+            .animation(.easeInOut(duration: 0.8), value: still)
+            .frame(width: place?.size.width ?? 0, height: place?.size.height ?? 0)
+            .opacity(Self.strength)
+            .scaleEffect(x: 1, y: stretch / GFTabletopLayout.longestStretch,
+                         anchor: UnitPoint(x: 0.5, y: place?.contentTop ?? 0)) // as long as the hinge makes it
+            .animation(.spring(duration: 0.1, bounce: 0), value: stretch)
+            .offset(place?.offset ?? .zero)
         }
         .allowsHitTesting(false)
     }
@@ -383,10 +386,10 @@ private struct GFGlow: View {
 /// shortens it): its content across the picture's width from the top of the panel, its blurred border round it.
 private struct GFGlowPlace {
     let size: CGSize, offset: CGSize
-    /// Where in the image (top 0, bottom 1) its content starts, and where the fade ends.
-    let contentTop: CGFloat, fadeEnd: CGFloat
+    /// Where in the image (top 0, bottom 1) its content starts: the fold's row, which stays put as the hinge stretches.
+    let contentTop: CGFloat
 
-    init?(image: CGImage, picture: CGSize, fadeEnd: CGFloat) {
+    init?(image: CGImage, picture: CGSize) {
         let pad = CGFloat(GFGlowImage.padding)
         let content = CGSize(width: CGFloat(image.width) - 2 * pad, height: CGFloat(image.height) - 2 * pad)
         guard content.width > 0, content.height > 0, picture.width > 0, picture.height > 0 else { return nil }
@@ -395,19 +398,21 @@ private struct GFGlowPlace {
         size = CGSize(width: CGFloat(image.width) * across, height: CGFloat(image.height) * down)
         offset = CGSize(width: -pad * across, height: -pad * down) // the content's top at the top of the panel
         contentTop = pad / CGFloat(image.height)
-        self.fadeEnd = contentTop + fadeEnd * content.height / CGFloat(image.height)
     }
 }
 
-/// The glow's picture: a frame made tiny, upside down (its bottom row first, by the fold), and blurred with a clear
-/// border round it so its edges fade too, as a blurred element's do on the web (Video.js's `filter: blur(24px)`), by
-/// Accelerate on the tiny picture: the screen then draws the glow with no blur of its own.
+/// The glow's picture: a frame made tiny, upside down (its bottom row first, by the fold), blurred with a clear border
+/// round it so its edges fade too, as a blurred element's do on the web (Video.js's `filter: blur(24px)`), and fading
+/// to clear 80% of the way down (Video.js's mask), by Accelerate on the tiny picture: the screen then draws the glow
+/// with no blur or mask of its own.
 nonisolated enum GFGlowImage {
     /// Pixels across the picture: "Same shape as the video, just tiny. The blur hides the low resolution." (Video.js)
     static let width = 64
     /// The clear border, as far as the blur reaches: a tent 2 x 5 + 1 pixels wide spreads a 64-pixel picture about as
     /// far as a 24-point blur spreads it across the Duo's panel.
     static let padding = 5
+    /// Where the fade from the fold ends, as a share of the picture's length (Video.js: "transparent 80%").
+    static let fadeEnd = 0.8
 
     /// The glow's picture from a tiny frame's BGRA pixels.
     static func make(bgra base: UnsafeRawPointer, width: Int, height: Int, rowBytes: Int) -> CGImage? {
@@ -416,8 +421,10 @@ nonisolated enum GFGlowImage {
         var bordered = [UInt8](repeating: 0, count: outRow * outHeight)
         bordered.withUnsafeMutableBytes { target in
             guard let start = target.baseAddress else { return }
-            for row in 0 ..< height { // upside down, inside the border
-                memcpy(start + (pad + height - 1 - row) * outRow + pad * 4, base + row * rowBytes, width * 4)
+            for row in 0 ..< height { // upside down, inside the border, opaque whatever the frame said
+                let line = start + (pad + height - 1 - row) * outRow + pad * 4
+                memcpy(line, base + row * rowBytes, width * 4)
+                for pixel in 0 ..< width { line.storeBytes(of: 255, toByteOffset: pixel * 4 + 3, as: UInt8.self) }
             }
         }
         var blurred = [UInt8](repeating: 0, count: bordered.count)
@@ -432,10 +439,26 @@ nonisolated enum GFGlowImage {
                                                    vImage_Flags(kvImageBackgroundColorFill))
             }
         }
-        guard status == kvImageNoError, let provider = CGDataProvider(data: Data(blurred) as CFData) else { return nil }
+        guard status == kvImageNoError else { return nil }
+        fade(&blurred, width: outWidth, contentRows: height, rowBytes: outRow)
+        guard let provider = CGDataProvider(data: Data(blurred) as CFData) else { return nil }
         return CGImage(width: outWidth, height: outHeight, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: outRow,
                        space: sRGB, bitmapInfo: bgra, provider: provider, decode: nil, shouldInterpolate: true,
                        intent: .defaultIntent)
+    }
+
+    /// Dims each row of the blurred picture as Video.js's mask does: whole at the fold (and in the border above it),
+    /// clear `fadeEnd` of the way down the picture's rows and below. Premultiplied, so all four bytes scale.
+    private static func fade(_ pixels: inout [UInt8], width: Int, contentRows: Int, rowBytes: Int) {
+        let rows = pixels.count / rowBytes
+        for row in padding ..< rows {
+            let along = (Double(row - padding) + 0.5) / Double(contentRows)
+            let keep = max(0, 1 - along / fadeEnd)
+            guard keep < 1 else { continue }
+            for index in row * rowBytes ..< row * rowBytes + width * 4 {
+                pixels[index] = UInt8((Double(pixels[index]) * keep).rounded())
+            }
+        }
     }
 
     /// The glow's picture from a still (10-bit software decoding's).
