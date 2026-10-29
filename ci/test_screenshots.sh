@@ -56,16 +56,22 @@ grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo guide -GFDemoMov
   && ok "moves the Apple TV focus" || no "tv moves"
 grep -qF "launch TZ=Europe/London" "$LOG" && ok "the app runs on UK time" || no "time zone"
 # unsigned builds crash on iCloud at launch; Lume keeps iCloud off under -ui-testing (as its own UI tests do)
-[ "$(grep -c "simctl launch " "$LOG")" -eq 22 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
+[ "$(grep -c "simctl launch " "$LOG")" -eq 26 ] && [ "$(grep "simctl launch " "$LOG" | grep -vc -- " -ui-testing ")" -eq 0 ] \
   && ok "every launch keeps iCloud off" || no "a launch without -ui-testing"
 n=0
 for f in iphone-guide-dark iphone-list-dark iphone-guide-light iphone-list-light iphone-guide-few-dark \
          iphone-home-dark iphone-home-added-dark iphone-movies-dark iphone-series-dark iphone-banner-dark \
          iphone-guide-landscape-dark tv-guide-channel tv-guide-programme tv-guide-bottom tv-guide-long tv-home \
-         tv-home-added tv-movies tv-banner tv-list; do
+         tv-home-added tv-movies tv-banner tv-list iphone-search-sport-dark iphone-search-futbols-dark \
+         iphone-search-typo-dark tv-search-sport; do
   if [ -f "$T/out/$f.png" ]; then n=$((n + 1)); else no "missing $f.png"; fi
 done
-[ "$n" -eq 20 ] && ok "twenty screenshots" || no "screenshots ($n)"
+[ "$n" -eq 24 ] && ok "twenty-four screenshots" || no "screenshots ($n)"
+# search (GFSmartSearch, Georgs 29 Oct): a typed search on the iPhone and the Apple TV, one with a space in it
+grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo search -GFDemoQuery sport$" "$LOG" \
+  && grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo search -GFDemoQuery futbols šovakar$" "$LOG" \
+  && grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo search -GFDemoQuery sport$" "$LOG" \
+  && ok "search is photographed on the iPhone and the Apple TV" || no "no picture of search"
 grep -qE "simctl launch .*IPHONE-1 lv.test.lume -ui-testing -GFDemo banner$" "$LOG" \
   && grep -qE "simctl launch .*TV-1 lv.test.lume -ui-testing -GFDemo banner$" "$LOG" \
   && ok "the continue banner is photographed on the iPhone and the Apple TV" || no "no picture of the banner"

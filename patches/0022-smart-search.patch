@@ -1,0 +1,191 @@
+diff --git a/Lume/Views/SearchView.swift b/Lume/Views/SearchView.swift
+index 179bc60..e1f8191 100644
+--- a/Lume/Views/SearchView.swift
++++ b/Lume/Views/SearchView.swift
+@@ -25,8 +25,9 @@ struct SearchView: View {
+     @State private var selectedFilter: ContentFilter = .all
+     @State private var results: [SearchResult] = []
+     @State private var playingMedia: PlayableMedia?
+-    /// Lume GF: guide programmes that match ("On TV")
+-    @State private var gfGuide = GFGuideSearchModel()
++    /// Lume GF: the search itself (GFSmartSearch: typos forgiven, Latvian and Cyrillic, categories, a ranked "All")
++    @State private var gfSmart = GFSmartSearchModel()
++    @Environment(DeepLinkRouter.self) private var gfRouter: DeepLinkRouter?
+ 
+     /// Max matches fetched per content type. Keeps the result set bounded so the
+     /// list stays responsive even when a playlist holds tens of thousands of items.
+@@ -80,59 +81,34 @@ struct SearchView: View {
+                 } else {
+                     // Results — only show "No Results" once a query has actually
+                     // been run, so it doesn't flash while the input is debouncing.
+-                    if results.isEmpty, gfGuide.rows.isEmpty {
+-                        if !debouncedSearchText.isEmpty {
++                    if results.isEmpty, gfSmart.groups.isEmpty {
++                        // Lume GF: once Lume GF's search has answered this query as well
++                        if !debouncedSearchText.isEmpty,
++                           gfSmart.hasAnswered(debouncedSearchText, filter: selectedFilter) {
+                             ContentUnavailableView.search
+                         }
+                     } else if !results.isEmpty {
+                         Section {
+                             ForEach(results) { result in
+-                                switch result {
+-                                case let .movie(movie):
+-                                    NavigationLink(value: movie) {
+-                                        SearchResultRow(result: result, playlistName: playlistName(for: result))
+-                                            .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
+-                                    }
+-                                    .mediaFavoriteMenu(
+-                                        isFavorite: { movie.isFavorite },
+-                                        onToggleFavorite: { MediaFavorites.toggle(movie, in: modelContext) }
+-                                    )
+-                                case let .series(series):
+-                                    NavigationLink(value: series) {
+-                                        SearchResultRow(result: result, playlistName: playlistName(for: result))
+-                                            .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
+-                                    }
+-                                    .mediaFavoriteMenu(
+-                                        isFavorite: { series.isFavorite },
+-                                        onToggleFavorite: { MediaFavorites.toggle(series, in: modelContext) }
+-                                    )
+-                                case let .liveStream(stream):
+-                                    Button {
+-                                        playChannel(stream)
+-                                    } label: {
+-                                        SearchResultRow(result: result, playlistName: playlistName(for: result))
+-                                    }
+-                                    .buttonStyle(.plain)
+-                                    .liveChannelMenu(
+-                                        stream: stream,
+-                                        isFavorite: stream.isFavorite,
+-                                        onToggleFavorite: { LiveChannelFavorites.toggle(stream, in: modelContext) }
+-                                    )
+-                                }
++                                lumeRow(result)
+                             }
+                         } header: {
+                             Text("\(results.count) Results")
+                         }
+                     }
+-                    // Lume GF: when and where a matching programme airs (Georgs, 8 Oct)
+-                    GFGuideSearchSection(model: gfGuide, onPlay: playChannel)
++                    // Lume GF: categories, channels, programmes, films and series, best first (Georgs, 29 Oct)
++                    GFSmartSearchSections(model: gfSmart, onPlay: playChannel, onOpenCategory: gfOpenCategory) {
++                        lumeRow($0)
++                    }
+                 }
+             }
+             .searchField(text: $searchText)
+-            .gfGuideSearch(gfGuide, query: debouncedSearchText,
+-                           playlistIDs: (searchAllPlaylists ? playlists : [activePlaylist].compactMap(\.self))
+-                               .map(\.id.uuidString),
+-                           isWanted: selectedFilter == .all || selectedFilter == .liveTV, onPlay: playChannel)
++            .gfSmartSearch(gfSmart, query: debouncedSearchText, filter: selectedFilter, playlists: playlists,
++                           scope: searchAllPlaylists ? playlists : [activePlaylist].compactMap(\.self),
++                           onPlay: playChannel)
++            #if GF_DEMO
++                .task { if let query = GFDemo.searchQuery { searchText = query } }
++            #endif
+             .navigationDestination(for: Movie.self) { movie in
+                 MovieDetailView(movie: movie, animationNamespace: animationNamespace)
+                 #if os(iOS)
+@@ -187,6 +163,52 @@ struct SearchView: View {
+         return playlists.owner(ofContentID: result.contentID)?.name
+     }
+ 
++    /// A movie, series or channel row as Lume draws it (Lume GF: GFSmartSearchSections draws its rows with it too).
++    @ViewBuilder private func lumeRow(_ result: SearchResult) -> some View {
++        switch result {
++        case let .movie(movie):
++            NavigationLink(value: movie) {
++                SearchResultRow(result: result, playlistName: playlistName(for: result))
++                    .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
++            }
++            .mediaFavoriteMenu(
++                isFavorite: { movie.isFavorite },
++                onToggleFavorite: { MediaFavorites.toggle(movie, in: modelContext) }
++            )
++        case let .series(series):
++            NavigationLink(value: series) {
++                SearchResultRow(result: result, playlistName: playlistName(for: result))
++                    .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
++            }
++            .mediaFavoriteMenu(
++                isFavorite: { series.isFavorite },
++                onToggleFavorite: { MediaFavorites.toggle(series, in: modelContext) }
++            )
++        case let .liveStream(stream):
++            Button {
++                playChannel(stream)
++            } label: {
++                SearchResultRow(result: result, playlistName: playlistName(for: result))
++            }
++            .buttonStyle(.plain)
++            .liveChannelMenu(
++                stream: stream,
++                isFavorite: stream.isFavorite,
++                onToggleFavorite: { LiveChannelFavorites.toggle(stream, in: modelContext) }
++            )
++        }
++    }
++
++    /// Lume GF: a category found opens Live TV on it (Georgs, 29 Oct), in its own playlist.
++    private func gfOpenCategory(_ category: Category) {
++        guard let owner = playlists.owner(ofContentID: category.id) else { return }
++        if owner.id != activePlaylist?.id { selectedPlaylistID = owner.id.uuidString }
++        // Live TV starts a playlist it has not shown yet on its first category: this one is chosen already
++        gfRouter?.liveTVSeededPrefix = "\(owner.id.uuidString)-"
++        gfRouter?.liveTVSection = .category(category)
++        gfRouter?.selectedTab = .liveTV
++    }
++
+     private func playChannel(_ stream: LiveStream) {
+         // Cross-playlist search surfaces channels the active playlist can't
+         // stream: a live URL is built from its playlist's server, credentials
+@@ -220,11 +242,9 @@ struct SearchView: View {
+             return
+         }
+ 
+-        let playlist = activePlaylist
+         let filter = selectedFilter
+         let wantMovies = filter == .all || filter == .movies
+         let wantSeries = filter == .all || filter == .series
+-        let wantLive = filter == .all || filter == .liveTV
+ 
+         // A Stalker portal's movies/series aren't synced locally, so they can
+         // only be found through the portal's own search API — asked of every
+@@ -232,17 +252,12 @@ struct SearchView: View {
+         // *is* synced) and every other source type use the local predicate
+         // search. Cross-playlist search still runs the local pass too, so other
+         // playlists' synced content is included.
+-        let usePortalForVODSeries = playlist?.sourceType == .stalker && !searchAllPlaylists
+         let portal = await portalSearch(query: query, wantMovies: wantMovies, wantSeries: wantSeries)
+         guard !Task.isCancelled else { return }
+ 
+-        let localHits = await localSearch(
+-            query: query, playlist: playlist,
+-            wantMovies: wantMovies && !usePortalForVODSeries,
+-            wantSeries: wantSeries && !usePortalForVODSeries,
+-            wantLive: wantLive
+-        )
+-        guard !Task.isCancelled else { return }
++        // Lume GF: everything synced here is searched by GFSmartSearch (GFSmartSearchSections), so Lume's own pass is
++        // left out; a portal's films and series still come from its search API above
++        let localHits = SearchHits()
+ 
+         results = assembleResults(portal: portal, localHits: localHits)
+     }
+@@ -449,7 +464,12 @@ private struct SearchFieldModifier: ViewModifier {
+     /// The search field's latest text. A class, and deliberately not
+     /// observable: writing it must not schedule a view update of its own.
+     private final class FieldText {
+-        var value = ""
++        #if GF_DEMO
++            // the screenshots' typed search (GFDemo): the field writes its own text back over the search's
++            var value = GFDemo.searchQuery ?? ""
++        #else
++            var value = ""
++        #endif
+     }
+ #endif
+ 

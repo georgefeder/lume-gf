@@ -159,6 +159,10 @@ shoot "$IOS" "$BID" iphone-movies-dark -GFDemo movies
 shoot "$IOS" "$BID" iphone-series-dark -GFDemo series
 # the continue banner over Home (another device played BBC One three minutes ago): at the top, centred
 shoot "$IOS" "$BID" iphone-banner-dark -GFDemo banner
+# search (GFSmartSearch): "All" ranked, a category on top; a Latvian word with a time word; a typo
+shoot "$IOS" "$BID" iphone-search-sport-dark -GFDemo search -GFDemoQuery sport
+shoot "$IOS" "$BID" iphone-search-futbols-dark -GFDemo search -GFDemoQuery "futbols šovakar"
+shoot "$IOS" "$BID" iphone-search-typo-dark -GFDemo search -GFDemoQuery duen
 # a channel opened in light mode, filmed (Georgs saw the screen flash dark): system light, then Lume's own Light setting
 xcrun simctl ui "$IOS" appearance light
 film "$IOS" "$BID" iphone-open-light -GFDemo list -GFDemoMoves play
@@ -206,6 +210,7 @@ shoot "$TV" "$BID" tv-home-added -GFDemo home -home.disabledSections.v1 favorite
 shoot "$TV" "$BID" tv-movies -GFDemo movies
 shoot "$TV" "$BID" tv-banner -GFDemo banner  # top right, never focusable
 shoot "$TV" "$BID" tv-list -GFDemo list
+shoot "$TV" "$BID" tv-search-sport -GFDemo search -GFDemoQuery sport
 [ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true
 echo "screenshots: done"
 # the dark flash Georgs saw on opening a channel must not come back
