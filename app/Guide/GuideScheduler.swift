@@ -134,6 +134,7 @@ final class GuideScheduler {
                 BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: nil) { task in
                     // Set at once: Apple may end the time before the main actor gets to the refresh.
                     task.expirationHandler = {
+                        Logger.database.info("Guide: iOS ended the background time")
                         Task { @MainActor in
                             EPGSyncService.shared.cancelBackgroundRefresh()
                             GuideScheduler.shared.submitImportTask()
@@ -144,8 +145,13 @@ final class GuideScheduler {
             }
         }
 
+        /// Each wake is in the diagnostic report (Georgs, 29 Oct: is the guide refreshed while the app is closed?).
         private func runBackground(_ task: BGTask) async {
+            let kind = task is BGProcessingTask ? "overnight import" : "background refresh"
+            Logger.database.info("Guide: iOS woke the app for its \(kind, privacy: .public)")
             let finished = await EPGSyncService.shared.refreshIfDueAndWait()
+            let outcome = finished ? "done" : "not finished"
+            Logger.database.info("Guide: \(kind, privacy: .public) \(outcome, privacy: .public)")
             submitBackgroundRefresh()
             if finished, task is BGProcessingTask { submitImportTask(onPower: true) }
             task.setTaskCompleted(success: finished)
@@ -156,6 +162,8 @@ final class GuideScheduler {
             request.earliestBeginDate = GuideClock.backgroundBeginDate(next: nextCheck(), now: Date())
             do {
                 try BGTaskScheduler.shared.submit(request)
+                let after = (request.earliestBeginDate ?? Date()).formatted(date: .omitted, time: .shortened)
+                Logger.database.info("Guide: background refresh asked of iOS for after \(after, privacy: .public)")
             } catch {
                 Logger.database.info("Guide background refresh not scheduled: \(error.localizedDescription, privacy: .public)")
             }

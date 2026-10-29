@@ -15,7 +15,8 @@
     /// series (some with long titles) and a few watched channels. `-GFDemo banner` shows Home with the continue banner
     /// over it, as when another device played BBC One three minutes ago. `-GFDemoFold 1` stands the player up half
     /// folded like an iPhone Duo on a table (GFTabletop), `-GFDemoHinge 100` open that far; `-GFDemoStream <url>`
-    /// gives the played channel a real stream.
+    /// gives the played channel a real stream. `-GFDemo search -GFDemoQuery sport` shows Lume's search screen with
+    /// that search typed (GFSmartSearch).
     enum GFDemo {
         static var mode: String? {
             value(after: "-GFDemo")
@@ -23,6 +24,11 @@
 
         static var moves: [String] {
             value(after: "-GFDemoMoves")?.split(separator: ",").map(String.init) ?? []
+        }
+
+        /// `-GFDemoQuery <text>`: what the search screen has typed (`-GFDemo search`).
+        static var searchQuery: String? {
+            value(after: "-GFDemoQuery")
         }
 
         static var channelCount: Int {
@@ -316,6 +322,7 @@
                 case "home", "banner": "home"
                 case "movies": "movies"
                 case "series": "series"
+                case "search": "search"
                 default: "live"
                 }
             }
@@ -366,6 +373,7 @@
                 case "home", "banner": HomeView()
                 case "movies": MoviesView()
                 case "series": SeriesView()
+                case "search": SearchView()
                 default: liveTV
                 }
             #elseif os(iOS)
@@ -374,6 +382,12 @@
                     Tab("Live TV", systemImage: "tv", value: "live") { liveTV }
                     Tab("Movies", systemImage: "film", value: "movies") { MoviesView() }
                     Tab("Series", systemImage: "rectangle.stack", value: "series") { SeriesView() }
+                    // as in the app (MainTabView): the search tab, its field at the bottom
+                    Tab(value: "search", role: .search) {
+                        SearchView()
+                    } label: {
+                        Label("Search", systemImage: "magnifyingglass")
+                    }
                 }
                 // as in the app (MainTabView): the tab bar shrinks while the guide scrolls down
                 .tabBarMinimizeOnScrollDownIfAvailable()
