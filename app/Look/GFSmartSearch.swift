@@ -1,6 +1,9 @@
 import OSLog
 import SwiftData
 import SwiftUI
+#if canImport(UIKit)
+    import UIKit
+#endif
 
 /// Lume GF's search behind Lume's search screen (Georgs, 29 Oct: typos, his languages, categories, and an "All" that
 /// understands what he is after). Three indexes (GFSearchIndex) are built off the main thread from the library and
@@ -28,10 +31,29 @@ nonisolated final class GFSearchCatalog: @unchecked Sendable {
     private var built: [Shelf: Built] = [:]
     private var building: [Shelf: (key: String, task: Task<Built, Never>)] = [:]
 
+    init() {
+        #if canImport(UIKit)
+            // the guide's and the library's indexes are the big ones: built again at the next search
+            NotificationCenter.default.addObserver(
+                forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil
+            ) { [weak self] _ in
+                self?.lock.withLock {
+                    self?.built[.guide] = nil
+                    self?.built[.library] = nil
+                }
+            }
+        #endif
+    }
+
+    /// Whether the index for `key` is built.
+    func isReady(_ shelf: Shelf, key: String) -> Bool {
+        lock.withLock { built[shelf]?.key == key }
+    }
+
     /// The index for `key`: at once when built, the older one while a new one builds, else once it is built. The
     /// guide's holds the programmes that have not ended at `now`.
-    func index(_ shelf: Shelf, key: String, container: ModelContainer, playlists: [String],
-               now: Date = Date()) async -> Built {
+    func index(_ shelf: Shelf, key: String, container: ModelContainer, playlists: [String], now: Date = Date(),
+               priority: TaskPriority = .userInitiated) async -> Built {
         enum Answer {
             case ready(Built)
             case wait(Task<Built, Never>)
@@ -42,11 +64,14 @@ nonisolated final class GFSearchCatalog: @unchecked Sendable {
             if let running = building[shelf], running.key == key {
                 task = running.task
             } else {
-                task = Task.detached(priority: built[shelf] == nil ? .userInitiated : .utility) { [self] in
+                task = Task.detached(priority: built[shelf] == nil ? priority : .utility) { [self] in
                     let result = Self.build(shelf, key: key, container: container, playlists: playlists, now: now)
+                    // kept only while it is the newest asked for: an older build finishing late is not
                     lock.withLock {
-                        built[shelf] = result
-                        if building[shelf]?.key == key { building[shelf] = nil }
+                        if building[shelf]?.key == key {
+                            built[shelf] = result
+                            building[shelf] = nil
+                        }
                     }
                     return result
                 }
@@ -81,21 +106,20 @@ nonisolated final class GFSearchCatalog: @unchecked Sendable {
         }
         switch shelf {
         case .live:
+            // hidden ones too (Content Management can show them again without a sync): the search leaves them out
             let live = "live" // CategoryType.live
-            var categories = FetchDescriptor<Category>(
-                predicate: #Predicate { $0.typeRaw == live && $0.isHidden == false }
-            )
+            var categories = FetchDescriptor<Category>(predicate: #Predicate { $0.typeRaw == live })
             categories.propertiesToFetch = [\.id, \.name]
             for category in (try? context.fetch(categories)) ?? [] {
                 guard let row = split(category.id) else { continue }
                 builder.add(.category, key: row.key, group: row.group, name: category.name)
             }
-            var streams = FetchDescriptor<LiveStream>(predicate: #Predicate { $0.isHidden == false })
-            streams.propertiesToFetch = [\.id, \.name, \.categoryId]
+            var streams = FetchDescriptor<LiveStream>()
+            streams.propertiesToFetch = [\.id, \.name, \.categoryId, \.isHidden]
             try? context.enumerate(streams, batchSize: 2000) { stream in
                 guard let row = split(stream.id) else { return }
                 builder.add(.channel, key: row.key, group: row.group, name: stream.name)
-                if let category = stream.categoryId { counts[category, default: 0] += 1 }
+                if let category = stream.categoryId, !stream.isHidden { counts[category, default: 0] += 1 }
             }
         case .guide:
             var listings = FetchDescriptor<EPGListing>(predicate: #Predicate { $0.end > now })
@@ -169,6 +193,7 @@ nonisolated enum GFSmartSearch {
     }
 
     static func run(_ request: Request, container: ModelContainer, catalog: GFSearchCatalog = .shared) async -> Found {
+        guard !Task.isCancelled else { return Found() }
         let query = GFSearchQuery(request.text)
         guard !query.required.isEmpty else { return Found() }
         let liveKinds = request.kinds.intersection([.category, .channel])
@@ -224,11 +249,12 @@ nonisolated enum GFSmartSearch {
         let titles = Array(Set(scores.keys.map(title(ofProgrammeKey:))))
         let now = request.now
         let context = ModelContext(container)
+        // every airing of these titles (a title on many channels, "NBA Basketball", has many): sorted here, so
+        // tonight's or a particular game's airing is never cut off by earlier ones
         var descriptor = FetchDescriptor<EPGListing>(
-            predicate: #Predicate { titles.contains($0.title) && $0.end > now },
-            sortBy: [SortDescriptor(\.start)]
+            predicate: #Predicate { titles.contains($0.title) && $0.end > now }
         )
-        descriptor.fetchLimit = 1000
+        descriptor.fetchLimit = 5000
         let matched = ((try? context.fetch(descriptor)) ?? []).filter {
             scores[programmeKey(title: $0.title, subtitle: $0.subtitle)] != nil
         }
@@ -261,7 +287,11 @@ nonisolated enum GFSmartSearch {
         var result: [Airing] = []
         for (key, listings) in byProgramme {
             guard let score = scores[key] else { continue }
-            for hit in GFGuideSearch.hits(listings, channels: Set(streams.keys), now: now,
+            // with a time asked for ("tonight"), that time's airings when there are any
+            let inTime = query.time.map { time in
+                listings.filter { time.contains(start: $0.start, end: $0.end, now: now, calendar: calendar) }
+            } ?? []
+            for hit in GFGuideSearch.hits(inTime.isEmpty ? listings : inTime, channels: Set(streams.keys), now: now,
                                           limit: GFSearchLayout.airingsPerProgramme) {
                 guard let stream = streams[hit.channelId] else { continue }
                 result.append(Airing(hit: hit, stream: stream, score: GFSearchLayout.programmeScore(

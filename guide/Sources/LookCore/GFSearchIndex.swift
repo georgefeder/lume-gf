@@ -141,11 +141,11 @@ nonisolated final class GFSearchIndex: Sendable {
         }
 
         private mutating func post(_ word: String, _ item: Int32, extra: Bool) {
-            let number = Int(number(of: word))
+            let index = Int(number(of: word))
             if extra {
-                if inExtra[number].last != item { inExtra[number].append(item) }
-            } else if inName[number].last != item {
-                inName[number].append(item)
+                if inExtra[index].last != item { inExtra[index].append(item) }
+            } else if inName[index].last != item {
+                inName[index].append(item)
             }
         }
     }
@@ -205,9 +205,13 @@ nonisolated final class GFSearchIndex: Sendable {
                 * penalty * Self.kindWeight(items[Int(item)].kind)
             hits.append((item, score, typos))
         }
+        // the fewest mistakes first, then as `isBetter`, so the limit never cuts between equals at random
         hits.sort { lhs, rhs in
             if lhs.typos != rhs.typos { return lhs.typos < rhs.typos }
-            return lhs.score > rhs.score
+            if lhs.score != rhs.score { return lhs.score > rhs.score }
+            let left = items[Int(lhs.item)], right = items[Int(rhs.item)]
+            if left.nameLength != right.nameLength { return left.nameLength < right.nameLength }
+            return left.key < right.key
         }
         var taken: [Kind: Int] = [:]
         var result: [Hit] = []
@@ -258,8 +262,11 @@ nonisolated final class GFSearchIndex: Sendable {
         var items: [Int32: ItemMatch] = [:]
         var words: Set<Int32> = []
 
+        /// Keeps an item's match with the fewest mistakes, then the best: a word still being typed ("spor") keeps its
+        /// clean match, never one a guessed concept gave it.
         mutating func offer(_ item: Int32, _ match: ItemMatch) {
-            if let old = items[item], old.quality >= match.quality { return }
+            if let old = items[item],
+               old.typos < match.typos || (old.typos == match.typos && old.quality >= match.quality) { return }
             items[item] = match
         }
     }
@@ -268,8 +275,11 @@ nonisolated final class GFSearchIndex: Sendable {
     private func itemMatches(_ part: GFSearchQuery.Part, table: inout GFSearchFuzzy.Table,
                              forgiving: Bool = true) -> PartMatch {
         var result = PartMatch()
+        var clean = false
         if part.words.count == 1 {
-            for (number, match) in wordMatches(part.words[0], table: &table, forgiving: forgiving) {
+            let found = wordMatches(part.words[0], table: &table, forgiving: forgiving)
+            clean = found.values.contains { $0.typos == 0 }
+            for (number, match) in found {
                 result.words.insert(number)
                 for item in inName[Int(number)] {
                     result.offer(item, ItemMatch(quality: match.quality, typos: match.typos))
@@ -296,8 +306,9 @@ nonisolated final class GFSearchIndex: Sendable {
             }
         }
         var concepts = part.concepts
-        // a mistyped word no name has may still be a concept ("somja"): never a word that is in a name ("nets")
-        if forgiving, part.words.count == 1, numbers[part.words[0]] == nil {
+        // a mistyped word no name has or starts may still be a concept ("somja"): never a word in a name ("nets"), nor
+        // one still being typed ("spor")
+        if forgiving, part.words.count == 1, !clean {
             concepts.formUnion(lexicon.concepts(ofMistypedWord: part.words[0]))
         }
         for concept in concepts {
@@ -313,8 +324,8 @@ nonisolated final class GFSearchIndex: Sendable {
         return result
     }
 
-    /// The words `word` matches: itself, words it starts (the closest 300), and, `forgiving`, words within its
-    /// mistakes budget, whole or (from five letters, when nothing else matched) by their start.
+    /// The words `word` matches: itself, words it starts (the closest 300), and, `forgiving` and when neither
+    /// matched, words within its mistakes budget, whole or (from five letters) by their start.
     private func wordMatches(_ word: String, table: inout GFSearchFuzzy.Table,
                              forgiving: Bool) -> [Int32: WordMatch] {
         var found: [Int32: WordMatch] = [:]
@@ -338,9 +349,11 @@ nonisolated final class GFSearchIndex: Sendable {
                 found[number] = WordMatch(quality: 0.72 + 0.2 * ratio, typos: 0)
             }
         }
+        // mistakes only for a word that matched nothing as it is: the clean matches would outrank them anyway
         let budget = GFSearchFuzzy.budget(forLength: length)
-        guard forgiving, budget > 0 else { return found }
+        guard forgiving, budget > 0, found.isEmpty else { return found }
         for candidateLength in max(1, length - budget) ... (length + budget) where candidateLength < byLength.count {
+            guard !Task.isCancelled else { return found }
             for number in byLength[candidateLength] where found[number] == nil {
                 guard let mistakes = table.distance(word, vocabulary[Int(number)], limit: budget), mistakes > 0
                 else { continue }
@@ -352,6 +365,7 @@ nonisolated final class GFSearchIndex: Sendable {
             var word = word
             word.withUTF8 { typed in
                 for candidateLength in (length + budget + 1) ..< max(length + budget + 1, byLength.count) {
+                    guard !Task.isCancelled else { return }
                     for number in byLength[candidateLength] {
                         var candidate = vocabulary[Int(number)]
                         let mistakes = candidate.withUTF8 { whole in

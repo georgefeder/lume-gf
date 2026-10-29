@@ -46,14 +46,20 @@ final class GFSmartSearchModel {
     }
 
     private(set) var groups: [ResultGroup] = []
-    /// The search the groups answer ("No Results" waits for it).
-    private(set) var answered = ""
+    /// Films and series are still being indexed (the first search after launch): the rest is shown meanwhile.
+    private(set) var loadingLibrary = false
+    /// The search and filter the groups fully answer ("No Results" waits for it).
+    private var answered = ""
     private(set) var now = Date()
     var selection: GFProgrammeSelection?
     @ObservationIgnored private let catalog: GFSearchCatalog
 
     init(catalog: GFSearchCatalog = .shared) {
         self.catalog = catalog
+    }
+
+    func hasAnswered(_ text: String, filter: ContentFilter) -> Bool {
+        answered == filter.rawValue + "|" + text
     }
 
     static func kinds(_ filter: ContentFilter) -> Set<GFSearchIndex.Kind> {
@@ -65,36 +71,41 @@ final class GFSmartSearchModel {
         }
     }
 
-    /// What the indexes are built from: each playlist's last sync (and films' and series'), and the guide's last
-    /// import (every three hours at least, so ended programmes leave).
+    /// What the live TV and library indexes are built from: each playlist's last sync, and for films and series their
+    /// own (a live channels' sync leaves them as they were).
     struct Keys: Equatable {
         let playlists: [String]
         let live: String
-        let guide: String
         let library: String
 
-        init(playlists: [Playlist], now: Date = Date()) {
+        init(playlists: [Playlist]) {
             let sorted = playlists.sorted { $0.id.uuidString < $1.id.uuidString }
             self.playlists = sorted.map(\.id.uuidString)
             live = sorted.map { "\($0.id.uuidString)@\($0.lastSyncDate?.timeIntervalSince1970 ?? 0)" }
                 .joined(separator: ",")
-            library = live + "|" + sorted.map {
-                "\(GFCatalogStamps.vodSyncedAt($0.id)?.timeIntervalSince1970 ?? 0)"
+            library = sorted.map {
+                let synced = GFCatalogStamps.vodSyncedAt($0.id) ?? $0.lastSyncDate
+                return "\($0.id.uuidString)@\(synced?.timeIntervalSince1970 ?? 0)"
             }.joined(separator: ",")
-            let imported = GuideScheduler.shared.enabledStates().compactMap(\.lastUpdate).max()
-            guide = "\(imported?.timeIntervalSince1970 ?? 0)|\(Int(now.timeIntervalSince1970 / 10800))"
         }
     }
 
-    /// Builds the indexes before the first search needs them (the search screen opened).
+    /// What the guide index is built from: the guide's last import, and every three hours (ended programmes leave).
+    static func guideKey(now: Date) -> String {
+        let imported = GuideScheduler.shared.enabledStates().compactMap(\.lastUpdate).max()
+        return "\(imported?.timeIntervalSince1970 ?? 0)|\(Int(now.timeIntervalSince1970 / 10800))"
+    }
+
+    /// Builds the indexes before the first search needs them (the search screen opened), unhurried.
     func prepare(keys: Keys, container: ModelContainer) {
-        let shelves: [(GFSearchCatalog.Shelf, String)] = [(.live, keys.live), (.guide, keys.guide),
+        let shelves: [(GFSearchCatalog.Shelf, String)] = [(.live, keys.live), (.guide, Self.guideKey(now: Date())),
                                                           (.library, keys.library)]
         let playlists = keys.playlists
         let catalog = catalog
         for (shelf, key) in shelves {
             Task.detached(priority: .utility) {
-                _ = await catalog.index(shelf, key: key, container: container, playlists: playlists)
+                _ = await catalog.index(shelf, key: key, container: container, playlists: playlists,
+                                        priority: .utility)
             }
         }
     }
@@ -104,22 +115,47 @@ final class GFSmartSearchModel {
         guard !text.isEmpty else {
             groups = []
             answered = ""
+            loadingLibrary = false
             return
         }
         let now = Date()
-        let request = GFSmartSearch.Request(
-            text: text, kinds: Self.kinds(filter), playlists: keys.playlists, scope: Set(scope.map(\.id.uuidString)),
-            liveKey: keys.live, guideKey: keys.guide, libraryKey: keys.library, now: now
-        )
-        let (container, catalog) = (context.container, catalog)
+        let kinds = Self.kinds(filter)
+        func request(_ kinds: Set<GFSearchIndex.Kind>) -> GFSmartSearch.Request {
+            GFSmartSearch.Request(
+                text: text, kinds: kinds, playlists: keys.playlists, scope: Set(scope.map(\.id.uuidString)),
+                liveKey: keys.live, guideKey: Self.guideKey(now: now), libraryKey: keys.library, now: now
+            )
+        }
+        // the library's index is the slow one to build (every film and series): until it is in, the rest shows
+        let library: Set<GFSearchIndex.Kind> = [.film, .series]
+        if !kinds.isDisjoint(with: library), !catalog.isReady(.library, key: keys.library) {
+            loadingLibrary = true
+            let rest = kinds.subtracting(library)
+            if !rest.isEmpty {
+                let found = await search(request(rest), container: context.container)
+                guard !Task.isCancelled else { return }
+                show(found, filter: filter, context: context, restriction: restriction, now: now)
+            }
+        }
+        let found = await search(request(kinds), container: context.container)
+        guard !Task.isCancelled else { return }
+        loadingLibrary = false
+        show(found, filter: filter, context: context, restriction: restriction, now: now)
+        answered = filter.rawValue + "|" + text
+    }
+
+    private func search(_ request: GFSmartSearch.Request, container: ModelContainer) async -> GFSmartSearch.Found {
+        let catalog = catalog
         let search = Task.detached(priority: .userInitiated) {
             await GFSmartSearch.run(request, container: container, catalog: catalog)
         }
-        let found = await withTaskCancellationHandler { await search.value } onCancel: { search.cancel() }
-        guard !Task.isCancelled else { return }
+        return await withTaskCancellationHandler { await search.value } onCancel: { search.cancel() }
+    }
+
+    private func show(_ found: GFSmartSearch.Found, filter: ContentFilter, context: ModelContext,
+                      restriction: ContentRestriction, now: Date) {
         self.now = now
         groups = Self.assemble(found, allKinds: filter == .all, context: context, restriction: restriction, now: now)
-        answered = text
     }
 
     /// The matches as rows, in the viewer's view of the library: hidden or restricted ones left out, favourite and
@@ -203,6 +239,15 @@ struct GFSmartSearchSections<LumeRow: View>: View {
                 }
             } header: {
                 Text(group.title)
+            }
+        }
+        if model.loadingLibrary {
+            Section {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Searching movies and series…")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -300,14 +345,19 @@ private struct GFSmartSearchHost: ViewModifier {
         let filter: ContentFilter
         let keys: GFSmartSearchModel.Keys
         let scope: [String]
+        /// A new guide (the status line changes with it), and the viewer's hidden and restricted categories.
+        let guide: String
+        let visibility: String
     }
 
     func body(content: Content) -> some View {
         @Bindable var model = model
         let keys = GFSmartSearchModel.Keys(playlists: playlists)
+        let key = Key(query: query, filter: filter, keys: keys, scope: scope.map(\.id.uuidString),
+                      guide: GuideStatus.shared.line, visibility: restriction.visibilityToken)
         content
             .task(id: keys) { model.prepare(keys: keys, container: modelContext.container) }
-            .task(id: Key(query: query, filter: filter, keys: keys, scope: scope.map(\.id.uuidString))) {
+            .task(id: key) {
                 await model.update(text: query, filter: filter, keys: keys, scope: scope, context: modelContext,
                                    restriction: restriction)
             }

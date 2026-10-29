@@ -19,10 +19,13 @@ nonisolated struct GFSearchQuery: Equatable, Sendable {
         case now, today, tonight, tomorrow
 
         /// Whether a programme from `start` to `end` is in this time, seen at `now`. Tonight runs from six in the
-        /// evening (or now, if later) to four in the morning.
+        /// evening to four in the morning; until four in the morning, "today" and "tonight" are still the evening
+        /// before.
         func contains(start: Date, end: Date, now: Date, calendar: Calendar) -> Bool {
             guard end > now else { return false }
-            let today = calendar.startOfDay(for: now)
+            let midnight = calendar.startOfDay(for: now)
+            let today = calendar.component(.hour, from: now) < 4
+                ? calendar.date(byAdding: .day, value: -1, to: midnight) ?? midnight : midnight
             func hours(_ hours: Int, from day: Date) -> Date {
                 calendar.date(byAdding: .hour, value: hours, to: day) ?? day
             }

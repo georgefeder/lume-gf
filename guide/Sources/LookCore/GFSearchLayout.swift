@@ -21,7 +21,7 @@ nonisolated enum GFSearchLayout {
 
     /// `rows` as sections. Top Results only when `allKinds` (the "All" filter) and rows of two kinds or more came;
     /// what is in it is not repeated below.
-    static func sections<ID>(_ rows: [Row<ID>], allKinds: Bool) -> [Section<ID>] {
+    static func sections<ID: Hashable & Sendable>(_ rows: [Row<ID>], allKinds: Bool) -> [Section<ID>] {
         let best = rows.enumerated().sorted { lhs, rhs in
             lhs.element.score != rhs.element.score ? lhs.element.score > rhs.element.score : lhs.offset < rhs.offset
         }.map(\.element)

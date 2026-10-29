@@ -133,6 +133,10 @@ struct GFSearchQueryTests {
         #expect(tonight.contains(start: at(11), end: at(12), now: afternoon, calendar: calendar)) // 02:00
         #expect(!tonight.contains(start: at(19), end: at(20), now: afternoon, calendar: calendar)) // tomorrow 10:00
         #expect(!tonight.contains(start: at(1), end: at(2), now: afternoon, calendar: calendar)) // 16:00
+        // at one in the morning, tonight is still the night that began the evening before
+        let late = at(10) // 01:00
+        #expect(tonight.contains(start: at(9.5), end: at(10.5), now: late, calendar: calendar))
+        #expect(!tonight.contains(start: at(27), end: at(28), now: late, calendar: calendar)) // the next evening
         #expect(GFSearchQuery.Time.now.contains(start: at(-1), end: at(1), now: afternoon, calendar: calendar))
         #expect(!GFSearchQuery.Time.now.contains(start: at(1), end: at(2), now: afternoon, calendar: calendar))
     }
@@ -200,6 +204,13 @@ struct GFSearchIndexTests {
 
     @Test func `a category beats a channel that only has the word`() {
         #expect(keys("sports").first == "cat-sport")
+    }
+
+    @Test func `a word still being typed keeps its matches`() {
+        let found = keys("spor")
+        #expect(found.first == "cat-sport")
+        #expect(found.contains("skysports"))
+        #expect(keys("finlan").first == "cat-fi")
     }
 
     @Test func `little words help, and with three words or more one may be missing`() {

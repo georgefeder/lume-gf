@@ -16,7 +16,7 @@ struct GFSmartSearchTests {
         let finland: Lume.Category
     }
 
-    private func library() throws -> Library {
+    private func makeLibrary() throws -> Library {
         let container = try makeTestContainer()
         let context = ModelContext(container)
         let mine = Playlist(name: "Mine", serverURL: "http://example.invalid", username: "u", password: "p")
@@ -67,14 +67,13 @@ struct GFSmartSearchTests {
         return await GFSmartSearch.run(request, container: library.container, catalog: GFSearchCatalog())
     }
 
-    @Test func `a country finds its category and its visible channels, in this playlist only`() async throws {
-        let library = try library()
+    @Test func `a country finds its category and its channels, in this playlist only`() async throws {
+        let library = try makeLibrary()
         for text in ["finland", "Somija", "finlnd"] {
             let found = await search(text, in: library)
             let keys = found.hits.map(\.key)
             #expect(keys.first == library.finland.id, "\(text): \(keys)")
             #expect(keys.contains("\(library.mine.id.uuidString)-live-1"), "\(text): \(keys)")
-            #expect(!keys.contains("\(library.mine.id.uuidString)-live-3"), "\(text): hidden channel found")
             #expect(!keys.contains { $0.hasPrefix(library.other.id.uuidString) }, "\(text): other playlist found")
             #expect(found.channelCounts[library.finland.id] == 1)
         }
@@ -83,7 +82,7 @@ struct GFSmartSearchTests {
     }
 
     @Test func `a programme is found by title or by its episode line, with the channel that carries it`() async throws {
-        let library = try library()
+        let library = try makeLibrary()
         let shark = await search("shark tank", in: library)
         #expect(Set(shark.airings.map(\.hit.listingID)) == ["later", "live"])
         #expect(shark.hits.map(\.key) == ["\(library.mine.id.uuidString)-series-7"])
@@ -93,7 +92,7 @@ struct GFSmartSearchTests {
     }
 
     @Test func `a mistyped film is found, and only the kinds asked for`() async throws {
-        let library = try library()
+        let library = try makeLibrary()
         let films = await search("duen", in: library).hits.map(\.key)
         #expect(films == ["\(library.mine.id.uuidString)-movie-5", "\(library.mine.id.uuidString)-movie-6"])
         let live = await search("dune", in: library, kinds: [.category, .channel, .programme])
@@ -101,13 +100,17 @@ struct GFSmartSearchTests {
     }
 
     @Test func `the screen's sections: Top Results, then the best kind first`() async throws {
-        let library = try library()
+        let library = try makeLibrary()
         let model = GFSmartSearchModel(catalog: GFSearchCatalog())
         let context = ModelContext(library.container)
         await model.update(text: "finland", filter: .all, keys: GFSmartSearchModel.Keys(playlists: [library.mine]),
                            scope: [library.mine], context: context, restriction: ContentRestriction())
-        #expect(model.answered == "finland")
+        #expect(model.hasAnswered("finland", filter: .all))
+        #expect(!model.hasAnswered("finland", filter: .movies))
+        #expect(!model.loadingLibrary)
         #expect(model.groups.first?.kind == .category)
-        #expect(model.groups.flatMap(\.rows).count == 2) // the category and Yle TV1
+        // the category and Yle TV1; MTV3 is hidden in Content Management
+        #expect(model.groups.flatMap(\.rows).map(\.id) == ["category|\(library.finland.id)",
+                                                            "channel|\(library.mine.id.uuidString)-live-1"])
     }
 }
