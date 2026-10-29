@@ -164,10 +164,10 @@ final class GFSmartSearchModel {
                                  restriction: ContentRestriction, now: Date) -> [ResultGroup] {
         var rows: [GFSearchLayout.Row<String>] = []
         var lookup: [String: Row] = [:]
-        func add(_ row: Row, _ kind: GFSearchIndex.Kind, _ score: Double) {
+        func add(_ row: Row, _ kind: GFSearchIndex.Kind, _ score: Double, family: String? = nil) {
             guard lookup[row.id] == nil else { return }
             lookup[row.id] = row
-            rows.append(GFSearchLayout.Row(kind: kind, id: row.id, score: score))
+            rows.append(GFSearchLayout.Row(kind: kind, id: row.id, score: score, family: family))
         }
         let scores = Dictionary(found.hits.map { ($0.key, $0.score) }, uniquingKeysWith: max)
         func ids(_ kind: GFSearchIndex.Kind) -> [String] {
@@ -197,7 +197,8 @@ final class GFSmartSearchModel {
         for airing in found.airings {
             guard let stream = context.model(for: airing.stream) as? LiveStream,
                   !restriction.hides(categoryID: stream.categoryId) else { continue }
-            add(.programme(GFProgrammeRow(hit: airing.hit, stream: stream)), .programme, airing.score)
+            add(.programme(GFProgrammeRow(hit: airing.hit, stream: stream)), .programme, airing.score,
+                family: GFSmartSearch.programmeKey(title: airing.hit.title, subtitle: airing.hit.subtitle))
         }
         let filmIDs = ids(.film)
         if !filmIDs.isEmpty {

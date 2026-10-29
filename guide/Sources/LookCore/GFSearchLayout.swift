@@ -9,6 +9,8 @@ nonisolated enum GFSearchLayout {
         let kind: GFSearchIndex.Kind
         let id: ID
         let score: Double
+        /// Rows of one programme (its airings) share this: Top Results shows one of them.
+        var family: String?
     }
 
     struct Section<ID: Hashable & Sendable>: Equatable, Sendable {
@@ -19,8 +21,8 @@ nonisolated enum GFSearchLayout {
 
     static let topCount = 3
 
-    /// `rows` as sections. Top Results only when `allKinds` (the "All" filter) and rows of two kinds or more came;
-    /// what is in it is not repeated below.
+    /// `rows` as sections. Top Results only when `allKinds` (the "All" filter) and rows of two kinds or more came:
+    /// the best few, one airing of a programme at most; what is in it is not repeated below.
     static func sections<ID: Hashable & Sendable>(_ rows: [Row<ID>], allKinds: Bool) -> [Section<ID>] {
         let best = rows.enumerated().sorted { lhs, rhs in
             lhs.element.score != rhs.element.score ? lhs.element.score > rhs.element.score : lhs.offset < rhs.offset
@@ -28,8 +30,15 @@ nonisolated enum GFSearchLayout {
         var rest = best
         var result: [Section<ID>] = []
         if allKinds, Set(best.map(\.kind)).count >= 2, best.count > topCount + 1 {
-            result.append(Section(kind: nil, ids: best.prefix(topCount).map(\.id)))
-            rest = Array(best.dropFirst(topCount))
+            var top: [Row<ID>] = []
+            var families = Set<String>()
+            for row in best where top.count < topCount {
+                if let family = row.family, !families.insert(family).inserted { continue }
+                top.append(row)
+            }
+            let chosen = Set(top.map(\.id))
+            result.append(Section(kind: nil, ids: top.map(\.id)))
+            rest = best.filter { !chosen.contains($0.id) }
         }
         var order: [GFSearchIndex.Kind] = []
         var byKind: [GFSearchIndex.Kind: [ID]] = [:]

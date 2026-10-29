@@ -246,6 +246,16 @@ struct GFSearchLayoutTests {
         #expect(sections.map(\.ids) == [["dune", "yle", "fi"], ["dune2"], ["mtv"], ["x"]])
     }
 
+    @Test func `Top Results shows one airing of a programme`() {
+        let rows = [Row(kind: .programme, id: "a1", score: 1.3, family: "Sports Centre"),
+                    Row(kind: .programme, id: "a2", score: 1.2, family: "Sports Centre"),
+                    Row(kind: .category, id: "sport", score: 1.1), Row(kind: .channel, id: "sky", score: 0.9),
+                    Row(kind: .programme, id: "a3", score: 0.8, family: "Sports Centre")]
+        let sections = GFSearchLayout.sections(rows, allKinds: true)
+        #expect(sections.map(\.kind) == [nil, .programme])
+        #expect(sections.map(\.ids) == [["a1", "sport", "sky"], ["a2", "a3"]])
+    }
+
     @Test func `no Top Results for one kind, a filter or a handful`() {
         let channels = [Row(kind: .channel, id: "a", score: 1), Row(kind: .channel, id: "b", score: 0.9),
                         Row(kind: .channel, id: "c", score: 0.8), Row(kind: .channel, id: "d", score: 0.7),
