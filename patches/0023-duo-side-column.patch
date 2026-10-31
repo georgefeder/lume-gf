@@ -1,3 +1,25 @@
+diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
+index 74f6c1f..b63a933 100644
+--- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
+@@ -116,9 +116,16 @@ import SwiftUI
+ 
+                 pipButton
+ 
++                // Lume GF: beside them on the iPhone Duo's outer screen, whose camera is at the top right
++                if GFTabletop.topButtonsOnTheLeft {
++                    PlayerCastButton()
++                }
++
+                 Spacer()
+ 
+-                PlayerCastButton()
++                if !GFTabletop.topButtonsOnTheLeft {
++                    PlayerCastButton()
++                }
+             }
+             .padding(.horizontal, 20)
+             .padding(.top, 12)
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
 index eac1279..27529a6 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift

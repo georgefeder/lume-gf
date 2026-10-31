@@ -1,5 +1,6 @@
 #if os(iOS)
     import Observation
+    import SwiftUI
     import UIKit
 
     /// Lume GF: the size of the window the app shows in, for code that sized by the kind of device. Both of the
@@ -24,15 +25,21 @@
         /// Read from the window itself: a SwiftUI view that ignores the safe area is told it has none. Redraws a
         /// SwiftUI view that reads it when the window resizes or turns.
         static var hasSideColumn: Bool {
+            sideColumnEdge != nil
+        }
+
+        /// The side that column is on (nil without one). The Duo's is on the right, the camera at its top.
+        static var sideColumnEdge: HorizontalEdge? {
             _ = changes.count
             let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
                 .filter { $0.session.role == .windowApplication }
             scenes.forEach(changes.watch)
             guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first,
-                  let window = scene.keyWindow ?? scene.windows.first else { return false }
+                  let window = scene.keyWindow ?? scene.windows.first else { return nil }
             let insets = window.safeAreaInsets
-            return GFTabletopLayout.controlsUseWholeWidth(size: window.bounds.size, leading: insets.left,
-                                                          trailing: insets.right)
+            guard GFTabletopLayout.controlsUseWholeWidth(size: window.bounds.size, leading: insets.left,
+                                                         trailing: insets.right) else { return nil }
+            return insets.right >= insets.left ? .trailing : .leading
         }
 
         /// The window's size and side insets, for the diagnostic report.
