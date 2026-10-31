@@ -217,6 +217,43 @@ extension View {
     }
 }
 
+extension View {
+    /// The player's controls across the whole width, as the picture is, on an upright screen with a column at its side
+    /// (the iPhone Duo's front screen: `GFTabletopLayout.controlsUseWholeWidth`). Their own margins keep them off the
+    /// edge, and their top row is above the camera in that column.
+    func gfControlsBesideSideColumn() -> some View {
+        modifier(GFSideColumnWidth())
+    }
+}
+
+private struct GFSideColumnWidth: ViewModifier {
+    /// The last answer: the controls come and go with every tap, and each time start as wide as they were.
+    private static var last = false
+    @State private var whole = Self.last
+
+    func body(content: Content) -> some View {
+        content
+            .ignoresSafeArea(edges: whole ? .horizontal : [])
+            .background {
+                // the whole screen and its insets, whatever the controls do
+                GeometryReader { proxy in
+                    let insets = proxy.safeAreaInsets
+                    Color.clear.onChange(of: GFTabletopLayout.controlsUseWholeWidth(
+                        size: proxy.size, leading: insets.leading, trailing: insets.trailing
+                    ), initial: true) { _, use in
+                        whole = use
+                        guard use != Self.last else { return }
+                        Self.last = use
+                        GFTabletop.log("controls across the whole width beside a side column: \(use ? "yes" : "no") "
+                            + "(\(Int(proxy.size.width))x\(Int(proxy.size.height)), insets \(Int(insets.leading)) "
+                            + "and \(Int(insets.trailing)))")
+                    }
+                }
+                .ignoresSafeArea()
+            }
+    }
+}
+
 #if GF_DEMO
     /// Screenshot builds: where a layer meant for `rect` really landed on screen.
     private struct GFDemoLanding: View {

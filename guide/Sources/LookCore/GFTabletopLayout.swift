@@ -56,4 +56,13 @@ nonisolated enum GFTabletopLayout {
     static func demoFold(size: CGSize) -> CGRect {
         CGRect(x: 0, y: size.height / 2 - 12, width: size.width, height: 24)
     }
+
+    /// Whether the player's controls take the whole width of a screen this `size`, with these safe-area insets at its
+    /// sides. The iPhone Duo's front screen keeps a column down one side for the clock, the signal and the camera
+    /// (Georgs, 31 Oct: the controls stopped about 84 points short of the picture, which runs under the column). Only
+    /// on an upright screen: an iPhone on its side has the Dynamic Island in its side inset, which the controls keep
+    /// clear of.
+    static func controlsUseWholeWidth(size: CGSize, leading: CGFloat, trailing: CGFloat) -> Bool {
+        size.height > size.width && max(leading, trailing) > 0
+    }
 }
