@@ -46,6 +46,16 @@ struct GFTabletopLayoutTests {
         #expect(GFTabletopLayout.reflectionStretch(hingeDegrees: nil) == 1)
     }
 
+    @Test func `the controls take the whole width beside the front screen's side column, and only there`() {
+        let front = CGSize(width: 457, height: 678)
+        #expect(GFTabletopLayout.controlsUseWholeWidth(size: front, leading: 0, trailing: 84))
+        #expect(GFTabletopLayout.controlsUseWholeWidth(size: front, leading: 84, trailing: 0)) // turned round
+        #expect(!GFTabletopLayout.controlsUseWholeWidth(size: CGSize(width: 402, height: 874), leading: 0, trailing: 0))
+        // an iPhone on its side: the Dynamic Island's inset stays clear
+        let sideways = CGSize(width: 874, height: 402)
+        #expect(!GFTabletopLayout.controlsUseWholeWidth(size: sideways, leading: 62, trailing: 62))
+    }
+
     @Test func `the pretend fold splits the screen in the middle`() {
         let split = GFTabletopLayout.split(size: duo, folds: [GFTabletopLayout.demoFold(size: duo)])
         #expect(split?.video.height == 463.5 && split?.panel.height == 463.5)

@@ -217,6 +217,38 @@ extension View {
     }
 }
 
+extension View {
+    /// The player's controls across the whole width, as the picture is, on an upright screen with a column at its side
+    /// (the iPhone Duo's front screen: `GFTabletopLayout.controlsUseWholeWidth`). Their own margins keep them off the
+    /// edge, and their top row is above the camera in that column.
+    func gfControlsBesideSideColumn() -> some View {
+        modifier(GFSideColumnWidth())
+    }
+}
+
+private struct GFSideColumnWidth: ViewModifier {
+    /// The answer last written to the diagnostic report.
+    private static var logged: Bool?
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+            let whole = GFWindowSize.hasSideColumn
+        #else
+            let whole = false
+        #endif
+        content
+            .ignoresSafeArea(edges: whole ? .horizontal : [])
+            .onChange(of: whole, initial: true) { _, whole in
+                guard whole != Self.logged else { return }
+                Self.logged = whole
+                #if os(iOS)
+                    GFTabletop.log("controls across the whole width beside a side column: \(whole ? "yes" : "no") "
+                        + "(\(GFWindowSize.sideColumnDescription))")
+                #endif
+            }
+    }
+}
+
 #if GF_DEMO
     /// Screenshot builds: where a layer meant for `rect` really landed on screen.
     private struct GFDemoLanding: View {

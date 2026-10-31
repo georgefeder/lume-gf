@@ -183,6 +183,9 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   shoot "$DUO" "$DBID" duo-guide-dark -GFDemo guide
   shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
   shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
+  # the player upright, unfolded: on the front screen the controls take the whole width beside the column iOS keeps
+  # down its side for the clock and the camera, as the picture does (Georgs, 31 Oct)
+  shoot "$DUO" "$DBID" duo-player-upright -GFDemo list -GFDemoMoves play -GFDemoStream "$TEST_STREAM"
   # stood up half folded (a pretend fold: nothing folds the simulator): the picture above, the controls below over its
   # reflection; Apple's public test stream plays, the demo's made-up channels never do. Leaning back a little, then
   # opened further: the reflection is shorter
