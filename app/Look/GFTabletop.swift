@@ -227,29 +227,24 @@ extension View {
 }
 
 private struct GFSideColumnWidth: ViewModifier {
-    /// The last answer: the controls come and go with every tap, and each time start as wide as they were.
-    private static var last = false
-    @State private var whole = Self.last
+    /// The answer last written to the diagnostic report.
+    private static var logged: Bool?
 
     func body(content: Content) -> some View {
+        #if os(iOS)
+            let whole = GFWindowSize.hasSideColumn
+        #else
+            let whole = false
+        #endif
         content
             .ignoresSafeArea(edges: whole ? .horizontal : [])
-            .background {
-                // the whole screen and its insets, whatever the controls do
-                GeometryReader { proxy in
-                    let insets = proxy.safeAreaInsets
-                    Color.clear.onChange(of: GFTabletopLayout.controlsUseWholeWidth(
-                        size: proxy.size, leading: insets.leading, trailing: insets.trailing
-                    ), initial: true) { _, use in
-                        whole = use
-                        guard use != Self.last else { return }
-                        Self.last = use
-                        GFTabletop.log("controls across the whole width beside a side column: \(use ? "yes" : "no") "
-                            + "(\(Int(proxy.size.width))x\(Int(proxy.size.height)), insets \(Int(insets.leading)) "
-                            + "and \(Int(insets.trailing)))")
-                    }
-                }
-                .ignoresSafeArea()
+            .onChange(of: whole, initial: true) { _, whole in
+                guard whole != Self.logged else { return }
+                Self.logged = whole
+                #if os(iOS)
+                    GFTabletop.log("controls across the whole width beside a side column: \(whole ? "yes" : "no") "
+                        + "(\(GFWindowSize.sideColumnDescription))")
+                #endif
             }
     }
 }
