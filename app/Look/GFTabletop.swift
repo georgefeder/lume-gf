@@ -111,6 +111,17 @@ final class GFTabletop {
         return "\(folds.count) fold region(s) [\(regions.joined(separator: "; "))] on \(screen): \(shape)"
     }
 
+    /// The player's top row keeps all its buttons on the left: the screen's side column is on the right, with the
+    /// camera at its top (the iPhone Duo's outer screen; Georgs, 31 Oct: "there's a camera in the top right"). The
+    /// row's other buttons cross the whole width (`gfControlsBesideSideColumn`), the top right stays clear.
+    static var topButtonsOnTheLeft: Bool {
+        #if os(iOS)
+            GFWindowSize.sideColumnEdge == .trailing
+        #else
+            false
+        #endif
+    }
+
     /// Test builds' `-GFDemoFold 1`: a pretend fold across the middle (no simulator command folds an iPhone Duo).
     static var demoFold: Bool {
         #if GF_DEMO
@@ -219,8 +230,8 @@ extension View {
 
 extension View {
     /// The player's controls across the whole width, as the picture is, on an upright screen with a column at its side
-    /// (the iPhone Duo's front screen: `GFTabletopLayout.controlsUseWholeWidth`). Their own margins keep them off the
-    /// edge, and their top row is above the camera in that column.
+    /// (the iPhone Duo's outer screen: `GFTabletopLayout.controlsUseWholeWidth`). Their own margins keep them off the
+    /// edge; the top row leaves the column's top, where the camera is, clear (`GFTabletop.topButtonsOnTheLeft`).
     func gfControlsBesideSideColumn() -> some View {
         modifier(GFSideColumnWidth())
     }
