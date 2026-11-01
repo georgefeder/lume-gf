@@ -1,0 +1,65 @@
+diff --git a/Lume/Services/Sync/CloudSync/CloudSyncCoordinator+BackendChoice.swift b/Lume/Services/Sync/CloudSync/CloudSyncCoordinator+BackendChoice.swift
+index 0f77345..fff01e5 100644
+--- a/Lume/Services/Sync/CloudSync/CloudSyncCoordinator+BackendChoice.swift
++++ b/Lume/Services/Sync/CloudSync/CloudSyncCoordinator+BackendChoice.swift
+@@ -28,6 +28,14 @@ extension CloudSyncCoordinator {
+                 return true
+             case .freshInstall:
+                 guard !settings.hasStoredBackend else { return false }
++                // Lume GF: a fresh install syncs with iCloud as before 3.0, unasked: Lume GF has no use for Lume Cloud,
++                // and the question would only stand between a new Apple TV and its synced playlists
++                #if SIDE_LOAD
++                    if GFCloudConfig.enabled {
++                        settings.backend = .icloud
++                        return false
++                    }
++                #endif
+                 let playlists = (try? ModelContext(catalogContainer).fetchCount(FetchDescriptor<Playlist>())) ?? 0
+                 guard playlists == 0 else {
+                     settings.backend = LumeCloudSettings.defaultBackend
+diff --git a/Lume/Services/Sync/CloudSync/CloudSyncCoordinator+BackendSwitch.swift b/Lume/Services/Sync/CloudSync/CloudSyncCoordinator+BackendSwitch.swift
+index 0fa80ba..1404ca9 100644
+--- a/Lume/Services/Sync/CloudSync/CloudSyncCoordinator+BackendSwitch.swift
++++ b/Lume/Services/Sync/CloudSync/CloudSyncCoordinator+BackendSwitch.swift
+@@ -40,7 +40,7 @@ extension CloudSyncCoordinator {
+     /// Whether this build can sync through iCloud.
+     var isICloudAvailable: Bool {
+         #if SIDE_LOAD
+-            false
++            GFCloudConfig.enabled && backends[.icloud] != nil // Lume GF: our Sideload builds have their own iCloud
+         #else
+             backends[.icloud] != nil
+         #endif
+@@ -92,7 +92,8 @@ extension CloudSyncCoordinator {
+         makeLumeCloudBackend: () throws -> LumeCloudBackend
+     ) -> any SyncBackend {
+         #if SIDE_LOAD
+-            let fallback: any SyncBackend = OffBackend()
++            // Lume GF: our Sideload builds sync through their own iCloud container (GFCloudConfig)
++            let fallback: any SyncBackend = GFCloudConfig.enabled ? iCloud : OffBackend()
+         #else
+             let fallback = iCloud
+         #endif
+diff --git a/Lume/Services/Sync/LumeCloud/LumeCloudSettings.swift b/Lume/Services/Sync/LumeCloud/LumeCloudSettings.swift
+index 45c14a4..fa4f158 100644
+--- a/Lume/Services/Sync/LumeCloud/LumeCloudSettings.swift
++++ b/Lume/Services/Sync/LumeCloud/LumeCloudSettings.swift
+@@ -25,7 +25,8 @@ nonisolated struct LumeCloudSettings {
+     /// SIDE_LOAD builds have no CloudKit, so they start Off.
+     static var defaultBackend: SyncBackendSelection {
+         #if SIDE_LOAD
+-            .off
++            // Lume GF: our Sideload builds have their own iCloud container (GFCloudConfig): iCloud, as before 3.0
++            GFCloudConfig.enabled ? .icloud : .off
+         #else
+             .icloud
+         #endif
+@@ -43,7 +44,7 @@ nonisolated struct LumeCloudSettings {
+         get {
+             let stored = defaults.string(forKey: Key.backend).flatMap(SyncBackendSelection.init(rawValue:)) ?? Self.defaultBackend
+             #if SIDE_LOAD
+-                return stored == .icloud ? .off : stored
++                return stored == .icloud && !GFCloudConfig.enabled ? .off : stored // Lume GF: ours can
+             #else
+                 return stored
+             #endif

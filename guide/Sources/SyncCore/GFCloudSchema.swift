@@ -72,6 +72,13 @@ public nonisolated enum GFCloudSchema {
         Entity(name: "SyncedLiveTVPreferences", attributes: [
             .init(name: "id", type: .string), .init(name: "showsFavorites", type: .bool),
             .init(name: "showsRecentlyWatched", type: .bool), .init(name: "updatedAt", type: .date)
+        ]),
+        // Lume 3.0: which sync the account's Apple devices use, handed between them (Lume Cloud's key end-to-end
+        // encrypted). Lume GF stays on iCloud, but Lume writes it on a switch, so the layout must have it.
+        Entity(name: "SyncedBackendChoice", attributes: [
+            .init(name: "id", type: .string), .init(name: "backend", type: .string),
+            .init(name: "serverURL", type: .string), .init(name: "accountId", type: .string),
+            .init(name: "rootKey", type: .binary, encrypted: true), .init(name: "changedAt", type: .date)
         ])
     ]
 

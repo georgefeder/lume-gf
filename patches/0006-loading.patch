@@ -1,5 +1,5 @@
 diff --git a/Lume/Services/Indexing/ContentIndexingService.swift b/Lume/Services/Indexing/ContentIndexingService.swift
-index 714668d..32a6cd5 100644
+index acd933c..ddd6d42 100644
 --- a/Lume/Services/Indexing/ContentIndexingService.swift
 +++ b/Lume/Services/Indexing/ContentIndexingService.swift
 @@ -50,10 +50,13 @@ final class ContentIndexingService {
@@ -15,12 +15,12 @@ index 714668d..32a6cd5 100644
 +        if !playbackHolders.isActive { EPGSyncService.shared.playbackDidEnd() }
      }
  
-     /// Set by `CloudSyncCoordinator` while `NSPersistentCloudKitContainer` is
+     /// Set by `ICloudBackend` while `NSPersistentCloudKitContainer` is
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
-index cfb9d73..a414ef9 100644
+index 219c697..c38ae3f 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
 +++ b/Lume/Services/Sync/EPGSyncManager.swift
-@@ -51,6 +51,9 @@ actor EPGSyncManager {
+@@ -55,6 +55,9 @@ actor EPGSyncManager {
              return false
          }
  
@@ -31,7 +31,7 @@ index cfb9d73..a414ef9 100644
          // one (GuideRefresher), so a failed or cut-off download never empties the guide.
  
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index 4498429..8b67ee4 100644
+index 97c3f39..9767d13 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
 @@ -77,6 +77,9 @@ final class EPGSyncService {
@@ -148,7 +148,7 @@ index 8ccf4ba..346574b 100644
              }
              .alert("Clear Recently Watched", isPresented: $confirmingClear) {
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index 74ce147..c1f121e 100644
+index 563ddb6..70e8910 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
 @@ -181,6 +181,11 @@ struct MainTabView: View {

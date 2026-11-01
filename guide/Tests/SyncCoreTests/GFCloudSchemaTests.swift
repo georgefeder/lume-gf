@@ -42,13 +42,15 @@ struct GFCloudSchemaTests {
         #expect(text.contains("        GRANT WRITE TO \"_creator\",\n        GRANT CREATE TO \"_icloud\",\n        GRANT READ TO \"_world\"\n    );\n"))
     }
 
-    @Test func `the full layout has Lume's nine types and the banner's record`() {
+    @Test func `the full layout has Lume's ten types and the banner's record`() {
         let text = GFCloudSchema.ckdb()
         for name in ["CD_SyncedPlaylist", "CD_UserContentState", "CD_UserProfile", "CD_SyncedEPGSource",
                      "CD_SyncedParentalPIN", "CD_SyncedCategoryRestriction", "CD_SyncedSportsFollow",
-                     "CD_SyncedRecordingServer", "CD_SyncedLiveTVPreferences"] {
+                     "CD_SyncedRecordingServer", "CD_SyncedLiveTVPreferences", "CD_SyncedBackendChoice"] {
             #expect(text.contains("    RECORD TYPE \(name) (\n"))
         }
+        // Lume 3.0: the backend handover's key travels end-to-end encrypted
+        #expect(text.contains("        CD_rootKey ENCRYPTED BYTES,\n"))
         #expect(text.contains("    RECORD TYPE GFLastPlayed (\n"))
         #expect(text.contains("        contentId STRING,\n"))
         #expect(text.contains("        updatedAt TIMESTAMP QUERYABLE SORTABLE,\n"))
@@ -59,6 +61,7 @@ struct GFCloudSchemaTests {
         #expect(GFCloudSchema.lumeEntities.map(\.name) == ["SyncedPlaylist", "UserContentState", "UserProfile",
                                                            "SyncedEPGSource", "SyncedParentalPIN",
                                                            "SyncedCategoryRestriction", "SyncedSportsFollow",
-                                                           "SyncedRecordingServer", "SyncedLiveTVPreferences"])
+                                                           "SyncedRecordingServer", "SyncedLiveTVPreferences",
+                                                           "SyncedBackendChoice"])
     }
 }

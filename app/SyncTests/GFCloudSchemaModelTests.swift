@@ -5,12 +5,11 @@ import Testing
 
 struct GFCloudSchemaModelTests {
     @Test func `Lume's cloud models match the committed layout`() throws {
-        // Review Focus 4: a Lume release that changes its synced models stops here, not in production
-        let model = try #require(NSManagedObjectModel.makeManagedObjectModel(for: [
-            SyncedPlaylist.self, UserContentState.self, UserProfile.self, SyncedEPGSource.self,
-            SyncedParentalPIN.self, SyncedCategoryRestriction.self, SyncedSportsFollow.self,
-            SyncedRecordingServer.self, SyncedLiveTVPreferences.self
-        ]))
+        // Review Focus 4: a Lume release that changes its synced models stops here, not in production. Lume's own list,
+        // so a model a release adds is caught too, with the one `LumeApp.makeCloudContainer` adds to it (Lume 3.0)
+        let model = try #require(NSManagedObjectModel.makeManagedObjectModel(
+            for: LumeApp.cloudMirrorModels + [SyncedBackendChoice.self]
+        ))
         let real = model.entities.map { entity in
             GFCloudSchema.Entity(name: entity.name ?? "", attributes: entity.attributesByName.values.map { attribute in
                 GFCloudSchema.Attribute(name: attribute.name, type: Self.type(attribute.attributeType),

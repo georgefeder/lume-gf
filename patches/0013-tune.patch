@@ -14,7 +14,7 @@ index e47fa33..59d9c63 100644
                  case .empty:
                      // Reserve the logo's vertical space without flashing the
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index 2be1a82..ad1431e 100644
+index fa90ba8..fd7a16f 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
 @@ -40,12 +40,15 @@ import SwiftUI
@@ -40,10 +40,10 @@ index 2be1a82..ad1431e 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index d229b26..52b789f 100644
+index 17deed0..b6cab33 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
-@@ -447,6 +447,7 @@ struct AVPlayerEngineView: View {
+@@ -450,6 +450,7 @@ struct AVPlayerEngineView: View {
      }
  
      private func closePlayer() {
@@ -52,7 +52,7 @@ index d229b26..52b789f 100644
              if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
                  window.toggleFullScreen(nil)
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index 9408c7d..74f6c1f 100644
+index a4e9e98..d2e4cae 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -65,12 +65,15 @@ import SwiftUI
@@ -78,7 +78,7 @@ index 9408c7d..74f6c1f 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineControlsOverlay.swift b/Lume/Views/Player/LumeEngineControlsOverlay.swift
-index 4248b6f..b042b00 100644
+index 0937b5d..0cfdb68 100644
 --- a/Lume/Views/Player/LumeEngineControlsOverlay.swift
 +++ b/Lume/Views/Player/LumeEngineControlsOverlay.swift
 @@ -54,12 +54,15 @@ import SwiftUI
@@ -122,10 +122,10 @@ index 3ee361d..ecdf0aa 100644
          let session = session
          let playing = isPlaying
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index 03e8b9e..a171fec 100644
+index 709a451..c7f805e 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
-@@ -510,6 +510,7 @@ struct LumeEngineEngineView: View {
+@@ -513,6 +513,7 @@ struct LumeEngineEngineView: View {
      }
  
      private func closePlayer() {
@@ -134,7 +134,7 @@ index 03e8b9e..a171fec 100644
              if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
                  window.toggleFullScreen(nil)
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index 454b352..1050723 100644
+index 167577a..eab69df 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 @@ -43,12 +43,15 @@ import VLCKit
