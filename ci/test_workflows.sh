@@ -57,5 +57,7 @@ check "the app tests stop on a Lume setting without a sync group (after our sour
   'y=YAML.load_file(ARGV[0]); s=y["jobs"]["app"]["steps"]; f=->(n) { s.index { |x| x["run"].to_s.include?(n) } }; i, t, a = f["add-sources.sh"], f["settings-tripwire.sh gf Lume"], f["run-app-tests.sh"]; exit(i && t && a && i < t && t < a ? 0 : 1)' "$WT"
 check "the test run compiles the real upscaler for Apple TV (the simulators build only its stand-in)" \
   'y=YAML.load_file(ARGV[0]); exit(y["jobs"]["core"]["steps"].any? { |x| x["run"].to_s.include?("device-typecheck.sh") } ? 0 : 1)' "$WT"
+check "every job that builds Lume fetches its Lume Cloud kit as well (Lume 3.0's ../LumeCloud/LumeCloudKit)" \
+  'ok = ARGV.all? { |f| YAML.load_file(f)["jobs"].values.all? { |j| s = Array(j["steps"]); !s.any? { |x| x["with"].to_h["repository"] == "bilipp/LumeRecorder" } || s.any? { |x| x["with"].to_h["repository"] == "bilipp/LumeCloud" && x["with"]["path"] == "LumeCloud" } } }; exit(ok ? 0 : 1)' "$WF" "$WT"
 [ "$fails" -eq 0 ] && echo "test_workflows: all passed" || echo "test_workflows: $fails failed"
 exit "$fails"
