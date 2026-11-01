@@ -44,7 +44,12 @@ struct GuideStatusLine: View {
     @State private var status = GuideStatus.shared
 
     var body: some View {
-        Text(status.line)
-            .task { status.reload() }
+        VStack(alignment: .leading, spacing: 2) {
+            Text(status.line)
+            Text(status.backgroundLine)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .task { status.reload() }
     }
 }
