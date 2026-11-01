@@ -29,6 +29,23 @@ final class GFTabletop {
     @ObservationIgnored private(set) var hingeDegrees: Double?
     /// The last ten degrees logged, so the report shows the angles the phone stood at without a line per degree.
     @ObservationIgnored private var loggedTens: Int?
+    /// The side of the player's screen iOS keeps a column on, upright (the iPhone Duo's outer screen: clock, signal
+    /// and camera down the right; `GFTabletopLayout.controlsUseWholeWidth`), nil without one. Told by the player's own
+    /// window (`GFWindowProbe`): the Duo can have a window on each screen, and the first one found was not always the
+    /// player's (Georgs, 1 Nov, on build 86: the buttons narrow again).
+    private(set) var sideColumn: HorizontalEdge?
+
+    /// The player's window, as its probe saw it.
+    func windowMeasured(size: CGSize, leading: CGFloat, trailing: CGFloat) {
+        let column: HorizontalEdge? = GFTabletopLayout.controlsUseWholeWidth(size: size, leading: leading,
+                                                                             trailing: trailing)
+            ? (trailing >= leading ? .trailing : .leading) : nil
+        guard column != sideColumn else { return }
+        sideColumn = column
+        let side = column.map { $0 == .trailing ? "right" : "left" } ?? "none"
+        Self.log("side column: \(side) (\(Int(size.width))x\(Int(size.height)), insets \(Int(leading)) and "
+            + "\(Int(trailing)))")
+    }
 
     private init() {
         #if GF_DEMO
@@ -115,11 +132,7 @@ final class GFTabletop {
     /// camera at its top (the iPhone Duo's outer screen; Georgs, 31 Oct: "there's a camera in the top right"). The
     /// row's other buttons cross the whole width (`gfControlsBesideSideColumn`), the top right stays clear.
     static var topButtonsOnTheLeft: Bool {
-        #if os(iOS)
-            GFWindowSize.sideColumnEdge == .trailing
-        #else
-            false
-        #endif
+        shared.sideColumn == .trailing
     }
 
     /// Test builds' `-GFDemoFold 1`: a pretend fold across the middle (no simulator command folds an iPhone Duo).
@@ -238,25 +251,89 @@ extension View {
 }
 
 private struct GFSideColumnWidth: ViewModifier {
-    /// The answer last written to the diagnostic report.
-    private static var logged: Bool?
-
     func body(content: Content) -> some View {
-        #if os(iOS)
-            let whole = GFWindowSize.hasSideColumn
-        #else
-            let whole = false
-        #endif
         content
-            .ignoresSafeArea(edges: whole ? .horizontal : [])
-            .onChange(of: whole, initial: true) { _, whole in
-                guard whole != Self.logged else { return }
-                Self.logged = whole
-                #if os(iOS)
-                    GFTabletop.log("controls across the whole width beside a side column: \(whole ? "yes" : "no") "
-                        + "(\(GFWindowSize.sideColumnDescription))")
-                #endif
+            .ignoresSafeArea(edges: GFTabletop.shared.sideColumn == nil ? [] : .horizontal)
+            // each player engine's controls tell their own window (KSPlayer's also from its fold reader)
+            #if os(iOS)
+            .background { GFWindowProbe().allowsHitTesting(false) }
+            #endif
+    }
+}
+
+#if os(iOS)
+    /// Tells `GFTabletop` the size and side insets of the window the player is in, whenever they change (a fold, an
+    /// unfold, a turn). A plain view in the player's own window: it cannot pick another screen's.
+    private struct GFWindowProbe: UIViewRepresentable {
+        func makeUIView(context _: Context) -> Probe {
+            Probe()
+        }
+
+        func updateUIView(_: Probe, context _: Context) {}
+
+        final class Probe: UIView {
+            override init(frame: CGRect) {
+                super.init(frame: frame)
+                isUserInteractionEnabled = false
             }
+
+            @available(*, unavailable)
+            required init?(coder _: NSCoder) {
+                fatalError("not from a storyboard")
+            }
+
+            override func didMoveToWindow() {
+                super.didMoveToWindow()
+                report()
+            }
+
+            override func layoutSubviews() {
+                super.layoutSubviews()
+                report()
+            }
+
+            override func safeAreaInsetsDidChange() {
+                super.safeAreaInsetsDidChange()
+                report()
+            }
+
+            /// After this layout pass: SwiftUI's state may not change while it lays the player out.
+            private func report() {
+                guard let window else { return }
+                let (size, insets) = (window.bounds.size, window.safeAreaInsets)
+                Task { @MainActor in
+                    GFTabletop.shared.windowMeasured(size: size, leading: insets.left, trailing: insets.right)
+                }
+            }
+        }
+    }
+#endif
+
+/// The player's close button while a channel has not started: the controls wait for the picture, and a channel stuck
+/// loading left nothing to tap (Georgs, 1 Nov: "while its loading the screen is inactive"). Where the controls' own
+/// close button is, so it stays put when they come.
+struct GFLoadingCloseButton: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack {
+            HStack {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                        .glassEffectCompat(.regularInteractive, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close player")
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
     }
 }
 
@@ -286,6 +363,9 @@ private struct GFFoldReader: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            #if os(iOS)
+            .background { GFWindowProbe().allowsHitTesting(false) }
+            #endif
             .background {
                 GeometryReader { proxy in
                     let _ = hingeMoves
