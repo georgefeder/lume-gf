@@ -1,5 +1,5 @@
 diff --git a/Lume/Info.plist b/Lume/Info.plist
-index 5259bb8..0ed014a 100644
+index 6d77a06..d01dbde 100644
 --- a/Lume/Info.plist
 +++ b/Lume/Info.plist
 @@ -2,6 +2,11 @@
@@ -14,7 +14,7 @@ index 5259bb8..0ed014a 100644
  	<key>CFBundleAllowMixedLocalizations</key>
  	<true/>
  	<key>CFBundleLocalizations</key>
-@@ -59,6 +64,8 @@
+@@ -61,6 +66,8 @@
  	<array>
  		<string>audio</string>
  		<string>remote-notification</string>
@@ -24,10 +24,10 @@ index 5259bb8..0ed014a 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index c0bf863..eaa6982 100644
+index 10d2313..5466768 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -32,6 +32,7 @@ struct LumeApp: App {
+@@ -33,6 +33,7 @@ struct LumeApp: App {
      #endif
  
      init() {
@@ -35,7 +35,7 @@ index c0bf863..eaa6982 100644
          // First, so the launch marker precedes anything the setup below logs.
          DiagnosticSession.start()
          let (catalog, cloud) = Self.makeModelContainers()
-@@ -42,6 +43,9 @@ struct LumeApp: App {
+@@ -43,6 +44,9 @@ struct LumeApp: App {
              // can resume a Cast session, which may end before that task runs.
              CastService.shared.progressCommitter = CastProgressCommitter(container: catalog)
          #endif
@@ -45,7 +45,7 @@ index c0bf863..eaa6982 100644
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -375,6 +379,8 @@ struct LumeApp: App {
+@@ -442,6 +446,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
@@ -54,14 +54,14 @@ index c0bf863..eaa6982 100644
  
                      // Seed the widget / Top Shelf snapshot once services are up
                      // (after profile bootstrap, so the catalog is profile-scoped).
-@@ -397,6 +403,7 @@ struct LumeApp: App {
-                     exportWidgetSnapshot()
+@@ -470,6 +476,7 @@ struct LumeApp: App {
+                     Task { await backendChoiceWatcher.refresh() }
                  }
                  .onChange(of: scenePhase) { _, phase in
 +                    GuideScheduler.shared.scenePhaseChanged(to: phase)
                      DiagnosticSession.scenePhaseChanged(to: phase)
                      cloudSync.handleScenePhaseChange(to: phase)
-                     // Keep the image disk cache inside its size limit. Rate-limited
+                     if phase == .active {
 diff --git a/Lume/Services/Network/XMLTVParser.swift b/Lume/Services/Network/XMLTVParser.swift
 index 2a4c0c0..f4a9e4d 100644
 --- a/Lume/Services/Network/XMLTVParser.swift
@@ -99,7 +99,7 @@ index 2a4c0c0..f4a9e4d 100644
          currentText = ""
          if elementName == "programme" {
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
-index c62cd45..cfb9d73 100644
+index 956bedf..219c697 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
 +++ b/Lume/Services/Sync/EPGSyncManager.swift
 @@ -4,9 +4,9 @@
@@ -115,13 +115,13 @@ index c62cd45..cfb9d73 100644
  //
  //  A channel is guided by exactly one source. Sources are walked oldest-first
  //  and each claims the channels it carries; later sources are then confined to
-@@ -35,53 +35,29 @@ actor EPGSyncManager {
-     /// Refreshes the guide from every enabled source. Returns `true` when at
-     /// least one source synced successfully.
+@@ -39,53 +39,29 @@ actor EPGSyncManager {
+     ///   `[Playlist].isLocked`). Their linked sources are skipped — the guide
+     ///   is fetched from the provider with that playlist's credentials.
      @discardableResult
--    func syncAllSources() async -> Bool {
-+    func syncAllSources(force: Bool = false) async -> Bool {
-         let sources = enabledSources()
+-    func syncAllSources(lockedPlaylistIDs: Set<UUID> = []) async -> Bool {
++    func syncAllSources(force: Bool = false, lockedPlaylistIDs: Set<UUID> = []) async -> Bool {
+         let sources = enabledSources(lockedPlaylistIDs: lockedPlaylistIDs)
          guard !sources.isEmpty else {
              Logger.database.info("No enabled EPG sources, skipping EPG sync")
              return false
@@ -176,7 +176,7 @@ index c62cd45..cfb9d73 100644
              unclaimedChannelIDs.subtract(result.claimedChannelIDs)
              anySucceeded = anySucceeded || result.didSync
          }
-@@ -97,53 +73,42 @@ actor EPGSyncManager {
+@@ -101,53 +77,42 @@ actor EPGSyncManager {
          let claimedChannelIDs: Set<String>
      }
  
@@ -257,7 +257,7 @@ index c62cd45..cfb9d73 100644
  
      // MARK: - Source / channel lookups
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index 9ea4637..4498429 100644
+index 58065cd..97c3f39 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
 @@ -99,7 +99,7 @@ final class EPGSyncService {
@@ -332,16 +332,16 @@ index 9ea4637..4498429 100644
          guard let container, task == nil else { return }
          isSyncing = true
          isBackgroundRefresh = background
-@@ -205,7 +221,7 @@ final class EPGSyncService {
+@@ -207,7 +223,7 @@ final class EPGSyncService {
          // lockstep with a frozen main thread right after a playlist sync.
          task = Task(priority: .utility) {
              let succeeded = await BackgroundActivity.perform("Guide refresh") {
--                await manager.syncAllSources()
-+                await manager.syncAllSources(force: force)
+-                await manager.syncAllSources(lockedPlaylistIDs: lockedPlaylistIDs)
++                await manager.syncAllSources(force: force, lockedPlaylistIDs: lockedPlaylistIDs)
              }
              if succeeded {
                  EPGSyncSchedule.lastSyncDate = Date()
-@@ -214,6 +230,7 @@ final class EPGSyncService {
+@@ -216,6 +232,7 @@ final class EPGSyncService {
              isSyncing = false
              task = nil
              Logger.database.info("EPG refresh finished (success: \(succeeded))")

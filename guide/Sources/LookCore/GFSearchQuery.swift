@@ -120,7 +120,7 @@ nonisolated struct GFSearchQuery: Equatable, Sendable {
 
     /// Words that only help: they count when a name has them, and never keep a name out.
     static let littleWords: Set<String> = Set([
-        "the", "a", "an", "on", "at", "in", "of", "and", "or", "for", "to", "with", "vs", "v", "versus", "tv",
+        "the", "a", "an", "on", "at", "in", "of", "and", "or", "for", "to", "with", "vs", "v", "x", "versus", "tv",
         "channel", "channels", "game", "games", "match", "matches", "watch", "show", "play", "playing", "what", "whats",
         "when", "where", "is", "are", "un", "uz", "ar", "pret", "kas", "kad", "kur", "kanāls", "kanāli", "kanālā",
         "spēle", "spēles", "pārraide", "translācija", "канал", "канали", "каналы", "матч", "гра", "игра", "і", "и",

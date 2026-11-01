@@ -23,11 +23,18 @@ nonisolated enum GuideSettings {
 final class GuideStatus {
     static let shared = GuideStatus()
     private(set) var line = "Guide not updated yet"
+    /// When the system last gave the app time to refresh the guide while it was closed (Georgs, 1 Nov: does the
+    /// Apple TV refresh in the background as the iPhone does? Its diagnostics only email a summary to Lume).
+    private(set) var backgroundLine = ""
+    nonisolated static let lastBackgroundKey = "gf.guide.lastBackgroundRefresh"
 
     private init() {}
 
     func reload() {
         line = GuideStatusSummary.line(for: GuideScheduler.shared.enabledStates(), time: Self.when)
+        let last = UserDefaults.standard.object(forKey: Self.lastBackgroundKey) as? Date
+        backgroundLine = last.map { "Last refreshed while closed: \(Self.when($0))" }
+            ?? "Not refreshed while closed yet"
     }
 
     /// A time today, "yesterday" and a time, or the date and a time: a bare "21:48" read as later today when it was
@@ -149,6 +156,7 @@ final class GuideScheduler {
         private func runBackground(_ task: BGTask) async {
             let kind = task is BGProcessingTask ? "overnight import" : "background refresh"
             Logger.database.info("Guide: iOS woke the app for its \(kind, privacy: .public)")
+            UserDefaults.standard.set(Date(), forKey: GuideStatus.lastBackgroundKey)
             let finished = await EPGSyncService.shared.refreshIfDueAndWait()
             let outcome = finished ? "done" : "not finished"
             Logger.database.info("Guide: \(kind, privacy: .public) \(outcome, privacy: .public)")

@@ -161,6 +161,18 @@ struct GFContinueBannerView: View {
     }
 }
 
+/// Whether the continue banner is on screen. The Apple TV's tab view opens Lume's playlist switcher on Play/Pause, and
+/// sits nearer the focus than the banner's own handler, so it got the press the banner asks for (Georgs, 1 Nov): while
+/// this is true it leaves Play/Pause to the banner.
+@MainActor
+@Observable
+final class GFContinueBannerPresence {
+    static let shared = GFContinueBannerPresence()
+    fileprivate(set) var isShowing = false
+
+    private init() {}
+}
+
 /// At the app's root: refreshes when the app comes to the front, shows the banner for ten seconds (iPhone/iPad: top,
 /// tap or swipe up; Apple TV: top-right, Play/Pause), and opens the player. Never on a child profile: the note can be
 /// a grown-up's channel.
@@ -188,6 +200,9 @@ private struct GFContinueBannerHost: ViewModifier {
         #endif
             .task(id: scenePhase) { await refresh() }
             .animation(.smooth, value: model?.offered)
+            .onChange(of: model?.offered != nil, initial: true) { _, showing in
+                GFContinueBannerPresence.shared.isShowing = showing
+            }
     }
 
     @ViewBuilder private var banner: some View {

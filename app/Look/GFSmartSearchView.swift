@@ -191,14 +191,18 @@ final class GFSmartSearchModel {
             for stream in fetched where !stream.isHidden && !restriction.hides(categoryID: stream.categoryId) {
                 add(.channel(stream), .channel, GFSearchLayout.channelScore(
                     scores[stream.id] ?? 0, isFavorite: stream.isFavorite, lastWatched: stream.lastWatchedDate, now: now
-                ))
+                ) * GFSearchEvents.quality(channelName: stream.name))
             }
         }
         for airing in found.airings {
             guard let stream = context.model(for: airing.stream) as? LiveStream,
                   !restriction.hides(categoryID: stream.categoryId) else { continue }
-            add(.programme(GFProgrammeRow(hit: airing.hit, stream: stream)), .programme, airing.score,
-                family: GFSmartSearch.programmeKey(title: airing.hit.title, subtitle: airing.hit.subtitle))
+            // the channel counts too: one the viewer likes, and the best picture of a match's channels (Georgs, 1 Nov)
+            let score = GFSearchLayout.channelScore(airing.score, isFavorite: stream.isFavorite,
+                                                    lastWatched: stream.lastWatchedDate, now: now)
+                * GFSearchEvents.quality(channelName: stream.name)
+            add(.programme(GFProgrammeRow(hit: airing.hit, stream: stream)), .programme, score,
+                family: "event \(airing.event)")
         }
         let filmIDs = ids(.film)
         if !filmIDs.isEmpty {

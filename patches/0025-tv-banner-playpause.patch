@@ -1,0 +1,19 @@
+diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
+index 35139e1..c97a69f 100644
+--- a/Lume/Views/MainTabView.swift
++++ b/Lume/Views/MainTabView.swift
+@@ -130,10 +130,12 @@ struct MainTabView: View {
+             // `onPlayPauseCommand` sits above this one in the focused chain and is
+             // never shadowed. The guard covers the plain overlays instead, which
+             // tvOS focus reaches straight through.
+-            .onPlayPauseCommand {
++            // Lume GF: while the continue banner shows, Play/Pause goes on to it (GFContinueBannerPresence): it asks
++            // for that press, and this handler, nearer the focus, opened the playlist switcher instead
++            .onPlayPauseCommand(perform: GFContinueBannerPresence.shared.isShowing ? nil : {
+                 guard playPauseTogglesQuickSwitch else { return }
+                 router.isQuickSwitchPresented.toggle()
+-            }
++            })
+         #endif
+             .environment(router)
+             .environment(\.contentRestriction, contentRestriction)

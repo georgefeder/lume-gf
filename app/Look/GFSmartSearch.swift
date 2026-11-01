@@ -174,6 +174,9 @@ nonisolated enum GFSmartSearch {
         let hit: GFGuideSearchHit
         let stream: PersistentIdentifier
         let score: Double
+        /// The broadcast event it belongs to, within this search (`GFSearchEvents`): one match under several titles
+        /// on several channels is one event.
+        let event: Int
     }
 
     struct Found: Sendable {
@@ -284,7 +287,7 @@ nonisolated enum GFSmartSearch {
             )
         }
         let calendar = Calendar.current
-        var result: [Airing] = []
+        var chosen: [(hit: GFGuideSearchHit, stream: PersistentIdentifier, score: Double)] = []
         for (key, listings) in byProgramme {
             guard let score = scores[key] else { continue }
             // with a time asked for ("tonight"), that time's airings when there are any
@@ -294,10 +297,23 @@ nonisolated enum GFSmartSearch {
             for hit in GFGuideSearch.hits(inTime.isEmpty ? listings : inTime, channels: Set(streams.keys), now: now,
                                           limit: GFSearchLayout.airingsPerProgramme) {
                 guard let stream = streams[hit.channelId] else { continue }
-                result.append(Airing(hit: hit, stream: stream, score: GFSearchLayout.programmeScore(
-                    score, start: hit.start, end: hit.end, now: now, time: query.time, calendar: calendar
-                )))
+                chosen.append((hit, stream, score))
             }
+        }
+        // one match under several titles on several channels is one event; the more channels, the more it counts
+        let events = GFSearchEvents.events(chosen.map {
+            GFSearchEvents.Airing(title: $0.hit.title, start: $0.hit.start, end: $0.hit.end)
+        })
+        var channels: [Int: Set<PersistentIdentifier>] = [:]
+        for (index, event) in events.enumerated() {
+            channels[event, default: []].insert(chosen[index].stream)
+        }
+        var result = chosen.indices.map { index in
+            let airing = chosen[index]
+            return Airing(hit: airing.hit, stream: airing.stream, score: GFSearchLayout.programmeScore(
+                airing.score, start: airing.hit.start, end: airing.hit.end, now: now, time: query.time,
+                calendar: calendar, channels: channels[events[index]]?.count ?? 1
+            ), event: events[index])
         }
         result.sort { $0.score != $1.score ? $0.score > $1.score : $0.hit.start < $1.hit.start }
         return Array(result.prefix(GFGuideSearch.limit))

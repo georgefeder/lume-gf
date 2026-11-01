@@ -1,8 +1,8 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index eaa6982..66370c0 100644
+index 5466768..dc13289 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -269,7 +269,8 @@ struct LumeApp: App {
+@@ -331,7 +331,8 @@ struct LumeApp: App {
  
      var body: some Scene {
          WindowGroup {
@@ -486,10 +486,10 @@ index d877deb..8ccf4ba 100644
          @State private var recordingStore = RecordingServerStore.shared
          /// Settings › Live TV's switch for the rail entry; off by default.
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index 45070f1..d229b26 100644
+index 4ac2eab..17deed0 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
-@@ -165,7 +165,7 @@ struct AVPlayerEngineView: View {
+@@ -167,7 +167,7 @@ struct AVPlayerEngineView: View {
                  .transition(.opacity)
              }
          }
@@ -513,10 +513,10 @@ index fba2809..cbfae1f 100644
          .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }
          .playerRecording(for: activeMedia)
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index ffecc9d..5f151eb 100644
+index cadc995..50e7b23 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
-@@ -313,7 +313,7 @@ struct KSPlayerEngineView: View {
+@@ -314,7 +314,7 @@ struct KSPlayerEngineView: View {
                  }
              }
              .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
@@ -525,7 +525,7 @@ index ffecc9d..5f151eb 100644
              .onAppear {
                  engine.attach(coordinator: coordinator)
                  attachNowPlayingTransport()
-@@ -502,7 +502,7 @@ struct KSPlayerEngineView: View {
+@@ -501,7 +501,7 @@ struct KSPlayerEngineView: View {
                  }
              }
              .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
@@ -535,10 +535,10 @@ index ffecc9d..5f151eb 100644
                  attachNowPlayingTransport()
                  scheduleHide()
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index 4cff8d2..03e8b9e 100644
+index 9641db6..709a451 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
-@@ -190,7 +190,7 @@ struct LumeEngineEngineView: View {
+@@ -192,7 +192,7 @@ struct LumeEngineEngineView: View {
          .subtitleSearch(isPresented: $isSearchingSubtitles, media: media) { subtitle in
              coordinator.loadExternalSubtitle(subtitle)
          }
@@ -563,7 +563,7 @@ index 85cf43e..835c78f 100644
                              Spacer(minLength: 0)
  
 diff --git a/Lume/Views/Player/MultiView/MultiViewScreen.swift b/Lume/Views/Player/MultiView/MultiViewScreen.swift
-index a83ff01..5e027b0 100644
+index a019c3b..5baa9b3 100644
 --- a/Lume/Views/Player/MultiView/MultiViewScreen.swift
 +++ b/Lume/Views/Player/MultiView/MultiViewScreen.swift
 @@ -205,7 +205,8 @@ struct MultiViewScreen: View {
@@ -609,10 +609,10 @@ index 0e754c0..6526b8f 100644
                          .font(.system(size: 19))
                          .foregroundStyle(.white.opacity(0.6))
 diff --git a/Lume/Views/Player/VLCPlayerEngineView.swift b/Lume/Views/Player/VLCPlayerEngineView.swift
-index d75a82e..e1441d6 100644
+index 15045f2..e280e1a 100644
 --- a/Lume/Views/Player/VLCPlayerEngineView.swift
 +++ b/Lume/Views/Player/VLCPlayerEngineView.swift
-@@ -182,7 +182,7 @@ struct VLCPlayerEngineView: View {
+@@ -184,7 +184,7 @@ struct VLCPlayerEngineView: View {
          .subtitleSearch(isPresented: $isSearchingSubtitles, media: media) { subtitle in
              coordinator.loadExternalSubtitle(subtitle)
          }

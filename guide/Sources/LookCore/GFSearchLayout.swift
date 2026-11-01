@@ -58,11 +58,11 @@ nonisolated enum GFSearchLayout {
         return score
     }
 
-    /// A programme's score at one airing: more on now or within three hours, and in the time asked for (less outside
-    /// it).
+    /// A programme's score at one airing: more on now or within three hours, in the time asked for (less outside it),
+    /// and the more `channels` show its event at once (`GFSearchEvents.popularity`).
     static func programmeScore(_ score: Double, start: Date, end: Date, now: Date, time: GFSearchQuery.Time?,
-                               calendar: Calendar) -> Double {
-        var score = score
+                               calendar: Calendar, channels: Int = 1) -> Double {
+        var score = score * GFSearchEvents.popularity(channels: channels)
         if start <= now, now < end {
             score *= 1.06
         } else if start.timeIntervalSince(now) < 3 * 3600 {

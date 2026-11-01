@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index 02c3157..eac1279 100644
+index 2ee945c..7a36b8c 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -83,6 +83,10 @@ struct KSPlayerEngineView: View {
@@ -13,7 +13,7 @@ index 02c3157..eac1279 100644
      /// True while the engine is preparing or (re)buffering, so the spinner shows
      /// both on first open and on a mid-stream stall.
      @State var isBuffering = true
-@@ -475,27 +479,43 @@ struct KSPlayerEngineView: View {
+@@ -474,27 +478,43 @@ struct KSPlayerEngineView: View {
                      }
                  }
                  .ignoresSafeArea()
@@ -59,7 +59,7 @@ index 02c3157..eac1279 100644
                          .transition(.opacity)
                  }
  
-@@ -505,9 +525,12 @@ struct KSPlayerEngineView: View {
+@@ -504,9 +524,12 @@ struct KSPlayerEngineView: View {
                          onRetry: { retryPlayback() },
                          onClose: { closePlayer() }
                      )

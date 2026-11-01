@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/SearchView.swift b/Lume/Views/SearchView.swift
-index 179bc60..e1f8191 100644
+index 04084f5..48d9abd 100644
 --- a/Lume/Views/SearchView.swift
 +++ b/Lume/Views/SearchView.swift
-@@ -25,8 +25,9 @@ struct SearchView: View {
+@@ -31,8 +31,9 @@ struct SearchView: View {
      @State private var selectedFilter: ContentFilter = .all
      @State private var results: [SearchResult] = []
      @State private var playingMedia: PlayableMedia?
@@ -14,7 +14,7 @@ index 179bc60..e1f8191 100644
  
      /// Max matches fetched per content type. Keeps the result set bounded so the
      /// list stays responsive even when a playlist holds tens of thousands of items.
-@@ -80,59 +81,34 @@ struct SearchView: View {
+@@ -86,59 +87,34 @@ struct SearchView: View {
                  } else {
                      // Results — only show "No Results" once a query has actually
                      // been run, so it doesn't flash while the input is debouncing.
@@ -89,7 +89,7 @@ index 179bc60..e1f8191 100644
              .navigationDestination(for: Movie.self) { movie in
                  MovieDetailView(movie: movie, animationNamespace: animationNamespace)
                  #if os(iOS)
-@@ -187,6 +163,52 @@ struct SearchView: View {
+@@ -193,6 +169,52 @@ struct SearchView: View {
          return playlists.owner(ofContentID: result.contentID)?.name
      }
  
@@ -142,7 +142,7 @@ index 179bc60..e1f8191 100644
      private func playChannel(_ stream: LiveStream) {
          // Cross-playlist search surfaces channels the active playlist can't
          // stream: a live URL is built from its playlist's server, credentials
-@@ -220,11 +242,9 @@ struct SearchView: View {
+@@ -226,11 +248,9 @@ struct SearchView: View {
              return
          }
  
@@ -154,7 +154,7 @@ index 179bc60..e1f8191 100644
  
          // A Stalker portal's movies/series aren't synced locally, so they can
          // only be found through the portal's own search API — asked of every
-@@ -232,17 +252,12 @@ struct SearchView: View {
+@@ -238,17 +258,12 @@ struct SearchView: View {
          // *is* synced) and every other source type use the local predicate
          // search. Cross-playlist search still runs the local pass too, so other
          // playlists' synced content is included.
@@ -175,7 +175,7 @@ index 179bc60..e1f8191 100644
  
          results = assembleResults(portal: portal, localHits: localHits)
      }
-@@ -449,7 +464,12 @@ private struct SearchFieldModifier: ViewModifier {
+@@ -455,7 +470,12 @@ private struct SearchFieldModifier: ViewModifier {
      /// The search field's latest text. A class, and deliberately not
      /// observable: writing it must not schedule a view update of its own.
      private final class FieldText {

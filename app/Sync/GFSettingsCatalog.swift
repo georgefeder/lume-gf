@@ -64,6 +64,9 @@ enum GFSettingsCatalog {
         ProfileSettings.askOnStartupKey, DebugLogSettings.enabledKey, "tv.quickSwitch.hintShown.v1",
         RecordingServerSetup.disclosureAcknowledgedKey,
         LiveTVRailSettings.showsFavoritesKey, LiveTVRailSettings.showsRecentlyWatchedKey,
-        GFEnhancePlan.settingKey // an experiment, switched on one Apple TV at a time
+        GFEnhancePlan.settingKey, // an experiment, switched on one Apple TV at a time
+        // Lume 3.0: Lume Cloud's notices, each about this device
+        LumeCloudSettings.Key.movedNoticePending, LumeCloudSettings.Key.movedNoticeShown,
+        LumeCloudSettings.Key.recoveryKeyViewed
     ]
 }

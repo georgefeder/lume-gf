@@ -98,7 +98,12 @@ nonisolated final class GFSearchIndex: Sendable {
             items.append(Item(kind: kind, group: group, nameLength: UInt16(clamping: name.count), key: key))
             var meaningful = words
             if let code, meaningful.first == code { meaningful.removeFirst() }
-            meaningful.removeAll { GFSearchText.noiseWords.contains($0) }
+            // what a name is about: not its picture quality, nor "live", "v", "the" (Georgs, 1 Nov: "Live SPFL:
+            // Falkirk v Celtic" lost to "Celtic Woman 20th Anniversary Concert" for words that say nothing)
+            meaningful.removeAll { word in
+                GFSearchText.noiseWords.contains(word) || GFSearchQuery.littleWords.contains(word)
+                    || GFSearchQuery.timeWords[word] != nil
+            }
             for word in Set(words) {
                 post(word, item, extra: false)
             }

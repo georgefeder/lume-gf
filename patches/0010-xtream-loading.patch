@@ -1,5 +1,5 @@
 diff --git a/Lume/Services/Diagnostics/PerformanceSignposts.swift b/Lume/Services/Diagnostics/PerformanceSignposts.swift
-index 1b159a3..aca49d5 100644
+index a4ae8b4..df71264 100644
 --- a/Lume/Services/Diagnostics/PerformanceSignposts.swift
 +++ b/Lume/Services/Diagnostics/PerformanceSignposts.swift
 @@ -45,6 +45,8 @@ nonisolated struct PerfSignpost {
@@ -212,12 +212,12 @@ index 1dc9115..0ec52d0 100644
          // Stalker maps onto the same catalog kinds as Xtream, but its default
          // sync skips the movie/series content walk (loaded on demand); only a
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index c1f121e..907fd4b 100644
+index 70e8910..35139e1 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
-@@ -501,7 +501,18 @@ struct MainTabView: View {
+@@ -509,7 +509,18 @@ struct MainTabView: View {
  
-         for playlist in candidates where shouldAutoSync(playlist) {
+         for playlist in candidates where !playlists.isLocked(playlist) && shouldAutoSync(playlist) {
              autoSyncAttempted.insert(playlist.id)
 -            syncQueue.append(playlist)
 +            // Lume GF: only a playlist's first sync shows the cover (an Xtream one only until its live channels are

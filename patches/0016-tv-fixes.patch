@@ -54,7 +54,7 @@ index 4d9514d..8a157de 100644
      /// keep showing that the next channel is on its way.
      @ViewBuilder
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index 5f151eb..02c3157 100644
+index 50e7b23..2ee945c 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -80,6 +80,9 @@ struct KSPlayerEngineView: View {
@@ -67,7 +67,7 @@ index 5f151eb..02c3157 100644
      /// True while the engine is preparing or (re)buffering, so the spinner shows
      /// both on first open and on a mid-stream stall.
      @State var isBuffering = true
-@@ -258,6 +261,7 @@ struct KSPlayerEngineView: View {
+@@ -259,6 +262,7 @@ struct KSPlayerEngineView: View {
                  }
                  .ignoresSafeArea()
  
@@ -75,7 +75,7 @@ index 5f151eb..02c3157 100644
                  zapFrameOverlay
  
                  // KSPlayer decodes the selected subtitle into
-@@ -320,6 +324,7 @@ struct KSPlayerEngineView: View {
+@@ -321,6 +325,7 @@ struct KSPlayerEngineView: View {
                  scheduleHide()
                  startStartupWatchdog()
                  seedAdoptedSessionState()
@@ -83,7 +83,7 @@ index 5f151eb..02c3157 100644
              }
              .onDisappear {
                  hideTask?.cancel()
-@@ -344,6 +349,7 @@ struct KSPlayerEngineView: View {
+@@ -345,6 +350,7 @@ struct KSPlayerEngineView: View {
              .onChange(of: media) { _, _ in
                  // The host swapped the stream (KSPlayer reloads its URL
                  // automatically). Reset local scrubbing / panel state.
@@ -91,7 +91,7 @@ index 5f151eb..02c3157 100644
                  isSeeking = false
                  seekPosition = 0
                  isPanelOpen = false
-@@ -470,6 +476,7 @@ struct KSPlayerEngineView: View {
+@@ -469,6 +475,7 @@ struct KSPlayerEngineView: View {
                  }
                  .ignoresSafeArea()
  
@@ -99,7 +99,7 @@ index 5f151eb..02c3157 100644
                  zapFrameOverlay
  
                  // KSPlayer decodes the selected subtitle into
-@@ -530,6 +537,7 @@ struct KSPlayerEngineView: View {
+@@ -529,6 +536,7 @@ struct KSPlayerEngineView: View {
              }
              #endif
              .onChange(of: media.id) { _, _ in
