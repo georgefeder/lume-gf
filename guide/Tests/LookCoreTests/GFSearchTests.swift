@@ -288,3 +288,64 @@ struct GFSearchLayoutTests {
         #expect(asked > live)
     }
 }
+
+/// Georgs, 1 Nov: searching "celtic", Falkirk v Celtic was on five channels under four titles, and a one-channel
+/// concert and the ESPN 2 airing led where the 4K Sky Sports Football one should.
+struct GFSearchEventsTests {
+    private let kickOff = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func airing(_ title: String, startsIn hours: Double, lasting length: Double = 2) -> GFSearchEvents.Airing {
+        GFSearchEvents.Airing(title: title, start: kickOff.addingTimeInterval(hours * 3600),
+                              end: kickOff.addingTimeInterval((hours + length) * 3600))
+    }
+
+    @Test func `one match under several titles at the same time is one event`() {
+        let events = GFSearchEvents.events([
+            airing("Live SPFL: Falkirk v Celtic", startsIn: 0),
+            airing("SPFL: Falkirk vs Celtic", startsIn: 0),
+            airing("Liga Escocesa 2026-27 - Falkirk x Celtic", startsIn: 0.25),
+            airing("Celtic Woman 20th Anniversary Concert", startsIn: 0),
+            airing("SPFL: Falkirk v Celtic", startsIn: 14) // tomorrow's repeat
+        ])
+        #expect(events == [0, 0, 0, 3, 4])
+    }
+
+    @Test func `a title's distinctive words leave out little words, live, quality and numbers`() {
+        #expect(GFSearchEvents.words("Live SPFL: Falkirk v Celtic") == ["spfl", "falkirk", "celtic"])
+        #expect(GFSearchEvents.words("Liga Escocesa 2026-27 - Falkirk x Celtic HD")
+            == ["liga", "escocesa", "falkirk", "celtic"])
+    }
+
+    @Test func `a single-word title is one event only with the same word`() {
+        let events = GFSearchEvents.events([airing("Celtic", startsIn: 0), airing("Celtic", startsIn: 0.5),
+                                            airing("Celtic Woman", startsIn: 0)])
+        #expect(events == [0, 0, 2])
+    }
+
+    @Test func `more channels at once and a better picture count for more`() {
+        #expect(GFSearchEvents.popularity(channels: 1) == 1)
+        #expect(GFSearchEvents.popularity(channels: 5) > GFSearchEvents.popularity(channels: 2))
+        #expect(GFSearchEvents.popularity(channels: 20) == GFSearchEvents.popularity(channels: 6))
+        #expect(GFSearchEvents.quality(channelName: "Sky Sports Football 4K")
+            > GFSearchEvents.quality(channelName: "ESPN 2 HD"))
+        #expect(GFSearchEvents.quality(channelName: "Sky Sports Main Event FHD")
+            > GFSearchEvents.quality(channelName: "Sky Sports Main Event HD"))
+        #expect(GFSearchEvents.quality(channelName: "WABE PBS 30") == 1)
+    }
+
+    @Test func `the match on five channels leads a one-channel concert that starts with the word`() throws {
+        var builder = GFSearchIndex.Builder()
+        builder.add(.programme, key: "match", name: "Live SPFL: Falkirk v Celtic")
+        builder.add(.programme, key: "concert", name: "Celtic Woman 20th Anniversary Concert")
+        let hits = Dictionary(uniqueKeysWithValues: builder.build().search(GFSearchQuery("celtic"))
+            .map { ($0.key, $0.score) })
+        let now = kickOff.addingTimeInterval(1800)
+        let calendar = Calendar(identifier: .gregorian)
+        func score(_ key: String, channels: Int) throws -> Double {
+            GFSearchLayout.programmeScore(try #require(hits[key]), start: kickOff,
+                                          end: kickOff.addingTimeInterval(7200), now: now, time: nil,
+                                          calendar: calendar, channels: channels)
+        }
+        #expect(try score("match", channels: 5) > score("concert", channels: 1))
+    }
+}
