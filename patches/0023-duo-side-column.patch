@@ -21,7 +21,7 @@ index 74f6c1f..b63a933 100644
              .padding(.horizontal, 20)
              .padding(.top, 12)
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index eac1279..27529a6 100644
+index eac1279..63b8971 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -506,6 +506,9 @@ struct KSPlayerEngineView: View {
@@ -34,3 +34,25 @@ index eac1279..27529a6 100644
                          .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                  }
  
+@@ -516,6 +519,13 @@ struct KSPlayerEngineView: View {
+                 if isBuffering {
+                     PlayerLoadingIndicator(title: hasStartedPlayback ? nil : media.title)
+                         .gfTabletopArea(gfTabletop?.video, from: .top)
++                        .gfControlsBesideSideColumn() // Lume GF: centred on the iPhone Duo's outer screen
++                        .transition(.opacity)
++                }
++
++                // Lume GF: a channel that has not started can still be closed (Georgs, 1 Nov)
++                if !hasStartedPlayback, !loadFailed, !GFTabletop.demoFold {
++                    GFLoadingCloseButton(onClose: { closePlayer() })
+                         .transition(.opacity)
+                 }
+ 
+@@ -526,6 +536,7 @@ struct KSPlayerEngineView: View {
+                         onClose: { closePlayer() }
+                     )
+                     .gfTabletopArea(gfTabletop?.video, from: .top)
++                    .gfControlsBesideSideColumn() // Lume GF: centred on the iPhone Duo's outer screen
+                     .transition(.opacity)
+                 }
+             }
