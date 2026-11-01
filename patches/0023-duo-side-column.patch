@@ -1,3 +1,46 @@
+diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+index ad1431e..9866543 100644
+--- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+@@ -89,9 +89,16 @@ import SwiftUI
+ 
+                 pipButton
+ 
++                // Lume GF: beside them on the iPhone Duo's outer screen, whose camera is at the top right
++                if GFTabletop.topButtonsOnTheLeft {
++                    PlayerCastButton(player: coordinator.player)
++                }
++
+                 Spacer()
+ 
+-                PlayerCastButton(player: coordinator.player)
++                if !GFTabletop.topButtonsOnTheLeft {
++                    PlayerCastButton(player: coordinator.player)
++                }
+             }
+             .padding(.horizontal, 20)
+             .padding(.top, 12)
+diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
+index 52b789f..4708345 100644
+--- a/Lume/Views/Player/AVPlayerEngineView.swift
++++ b/Lume/Views/Player/AVPlayerEngineView.swift
+@@ -131,6 +131,8 @@ struct AVPlayerEngineView: View {
+ 
+             if isControlsVisible, !loadFailed {
+                 controlsOverlay
++                    // Lume GF: across the whole width beside the iPhone Duo outer screen's side column (Georgs, 1 Nov)
++                    .gfControlsBesideSideColumn()
+                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+             }
+ 
+@@ -162,6 +164,7 @@ struct AVPlayerEngineView: View {
+                     onRetry: { retryPlayback() },
+                     onClose: { closePlayer() }
+                 )
++                .gfControlsBesideSideColumn() // Lume GF: centred on the iPhone Duo's outer screen
+                 .transition(.opacity)
+             }
+         }
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 index 74f6c1f..b63a933 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
@@ -56,3 +99,107 @@ index eac1279..63b8971 100644
                      .transition(.opacity)
                  }
              }
+diff --git a/Lume/Views/Player/LumeEngineControlsOverlay.swift b/Lume/Views/Player/LumeEngineControlsOverlay.swift
+index b042b00..598b8ea 100644
+--- a/Lume/Views/Player/LumeEngineControlsOverlay.swift
++++ b/Lume/Views/Player/LumeEngineControlsOverlay.swift
+@@ -103,9 +103,16 @@ import SwiftUI
+ 
+                 pipButton
+ 
++                // Lume GF: beside them on the iPhone Duo's outer screen, whose camera is at the top right
++                if GFTabletop.topButtonsOnTheLeft {
++                    PlayerCastButton()
++                }
++
+                 Spacer()
+ 
+-                PlayerCastButton()
++                if !GFTabletop.topButtonsOnTheLeft {
++                    PlayerCastButton()
++                }
+             }
+             .padding(.horizontal, 20)
+             .padding(.top, 12)
+diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
+index a171fec..496469e 100644
+--- a/Lume/Views/Player/LumeEngineEngineView.swift
++++ b/Lume/Views/Player/LumeEngineEngineView.swift
+@@ -148,6 +148,8 @@ struct LumeEngineEngineView: View {
+             // behind its Play button.
+             if isControlsVisible, coordinator.hasStartedPlayback, !loadFailed {
+                 controlsOverlay
++                    // Lume GF: across the whole width beside the iPhone Duo outer screen's side column (Georgs, 1 Nov)
++                    .gfControlsBesideSideColumn()
+                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+             }
+ 
+@@ -175,15 +177,25 @@ struct LumeEngineEngineView: View {
+ 
+             if coordinator.isBuffering, !loadFailed {
+                 PlayerLoadingIndicator(title: coordinator.hasStartedPlayback ? nil : media.title)
++                    .gfControlsBesideSideColumn() // Lume GF: centred on the iPhone Duo's outer screen
+                     .transition(.opacity)
+             }
+ 
++            // Lume GF: a channel that has not started can still be closed (Georgs, 1 Nov)
++            #if os(iOS)
++                if !coordinator.hasStartedPlayback, !loadFailed {
++                    GFLoadingCloseButton(onClose: { closePlayer() })
++                        .transition(.opacity)
++                }
++            #endif
++
+             if loadFailed {
+                 PlayerErrorIndicator(
+                     title: media.title,
+                     onRetry: { retryPlayback() },
+                     onClose: { closePlayer() }
+                 )
++                .gfControlsBesideSideColumn() // Lume GF: centred on the iPhone Duo's outer screen
+                 .transition(.opacity)
+             }
+         }
+diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+index 1050723..10b987b 100644
+--- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+@@ -92,9 +92,16 @@ import VLCKit
+ 
+                 pipButton
+ 
++                // Lume GF: beside them on the iPhone Duo's outer screen, whose camera is at the top right
++                if GFTabletop.topButtonsOnTheLeft {
++                    PlayerCastButton()
++                }
++
+                 Spacer()
+ 
+-                PlayerCastButton()
++                if !GFTabletop.topButtonsOnTheLeft {
++                    PlayerCastButton()
++                }
+             }
+             .padding(.horizontal, 20)
+             .padding(.top, 12)
+diff --git a/Lume/Views/Player/VLCPlayerEngineView.swift b/Lume/Views/Player/VLCPlayerEngineView.swift
+index e1441d6..87069f1 100644
+--- a/Lume/Views/Player/VLCPlayerEngineView.swift
++++ b/Lume/Views/Player/VLCPlayerEngineView.swift
+@@ -145,6 +145,8 @@ struct VLCPlayerEngineView: View {
+ 
+             if isControlsVisible, !loadFailed {
+                 controlsOverlay
++                    // Lume GF: across the whole width beside the iPhone Duo outer screen's side column (Georgs, 1 Nov)
++                    .gfControlsBesideSideColumn()
+                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+             }
+ 
+@@ -176,6 +178,7 @@ struct VLCPlayerEngineView: View {
+                     onRetry: { retryPlayback() },
+                     onClose: { closePlayer() }
+                 )
++                .gfControlsBesideSideColumn() // Lume GF: centred on the iPhone Duo's outer screen
+                 .transition(.opacity)
+             }
+         }

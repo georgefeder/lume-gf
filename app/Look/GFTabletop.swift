@@ -254,6 +254,10 @@ private struct GFSideColumnWidth: ViewModifier {
     func body(content: Content) -> some View {
         content
             .ignoresSafeArea(edges: GFTabletop.shared.sideColumn == nil ? [] : .horizontal)
+            // each player engine's controls tell their own window (KSPlayer's also from its fold reader)
+            #if os(iOS)
+            .background { GFWindowProbe().allowsHitTesting(false) }
+            #endif
     }
 }
 
