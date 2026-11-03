@@ -1,0 +1,14 @@
+diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
+index cf5aaf1..ba1b7b6 100644
+--- a/Lume/Views/Player/FullScreenPlayerView.swift
++++ b/Lume/Views/Player/FullScreenPlayerView.swift
+@@ -248,7 +248,9 @@ struct FullScreenPlayerView: View {
+             // and a top bar laid out in the status-bar / Dynamic-Island region
+             // collides with the clock and cellular indicators.
+             #if os(iOS)
++                // Lume GF: up and down on the left half sets the brightness, on the right the volume (Georgs, 3 Nov)
+                 playerView
++                    .gfLevelSwipes(enabled: !showsCastSurface)
+             #else
+                 playerView
+                     .playerVolumeSession()
