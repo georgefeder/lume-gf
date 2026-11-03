@@ -168,6 +168,9 @@ xcrun simctl ui "$IOS" appearance light
 film "$IOS" "$BID" iphone-open-light -GFDemo list -GFDemoMoves play
 film "$IOS" "$BID" iphone-open-lightsetting -GFDemo list -GFDemoMoves play -app.appearance light
 xcrun simctl ui "$IOS" appearance dark
+# the player's level pill (GFLevelSwipes, Georgs 3 Nov): what a swipe on the right half shows, the volume at 62 %
+# (after the films: a playing channel may turn the iPhone sideways)
+shoot "$IOS" "$BID" iphone-player-level-dark -GFDemo list -GFDemoMoves play,level -GFDemoStream "$TEST_STREAM"
 shoot "$IOS" "$BID" iphone-guide-landscape-dark -GFDemo guide -GFDemoMoves landscape  # last: the iPhone stays sideways
 xcrun simctl shutdown "$IOS" >/dev/null 2>&1 || true
 
@@ -189,6 +192,8 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   # a channel that never starts (the demo's made-up address): the spinner centred, a close button to leave by
   # (Georgs, 1 Nov: "while its loading the screen is inactive")
   shoot "$DUO" "$DBID" duo-player-loading -GFDemo list -GFDemoMoves play
+  # the level pill on the front screen: centred beside the side column, clear of the camera
+  shoot "$DUO" "$DBID" duo-player-level -GFDemo list -GFDemoMoves play,level -GFDemoStream "$TEST_STREAM"
   # stood up half folded (a pretend fold: nothing folds the simulator): the picture above, the controls below over its
   # reflection; Apple's public test stream plays, the demo's made-up channels never do. Leaning back a little, then
   # opened further: the reflection is shorter
