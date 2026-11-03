@@ -193,11 +193,15 @@ extension View {
                 }
         }
 
-        /// Below the top row of buttons, centred on the screen (the Duo's outer screen: beside its side column).
+        /// Below the top row of buttons, centred on the whole screen, as the play button is. The Duo's outer screen
+        /// keeps a column down its side for the clock and the camera: the pill's row spans the player's width and then
+        /// that column too (a pill alone would stay centred left of the column; Georgs, 3 Nov). The pill is narrower
+        /// than the screen left of the column, so it never reaches the camera at the column's top.
         @ViewBuilder private var pill: some View {
             if let kind = model.shown {
                 GFLevelPill(kind: kind, level: model.level)
                     .padding(.top, 68)
+                    .frame(maxWidth: .infinity)
                     .gfControlsBesideSideColumn()
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.92)))
                     .allowsHitTesting(false)
