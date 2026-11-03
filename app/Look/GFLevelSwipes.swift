@@ -28,8 +28,13 @@ extension View {
         private(set) var level = 0.0
         @ObservationIgnored private var hideTask: Task<Void, Never>?
         @ObservationIgnored weak var host: GFLevelHostView?
-        /// The brightness before the first swipe here, put back on leaving.
+        /// The brightness before the first swipe here, put back on leaving, and the screen it is on (kept from the
+        /// swipe: when the player closes, its view may already be out of the window).
         @ObservationIgnored private var originalBrightness: CGFloat?
+        @ObservationIgnored private weak var brightnessScreen: UIScreen?
+        /// Over Control Centre or the app switcher: the player's brightness, put back on return unless the brightness
+        /// was changed meanwhile.
+        @ObservationIgnored private var away: (player: CGFloat, original: CGFloat)?
         /// A swipe in progress sets the volume: its own changes are not news for the pill.
         @ObservationIgnored var isDraggingVolume = false
         @ObservationIgnored private var volumeObservation: NSKeyValueObservation?
@@ -47,8 +52,12 @@ extension View {
             if (next == 0 || next == 1), next != level || shown != kind { edgeTap.impactOccurred() }
             switch kind {
             case .brightness:
-                guard let screen = host?.screen else { return }
-                if originalBrightness == nil { originalBrightness = screen.brightness }
+                // a swipe after the first stays on the first one's screen, whose brightness goes back on leaving
+                guard let screen = originalBrightness == nil ? host?.screen : brightnessScreen else { return }
+                if originalBrightness == nil {
+                    originalBrightness = screen.brightness
+                    brightnessScreen = screen
+                }
                 screen.brightness = CGFloat(next)
             case .volume:
                 host?.setVolume(Float(next))
@@ -72,10 +81,35 @@ extension View {
             }
         }
 
+        /// The player closes: the brightness it was before the first swipe.
         func restoreBrightness() {
-            guard let originalBrightness else { return }
-            host?.screen?.brightness = originalBrightness
+            away = nil
+            guard let originalBrightness, let screen = brightnessScreen else { return }
+            screen.brightness = originalBrightness
             self.originalBrightness = nil
+        }
+
+        /// The app leaves the screen, or something covers it: the old brightness while away.
+        func leave() {
+            guard let originalBrightness, let screen = brightnessScreen else { return }
+            away = (screen.brightness, originalBrightness)
+            screen.brightness = originalBrightness
+            self.originalBrightness = nil
+        }
+
+        /// Back: the player's brightness again, unless it was changed meanwhile (Control Centre's slider).
+        func comeBack() {
+            guard let away, let screen = brightnessScreen else { return }
+            self.away = nil
+            guard abs(screen.brightness - away.original) < 0.02 else { return }
+            originalBrightness = away.original
+            screen.brightness = away.player
+        }
+
+        /// The finger lifted, or the swipe was cut short (a call, Control Centre).
+        func dragEnded() {
+            isDraggingVolume = false
+            hideSoon()
         }
 
         /// The side buttons' presses show in the pill: with the hidden volume view on screen iOS shows no volume
@@ -102,10 +136,9 @@ extension View {
         let enabled: Bool
         @State private var model = GFLevelModel()
         @State private var size = CGSize.zero
-        /// The drag's level, once it is known to be a level swipe; a drag that went sideways first stays sideways.
-        @State private var active: GFPlayerSwipe.Kind?
-        @State private var decided = false
-        @State private var startLevel = 0.0
+        /// The drag so far: nil until its first move, then the level it sets (none for one that went sideways first:
+        /// it stays sideways) and that level when it began. Gesture state, so a swipe cut short starts afresh.
+        @GestureState private var track: Track?
         @Environment(\.scenePhase) private var scenePhase
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -132,30 +165,31 @@ extension View {
                 }
                 .onDisappear { model.restoreBrightness() }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase != .active { model.restoreBrightness() }
+                    if phase == .active { model.comeBack() } else { model.leave() }
                 }
+                // the end of a level swipe, lifted or cut short (gesture state goes back to nil either way)
+                .onChange(of: track) { old, new in
+                    if new == nil, old?.kind != nil { model.dragEnded() }
+                }
+        }
+
+        private struct Track: Equatable {
+            var kind: GFPlayerSwipe.Kind?
+            var start: Double
         }
 
         private var drag: some Gesture {
             DragGesture(minimumDistance: GFPlayerSwipe.threshold, coordinateSpace: .local)
-                .onChanged { value in
-                    if !decided {
-                        decided = true
-                        guard GFPlayerSwipe.isVertical(value.translation),
-                              let kind = GFPlayerSwipe.kind(start: value.startLocation, size: size) else { return }
-                        active = kind
-                        startLevel = model.current(kind)
+                .updating($track) { value, track, _ in
+                    if track == nil {
+                        let kind = GFPlayerSwipe.isVertical(value.translation)
+                            ? GFPlayerSwipe.kind(start: value.startLocation, size: size) : nil
+                        track = Track(kind: kind, start: kind.map { model.current($0) } ?? 0)
                         model.isDraggingVolume = kind == .volume
                     }
-                    guard let active else { return }
-                    model.set(active, to: GFPlayerSwipe.level(from: startLevel, dy: value.translation.height,
-                                                              height: size.height))
-                }
-                .onEnded { _ in
-                    if active != nil { model.hideSoon() }
-                    active = nil
-                    decided = false
-                    model.isDraggingVolume = false
+                    guard let kind = track?.kind, let start = track?.start else { return }
+                    model.set(kind, to: GFPlayerSwipe.level(from: start, dy: value.translation.height,
+                                                            height: size.height))
                 }
         }
 
@@ -175,6 +209,7 @@ extension View {
     struct GFLevelPill: View {
         let kind: GFPlayerSwipe.Kind
         let level: Double
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         private let barWidth: CGFloat = 96
 
@@ -202,7 +237,7 @@ extension View {
             .padding(.vertical, 10)
             .glassEffectCompat(.regular, in: Capsule())
             // the icon swaps smoothly between brightness and volume; the bar follows the finger with no lag
-            .animation(.smooth(duration: 0.25), value: kind)
+            .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: kind)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(kind == .brightness ? "Brightness" : "Volume")
             .accessibilityValue("\(GFPlayerSwipe.percent(level)) percent")
