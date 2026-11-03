@@ -4,8 +4,8 @@ Lume's own on both devices, so the iPhone glass column's checks of build 9 are g
 For Georgs' notes of 2 Oct: posters in a row line up at the top (a title on two lines lifted its poster), and Home
 shows Recently Watched and the recently added films and series (his Apple TV's Home showed only the sports row). Rows
 below the first screen are never drawn, so the recently added rows are checked on a second picture of Home with
-Recently Watched and Favorites switched off. The continue banner sits at the top of the screen, whole, centred on the
-iPhone and in the right half on the Apple TV.
+Recently Watched and Favorites switched off. The continue banner sits whole on screen: above the tab bar and centred on
+the iPhone, top right on the Apple TV's safe area and margins.
 Positions come from the demo build's log lines ("GFDemo guide geometry:", "GFDemo focused programme:", in points on
 screen), brightness from png-lines.swift. Exit 1 when a check fails. Usage: guide-check.py <screenshots dir>"""
 import os, statistics, subprocess, sys
@@ -88,22 +88,32 @@ def home_rows_ok(rows, expected):
     return True, "Home shows " + ", ".join(expected)
 
 
+# The Apple TV's banner (Georgs, 3 Nov: it felt geometrically wrong): on the safe area's top, its right edge as far
+# in from the right as Home's rows start from the left
+TV_TOP = 60
+TV_MARGIN = 96
+
+
 def banner_ok(b):
-    """The continue banner from its log line: whole on screen in the top 30%, centred on the iPhone (equal gaps), in the
-    right half on the Apple TV."""
+    """The continue banner from its log line, whole on screen. iPhone: in the tab bar's accessory place, centred
+    (equal gaps) in the bottom 30%. Apple TV: top right, on the safe area's top (60 points) and Home's margin (96 points
+    in from the right)."""
     if not b or b.get("w", 0) <= 0 or b.get("screenW", 0) <= 0:
         return False, "no banner logged"
     left, right = b["x"], b["screenW"] - b["x"] - b["w"]
     detail = "x=%g y=%g w=%g h=%g on %gx%g" % (b["x"], b["y"], b["w"], b["h"], b["screenW"], b["screenH"])
-    if left < 0 or right < 0 or b["y"] < 0:
+    if left < 0 or right < 0 or b["y"] < 0 or b["y"] + b["h"] > b["screenH"]:
         return False, "off the screen: " + detail
-    if b["y"] + b["h"] > b["screenH"] * 0.3:
-        return False, "not at the top: " + detail
     if b.get("tv"):
-        if b["x"] < b["screenW"] / 2:
-            return False, "not on the right: " + detail
-    elif abs(left - right) > 2:
-        return False, "not centred: " + detail
+        if abs(b["y"] - TV_TOP) > 2:
+            return False, "not on the safe area's top (%g): %s" % (TV_TOP, detail)
+        if abs(right - TV_MARGIN) > 2:
+            return False, "right edge not on Home's margin (%g in): %s" % (TV_MARGIN, detail)
+    else:
+        if b["y"] < b["screenH"] * 0.7:
+            return False, "not above the tab bar: " + detail
+        if abs(left - right) > 2:
+            return False, "not centred: " + detail
     return True, detail
 
 

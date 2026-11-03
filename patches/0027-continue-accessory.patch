@@ -1,0 +1,20 @@
+diff --git a/Lume/Views/Components/Cast/CastMiniControllerPlacement.swift b/Lume/Views/Components/Cast/CastMiniControllerPlacement.swift
+index 26b92f4..74a1df9 100644
+--- a/Lume/Views/Components/Cast/CastMiniControllerPlacement.swift
++++ b/Lume/Views/Components/Cast/CastMiniControllerPlacement.swift
+@@ -80,8 +80,13 @@ extension View {
+         @ViewBuilder
+         func bottomAccessoryIfAvailable(model: CastMiniControllerModel) -> some View {
+             if #available(iOS 26.1, *) {
+-                tabViewBottomAccessory(isEnabled: model.isVisible) {
+-                    CastMiniControllerAccessory(model: model)
++                // Lume GF: the continue banner takes the place while no cast plays (GFContinueAccessory, Georgs 3 Nov)
++                tabViewBottomAccessory(isEnabled: model.isVisible || GFContinueBannerPresence.shared.isShowing) {
++                    if model.isVisible {
++                        CastMiniControllerAccessory(model: model)
++                    } else {
++                        GFContinueAccessory()
++                    }
+                 }
+             } else {
+                 self

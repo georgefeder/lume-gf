@@ -84,8 +84,20 @@ extension PlayableMedia {
     }
 }
 
-/// Where the banner sits: iPhone and iPad at the top under the Dynamic Island, Apple TV top-right.
+/// Where the banner sits (Georgs, 3 Nov: on every device it "feels geometrically wrong"). iPhone and iPad, iOS 26.1
+/// on: in the tab bar's accessory place, above the tab bar and as wide as it, where Lume's Chromecast mini player sits
+/// (`GFContinueAccessory`); the system lays it out on every screen, the Duo's two included. Before 26.1: at the top,
+/// on the screen's 16-point margins. Apple TV: top right, where tvOS shows its own notices, on the safe area's top,
+/// its right edge on the margin Home's rows start at on the left.
 enum GFContinueBannerLayout {
+    /// iOS 26.1's `tabViewBottomAccessory(isEnabled:)`; 26.0's accessory comes and goes only by rebuilding the tabs.
+    static var usesTabAccessory: Bool {
+        #if os(iOS)
+            if #available(iOS 26.1, *) { return true }
+        #endif
+        return false
+    }
+
     static var alignment: Alignment {
         #if os(tvOS)
             .topTrailing
@@ -96,48 +108,57 @@ enum GFContinueBannerLayout {
 
     static var padding: EdgeInsets {
         #if os(tvOS)
-            EdgeInsets(top: 40, leading: 0, bottom: 0, trailing: 60)
+            // inside the TV's safe area (60 points at the top, 80 at the sides): 16 more at the right puts the right
+            // edge 96 points from the screen's, as Home's rows start 96 points from the left
+            EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16)
         #else
-            EdgeInsets(top: 4, leading: 10, bottom: 0, trailing: 10)
+            EdgeInsets(top: 8, leading: 16, bottom: 0, trailing: 16)
         #endif
     }
 }
 
-/// The banner itself: Liquid Glass, artwork, title, where and when, a play button (iPhone/iPad) or the remote's
-/// Play/Pause hint (Apple TV); never focusable on the Apple TV.
+/// The banner on the Apple TV, and on iPhone and iPad before iOS 26.1: Liquid Glass, the artwork, title, where and
+/// when, a play button (iPhone/iPad) or the remote's Play/Pause hint (Apple TV); never focusable on the Apple TV. The
+/// artwork and the button are circles as tall as the text, with the same gap all round, so they follow the capsule's
+/// round ends (a square tile and a button shorter than the text sat off its curve).
 struct GFContinueBannerView: View {
     let note: GFLastPlayedNote
     let now: Date
     var onPlay: () -> Void = {}
+    @State private var textHeight: CGFloat = 0
+
+    private static let gap: CGFloat = 8
+    private static var smallestCircle: CGFloat {
+        #if os(tvOS)
+            64
+        #else
+            44
+        #endif
+    }
+
+    private var circle: CGFloat {
+        max(Self.smallestCircle, textHeight)
+    }
 
     var body: some View {
         HStack(spacing: 12) {
-            artwork
-            VStack(alignment: .leading, spacing: 2) {
-                Text(note.kind == .channel ? "Continue \(note.title)" : note.title)
-                    .font(.headline).lineLimit(1)
-                Text(GFContinueOffer.subtitle(note, now: now))
-                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                if note.kind != .channel, note.duration > 0 {
-                    ProgressView(value: min(1, note.position / note.duration)).tint(.primary).frame(maxWidth: 160)
-                }
-            }
+            GFContinueArtwork(note: note, size: circle)
+            GFContinueText(note: note, now: now)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight = $0 }
             Spacer(minLength: 8)
             #if os(tvOS)
-                // a fixed size: the TV's title3 drew the wide play-pause glyph past its circle
-                Image(systemName: "playpause.fill").font(.system(size: 24, weight: .semibold))
-                    .frame(width: 64, height: 64).glassEffectCompat(.regular, in: Circle())
+                Image(systemName: "playpause.fill").font(.system(size: circle * 0.36, weight: .semibold))
+                    .frame(width: circle, height: circle).glassEffectCompat(.regular, in: Circle())
             #else
                 Button(action: onPlay) {
-                    Image(systemName: "play.fill").font(.title3).frame(width: 44, height: 44)
+                    Image(systemName: "play.fill").font(.title3).frame(width: circle, height: circle)
                 }
                 .buttonStyle(.plain)
                 .glassEffectCompat(.regularInteractive, in: Circle())
                 .accessibilityLabel(Text("Play"))
             #endif
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(Self.gap)
         .glassEffectCompat(.regular, in: Capsule())
         #if os(tvOS)
             .frame(width: 640)
@@ -146,35 +167,180 @@ struct GFContinueBannerView: View {
             .frame(maxWidth: 520) // an iPad's banner stays phone-sized
         #endif
     }
+}
 
-    @ViewBuilder private var artwork: some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        AsyncImage(url: note.artworkURL.flatMap(URL.init(string:))) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
-            Image(systemName: note.kind == .channel ? "dot.radiowaves.left.and.right" : "film")
-                .foregroundStyle(.secondary)
+/// The title ("Continue BBC One" for a channel), where and when it played, and for a film or episode how far in.
+private struct GFContinueText: View {
+    let note: GFLastPlayedNote
+    let now: Date
+    /// The tab bar's accessory: smaller type; `inline` (beside a shrunk tab bar) the title alone.
+    var accessory = false
+    var inline = false
+    var showsProgress = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: accessory ? 1 : 2) {
+            Text(note.kind == .channel ? "Continue \(note.title)" : note.title)
+                .font(accessory ? .subheadline.weight(.semibold) : .headline).lineLimit(1)
+            if !inline {
+                Text(GFContinueOffer.subtitle(note, now: now))
+                    .font(accessory ? .caption : .subheadline).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if showsProgress, let progress = GFContinueArtwork.progress(note) {
+                ProgressView(value: progress).tint(.primary).frame(maxWidth: 160)
+            }
         }
-        .frame(width: note.kind == .channel ? 46 : 34, height: 46)
-        .background(.quaternary, in: shape)
-        .clipShape(shape)
     }
 }
 
-/// Whether the continue banner is on screen. The Apple TV's tab view opens Lume's playlist switcher on Play/Pause, and
-/// sits nearer the focus than the banner's own handler, so it got the press the banner asks for (Georgs, 1 Nov): while
-/// this is true it leaves Play/Pause to the banner.
+/// The artwork in a circle: a channel's logo whole inside it, a poster filling it.
+private struct GFContinueArtwork: View {
+    let note: GFLastPlayedNote
+    let size: CGFloat
+
+    /// How far into a film or episode, none for a channel.
+    static func progress(_ note: GFLastPlayedNote) -> Double? {
+        guard note.kind != .channel, note.duration > 0 else { return nil }
+        return min(1, max(0, note.position / note.duration))
+    }
+
+    var body: some View {
+        AsyncImage(url: note.artworkURL.flatMap(URL.init(string:))) { image in
+            if note.kind == .channel {
+                image.resizable().scaledToFit().padding(size * 0.18)
+            } else {
+                image.resizable().scaledToFill()
+            }
+        } placeholder: {
+            Image(systemName: note.kind == .channel ? "dot.radiowaves.left.and.right" : "film")
+                .font(.system(size: size * 0.38, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: size, height: size)
+        .background(.quaternary, in: Circle())
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+}
+
+#if os(iOS)
+    /// The banner in the tab bar's accessory place (iOS 26.1 on; Lume's `castMiniController` hands it the place while
+    /// no cast plays). Laid out as Lume's Chromecast mini player is: the artwork, two lines, a play button with a ring
+    /// for how far in a film is; beside a shrunk tab bar the title alone. Tap or Play plays, a swipe down dismisses.
+    @available(iOS 26.1, *)
+    struct GFContinueAccessory: View {
+        @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+        @State private var height: CGFloat = 0
+        private var presence: GFContinueBannerPresence {
+            .shared
+        }
+
+        var body: some View {
+            if let note = presence.note {
+                let inline = placement == .inline
+                let artwork: CGFloat = inline ? 28 : 36
+                let button: CGFloat = inline ? 32 : 40
+                HStack(spacing: 10) {
+                    GFContinueArtwork(note: note, size: artwork)
+                    GFContinueText(note: note, now: presence.shownAt, accessory: true, inline: inline,
+                                   showsProgress: false)
+                    Spacer(minLength: 4)
+                    Button { presence.play() } label: {
+                        Image(systemName: "play.fill")
+                            .font(.body.weight(.semibold))
+                            .frame(width: button, height: button)
+                            .overlay { ring(note, size: button) }
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Play"))
+                }
+                // the circles as far from the accessory's round ends as from its top and bottom: concentric with them
+                .padding(.leading, max(4, (height - artwork) / 2))
+                .padding(.trailing, max(4, (height - button) / 2))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+                .contentShape(Rectangle())
+                .onTapGesture { presence.play() }
+                .simultaneousGesture(DragGesture(minimumDistance: 10).onEnded {
+                    if $0.translation.height > 0 { presence.dismiss() }
+                })
+                .accessibilityAction(named: Text("Dismiss")) { presence.dismiss() }
+                #if GF_DEMO
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { GFDemo.logBanner($0) }
+                #endif
+            }
+        }
+
+        /// How far into a film or episode, round the play button.
+        @ViewBuilder private func ring(_ note: GFLastPlayedNote, size: CGFloat) -> some View {
+            if let progress = GFContinueArtwork.progress(note) {
+                ZStack {
+                    Circle().stroke(.quaternary, lineWidth: 2)
+                    Circle().trim(from: 0, to: progress)
+                        .stroke(.primary, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                .padding(2)
+            }
+        }
+    }
+#endif
+
+extension View {
+    /// The continue banner in the tab bar's accessory place of a `TabView` with no Chromecast mini player (the demo's;
+    /// the app's comes with Lume's `castMiniController`).
+    @ViewBuilder func gfContinueAccessory() -> some View {
+        #if os(iOS)
+            if #available(iOS 26.1, *) {
+                tabViewBottomAccessory(isEnabled: GFContinueBannerPresence.shared.isShowing) { GFContinueAccessory() }
+            } else {
+                self
+            }
+        #else
+            self
+        #endif
+    }
+}
+
+/// What the continue banner offers while it shows: the tab bar's accessory draws it from here, and the Apple TV's
+/// tab view, which opens Lume's playlist switcher on Play/Pause and sits nearer the focus than the banner's own
+/// handler (Georgs, 1 Nov), leaves Play/Pause to the banner while `isShowing`.
 @MainActor
 @Observable
 final class GFContinueBannerPresence {
     static let shared = GFContinueBannerPresence()
-    fileprivate(set) var isShowing = false
+    private(set) var note: GFLastPlayedNote?
+    private(set) var shownAt = Date()
+    @ObservationIgnored private var onPlay: () -> Void = {}
+    @ObservationIgnored private var onDismiss: () -> Void = {}
+
+    var isShowing: Bool {
+        note != nil
+    }
 
     private init() {}
+
+    func show(_ note: GFLastPlayedNote?, at shownAt: Date, onPlay: @escaping () -> Void,
+              onDismiss: @escaping () -> Void) {
+        self.note = note
+        self.shownAt = shownAt
+        self.onPlay = onPlay
+        self.onDismiss = onDismiss
+    }
+
+    func play() {
+        onPlay()
+    }
+
+    func dismiss() {
+        onDismiss()
+    }
 }
 
-/// At the app's root: refreshes when the app comes to the front, shows the banner for ten seconds (iPhone/iPad: top,
-/// tap or swipe up; Apple TV: top-right, Play/Pause), and opens the player. Never on a child profile: the note can be
+/// At the app's root: refreshes when the app comes to the front, shows the banner for ten seconds (iPhone/iPad: above
+/// the tab bar, tap or swipe down, before iOS 26.1 at the top, swipe up; Apple TV: top right, Play/Pause), and opens
+/// the player. Never on a child profile: the note can be
 /// a grown-up's channel.
 private struct GFContinueBannerHost: ViewModifier {
     @Environment(\.modelContext) private var context
@@ -200,21 +366,26 @@ private struct GFContinueBannerHost: ViewModifier {
         #endif
             .task(id: scenePhase) { await refresh() }
             .animation(.smooth, value: model?.offered)
-            .onChange(of: model?.offered != nil, initial: true) { _, showing in
-                GFContinueBannerPresence.shared.isShowing = showing
+            .onChange(of: model?.offered, initial: true) { _, note in
+                withAnimation(.smooth) {
+                    GFContinueBannerPresence.shared.show(note, at: shownAt, onPlay: play, onDismiss: dismiss)
+                }
+            }
+            // ten seconds, then it goes: timed here, as the accessory's view is not always on screen
+            .task(id: model?.offered?.updatedAt) {
+                guard let note = model?.offered else { return }
+                try? await Task.sleep(for: .seconds(10))
+                if !Task.isCancelled, model?.offered == note { dismiss() }
             }
     }
 
+    /// The banner over the app: the Apple TV's, and the iPhone's and iPad's before iOS 26.1.
     @ViewBuilder private var banner: some View {
-        if let note = model?.offered {
+        if !GFContinueBannerLayout.usesTabAccessory, let note = model?.offered {
             GFContinueBannerView(note: note, now: shownAt, onPlay: play)
                 .padding(GFContinueBannerLayout.padding)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .gfBannerGestures(onTap: play, onSwipeUp: dismiss)
-                .task(id: note.updatedAt) {
-                    try? await Task.sleep(for: .seconds(10))
-                    if model?.offered == note { dismiss() }
-                }
         }
     }
 
@@ -246,7 +417,7 @@ private struct GFContinueBannerHost: ViewModifier {
 }
 
 private extension View {
-    /// iPhone and iPad: tap to play, swipe up to dismiss (the Apple TV uses Play/Pause).
+    /// iPhone and iPad before iOS 26.1: tap to play, swipe up to dismiss (the Apple TV uses Play/Pause).
     @ViewBuilder func gfBannerGestures(onTap: @escaping () -> Void, onSwipeUp: @escaping () -> Void) -> some View {
         #if os(tvOS)
             self

@@ -157,7 +157,7 @@ shoot "$IOS" "$BID" iphone-home-dark -GFDemo home
 shoot "$IOS" "$BID" iphone-home-added-dark -GFDemo home -home.disabledSections.v1 favorites,recentlyWatched
 shoot "$IOS" "$BID" iphone-movies-dark -GFDemo movies
 shoot "$IOS" "$BID" iphone-series-dark -GFDemo series
-# the continue banner over Home (another device played BBC One three minutes ago): at the top, centred
+# the continue banner over Home (another device played BBC One three minutes ago): above the tab bar, as wide as it
 shoot "$IOS" "$BID" iphone-banner-dark -GFDemo banner
 # search (GFSmartSearch): "All" ranked, a category on top; a Latvian word with a time word; a typo
 shoot "$IOS" "$BID" iphone-search-sport-dark -GFDemo search -GFDemoQuery sport
@@ -186,6 +186,8 @@ if DUO=$(new_duo) && [ -n "$DUO" ]; then
   shoot "$DUO" "$DBID" duo-guide-dark -GFDemo guide
   shoot "$DUO" "$DBID" duo-list-dark -GFDemo list
   shoot "$DUO" "$DBID" duo-home-dark -GFDemo home
+  # the continue banner above the tab bar on both screens (Georgs, 3 Nov: it sat wrong on every device)
+  shoot "$DUO" "$DBID" duo-banner -GFDemo banner
   # the player upright, unfolded: on the front screen the controls take the whole width beside the column iOS keeps
   # down its side for the clock and the camera, as the picture does (Georgs, 31 Oct)
   shoot "$DUO" "$DBID" duo-player-upright -GFDemo list -GFDemoMoves play -GFDemoStream "$TEST_STREAM"
@@ -219,7 +221,7 @@ shoot "$TV" "$BID" tv-guide-long -GFDemo guide -GFDemoMoves right,down
 shoot "$TV" "$BID" tv-home -GFDemo home
 shoot "$TV" "$BID" tv-home-added -GFDemo home -home.disabledSections.v1 favorites,recentlyWatched
 shoot "$TV" "$BID" tv-movies -GFDemo movies
-shoot "$TV" "$BID" tv-banner -GFDemo banner  # top right, never focusable
+shoot "$TV" "$BID" tv-banner -GFDemo banner  # top right on the safe area and Home's margin, never focusable
 shoot "$TV" "$BID" tv-list -GFDemo list
 shoot "$TV" "$BID" tv-search-sport -GFDemo search -GFDemoQuery sport
 [ "$DIED" -eq 0 ] || python3 "$CI/crash-summary.py" 3 || true

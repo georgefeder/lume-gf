@@ -337,7 +337,14 @@
         var body: some View {
             content
                 .overlay(alignment: GFContinueBannerLayout.alignment) {
-                    if GFDemo.mode == "banner" { banner }
+                    if GFDemo.mode == "banner", !GFContinueBannerLayout.usesTabAccessory { banner }
+                }
+                // iOS 26.1 on: the banner in the tab bar's accessory place, as the app shows it
+                .task {
+                    if GFDemo.mode == "banner", GFContinueBannerLayout.usesTabAccessory {
+                        GFContinueBannerPresence.shared.show(bannerNote(now: Date()), at: Date(), onPlay: {},
+                                                             onDismiss: {})
+                    }
                 }
                 .environment(router)
                 .modelContainer(store.container)
@@ -347,14 +354,17 @@
         /// device played three minutes ago.
         private var banner: some View {
             let now = Date()
-            let note = GFLastPlayedNote(
+            return GFContinueBannerView(note: bannerNote(now: now), now: now)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { GFDemo.logBanner($0) }
+                .padding(GFContinueBannerLayout.padding)
+        }
+
+        private func bannerNote(now: Date) -> GFLastPlayedNote {
+            GFLastPlayedNote(
                 deviceID: "demo-other-device", deviceKind: GFGuideGlass.isTV ? "iPhone" : "Apple TV", kind: .channel,
                 contentId: store.firstStream?.id ?? "", title: "BBC One", artworkURL: nil, position: 0, duration: 0,
                 playing: true, updatedAt: now.addingTimeInterval(-180)
             )
-            return GFContinueBannerView(note: note, now: now)
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { GFDemo.logBanner($0) }
-                .padding(GFContinueBannerLayout.padding)
         }
 
         private func play(_ stream: LiveStream) {
@@ -391,6 +401,8 @@
                 }
                 // as in the app (MainTabView): the tab bar shrinks while the guide scrolls down
                 .tabBarMinimizeOnScrollDownIfAvailable()
+                // and the continue banner takes the tab bar's accessory place (the app's comes with the cast player's)
+                .gfContinueAccessory()
                 .task {
                     if GFDemo.moves.contains("landscape") { GFDemo.turnToLandscape() }
                     if GFDemo.moves.contains("play"), let stream = store.firstStream {
