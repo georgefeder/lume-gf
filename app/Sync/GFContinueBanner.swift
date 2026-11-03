@@ -39,6 +39,11 @@ final class GFContinueBannerModel {
         self.offered = nil
     }
 
+    /// With the playlists as they are now: the tab bar's accessory can ask long after the host last drew.
+    func media(selectedID: String) -> PlayableMedia? {
+        media(playlists: (try? context.fetch(FetchDescriptor<Playlist>())) ?? [], selectedID: selectedID)
+    }
+
     func media(playlists: [Playlist], selectedID: String) -> PlayableMedia? {
         guard let note = offered,
               let playlist = playlists.owner(ofContentID: note.contentId) ?? playlists.active(for: selectedID)
@@ -230,7 +235,8 @@ private struct GFContinueArtwork: View {
     @available(iOS 26.1, *)
     struct GFContinueAccessory: View {
         @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-        @State private var height: CGFloat = 0
+        /// The accessory's height, measured (iPhone: about 48 points).
+        @State private var height: CGFloat = 48
         private var presence: GFContinueBannerPresence {
             .shared
         }
@@ -265,7 +271,16 @@ private struct GFContinueArtwork: View {
                 .simultaneousGesture(DragGesture(minimumDistance: 10).onEnded {
                     if $0.translation.height > 0 { presence.dismiss() }
                 })
+                // one element for VoiceOver: the title and where it played, activated to play
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { presence.play() }
                 .accessibilityAction(named: Text("Dismiss")) { presence.dismiss() }
+                // ten seconds on screen, then it goes (hidden behind the cast player or a pushed screen it waits)
+                .task(id: note.updatedAt) {
+                    try? await Task.sleep(for: .seconds(10))
+                    if !Task.isCancelled, presence.note == note { presence.dismiss() }
+                }
                 #if GF_DEMO
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { GFDemo.logBanner($0) }
                 #endif
@@ -346,8 +361,6 @@ private struct GFContinueBannerHost: ViewModifier {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(ProfileManager.self) private var profileManager: ProfileManager?
-    @Query private var playlists: [Playlist]
-    @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID = ""
     @State private var model: GFContinueBannerModel?
     @State private var playing: PlayableMedia?
     @State private var shownAt = Date()
@@ -366,17 +379,17 @@ private struct GFContinueBannerHost: ViewModifier {
         #endif
             .task(id: scenePhase) { await refresh() }
             .animation(.smooth, value: model?.offered)
-            .onChange(of: model?.offered, initial: true) { _, note in
-                withAnimation(.smooth) {
-                    GFContinueBannerPresence.shared.show(note, at: shownAt, onPlay: play, onDismiss: dismiss)
-                }
-            }
-            // ten seconds, then it goes: timed here, as the accessory's view is not always on screen
-            .task(id: model?.offered?.updatedAt) {
-                guard let note = model?.offered else { return }
-                try? await Task.sleep(for: .seconds(10))
-                if !Task.isCancelled, model?.offered == note { dismiss() }
-            }
+            .onChange(of: model?.offered, initial: true) { publish() }
+    }
+
+    /// Hands the offer to the tab bar's accessory (and the Apple TV's Play/Pause).
+    private func publish() {
+        #if GF_DEMO
+            if GFDemo.mode == "banner" { return } // the demo shows its own (GFDemoRoot)
+        #endif
+        withAnimation(.smooth) {
+            GFContinueBannerPresence.shared.show(model?.offered, at: shownAt, onPlay: play, onDismiss: dismiss)
+        }
     }
 
     /// The banner over the app: the Apple TV's, and the iPhone's and iPad's before iOS 26.1.
@@ -386,6 +399,10 @@ private struct GFContinueBannerHost: ViewModifier {
                 .padding(GFContinueBannerLayout.padding)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .gfBannerGestures(onTap: play, onSwipeUp: dismiss)
+                .task(id: note.updatedAt) {
+                    try? await Task.sleep(for: .seconds(10))
+                    if !Task.isCancelled, model?.offered == note { dismiss() }
+                }
         }
     }
 
@@ -400,10 +417,12 @@ private struct GFContinueBannerHost: ViewModifier {
         if model == nil { model = GFContinueBannerModel(store: GFLastPlayed.store, context: context) }
         shownAt = Date()
         await model?.refresh(now: shownAt)
+        publish() // an offer still standing gets the new "minutes ago"
     }
 
     private func play() {
-        guard let media = model?.media(playlists: playlists, selectedID: selectedPlaylistID) else {
+        let selectedID = UserDefaults.standard.string(forKey: PlaylistSelectionStore.key) ?? ""
+        guard let media = model?.media(selectedID: selectedID) else {
             dismiss()
             return
         }
