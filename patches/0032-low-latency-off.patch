@@ -1,0 +1,37 @@
+diff --git a/Lume/Services/Player/PlayerEngineOptions.swift b/Lume/Services/Player/PlayerEngineOptions.swift
+index b2c45b8..b43bacf 100644
+--- a/Lume/Services/Player/PlayerEngineOptions.swift
++++ b/Lume/Services/Player/PlayerEngineOptions.swift
+@@ -415,7 +415,9 @@ struct KSPlayerOptions {
+             autoDeinterlace: defaults.bool(PlayerSettings.KSPlayer.autoDeinterlaceKey, default: PlayerSettings.KSPlayer.autoDeinterlaceDefault),
+             autoRotate: defaults.bool(PlayerSettings.KSPlayer.autoRotateKey, default: PlayerSettings.KSPlayer.autoRotateDefault),
+             adaptive: defaults.bool(PlayerSettings.KSPlayer.adaptiveKey, default: PlayerSettings.KSPlayer.adaptiveDefault),
+-            noBuffer: defaults.bool(PlayerSettings.KSPlayer.noBufferKey, default: PlayerSettings.KSPlayer.noBufferDefault),
++            // Lume GF: Low Latency forced off (Georgs, 4 Nov): FFmpeg's nobuffer threw away the opening keyframe of
++            // every live channel, so the first picture stood still 1 to 5 s (GFLiveProbe); a stored "on" is ignored
++            noBuffer: false,
+             codecLowDelay: defaults.bool(PlayerSettings.KSPlayer.codecLowDelayKey, default: PlayerSettings.KSPlayer.codecLowDelayDefault),
+             autoPip: defaults.bool(PlayerSettings.KSPlayer.autoPipKey, default: PlayerSettings.KSPlayer.autoPipDefault),
+             autoSelectSubtitle: defaults.bool(PlayerSettings.KSPlayer.autoSelectSubtitleKey, default: PlayerSettings.KSPlayer.autoSelectSubtitleDefault),
+diff --git a/Lume/Views/Settings/PlayerEngineSettingsViews.swift b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
+index 3598ed6..f75ce2c 100644
+--- a/Lume/Views/Settings/PlayerEngineSettingsViews.swift
++++ b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
+@@ -142,7 +142,7 @@ import SwiftUI
+                 Toggle("Fast Open", isOn: $secondOpen)
+                 Toggle("Loop Playback", isOn: $loopPlay)
+                 Toggle("Auto-Select Subtitles", isOn: $autoSelectSubtitle)
+-                Toggle("Low Latency (No Buffer)", isOn: $noBuffer)
++                // Lume GF: Low Latency is forced off (KSPlayerOptions.load), so it is not offered
+                 Toggle("Use System HTTP Proxy", isOn: $systemProxy)
+                 Toggle("Automatic Picture in Picture", isOn: $autoPip)
+ 
+@@ -370,7 +370,7 @@ import SwiftUI
+ 
+                 VStack(alignment: .leading, spacing: 8) {
+                     TVSettingsSectionLabel("KSPlayer — Buffering")
+-                    TVOptionToggleRow(title: "Low Latency (No Buffer)", isOn: $noBuffer)
++                    // Lume GF: Low Latency is forced off (KSPlayerOptions.load), so it is not offered
+                     TVOptionCycleRow(title: "Live Buffer", valueLabel: KSBufferPreset.label(liveBuffer)) {
+                         liveBuffer = PlayerOptionCycle.next(liveBuffer, in: KSBufferPreset.values)
+                     }

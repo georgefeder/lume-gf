@@ -17,13 +17,19 @@ nonisolated struct GFZapTiming: Equatable, Sendable {
     let stream: String
     /// When the change began, in seconds on the media clock.
     let started: Double
+    /// The player's Low Latency switch (KSPlayer's nobuffer) and Live Buffer seconds for this change: the server
+    /// cannot see them (Glasgow Pi Admin, 4 Nov: with Low Latency on, the first picture stood still 1 to 5 s).
+    var lowLatency: Bool?
+    var liveBuffer: Int?
     private(set) var steps: [Step: Int] = [:]
     /// Moving, failed, or the stream shut down: the timings are complete.
     private(set) var isOver = false
 
-    init(stream: String, started: Double) {
+    init(stream: String, started: Double, lowLatency: Bool? = nil, liveBuffer: Int? = nil) {
         self.stream = stream
         self.started = started
+        self.lowLatency = lowLatency
+        self.liveBuffer = liveBuffer
     }
 
     /// Takes one log line, logged at `time`. Returns whether the change is over now.
@@ -89,6 +95,8 @@ nonisolated struct GFZapTiming: Equatable, Sendable {
     func query(device: String, build: String) -> String {
         var items = ["d=\(device)", "b=\(build.filter { $0.isNumber || $0 == "." })"]
         if let channelNumber { items.append("ch=\(channelNumber)") }
+        if let lowLatency { items.append("ll=\(lowLatency ? 1 : 0)") }
+        if let liveBuffer { items.append("lb=\(liveBuffer)") }
         for step in Step.allCases {
             if let ms = steps[step] { items.append("\(step.rawValue)=\(ms)") }
         }

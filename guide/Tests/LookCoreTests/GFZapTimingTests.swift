@@ -58,6 +58,15 @@ struct GFZapTimingTests {
         #expect(timing.query(device: "ipad", build: "95") == "d=ipad&b=95&ch=5&play=1000")
     }
 
+    @Test func `the player's Low Latency and Live Buffer settings go with the timings`() {
+        var timing = GFZapTiming(stream: "60412.ts", started: 0, lowLatency: true, liveBuffer: 2)
+        let over = timing.note("60412.ts input opened (0)", at: 1.2)
+        #expect(!over)
+        #expect(timing.query(device: "iphone", build: "96") == "d=iphone&b=96&ch=60412&ll=1&lb=2&open=1200")
+        let off = GFZapTiming(stream: "60412.ts", started: 0, lowLatency: false, liveBuffer: 4)
+        #expect(off.query(device: "atv", build: "96") == "d=atv&b=96&ch=60412&ll=0&lb=4")
+    }
+
     @Test func `the report carries only the channel's digits, never its address or name`() {
         let timing = GFZapTiming(stream: "index.m3u8", started: 0)
         #expect(timing.channelNumber == nil)
