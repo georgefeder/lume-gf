@@ -194,15 +194,16 @@ extension View {
         }
 
         /// Below the top row of buttons, centred on the whole screen, as the play button is. The Duo's outer screen
-        /// keeps a column down its side for the clock and the camera: the pill's row spans the player's width and then
-        /// that column too (a pill alone would stay centred left of the column; Georgs, 3 Nov). The pill is narrower
-        /// than the screen left of the column, so it never reaches the camera at the column's top.
+        /// keeps a column down its side for the clock and the camera, and the player stops short of it: the pill is
+        /// moved by the gap between the player's middle and the screen's, measured from the window as it is drawn. It
+        /// once followed the shared side-column reading instead, and jumped as that changed: left as it came, centred
+        /// while adjusting, left again as it faded (Georgs, 4 Nov). The pill is narrower than the screen left of the
+        /// column, so it never reaches the camera at the column's top.
         @ViewBuilder private var pill: some View {
             if let kind = model.shown {
                 GFLevelPill(kind: kind, level: model.level)
                     .padding(.top, 68)
-                    .frame(maxWidth: .infinity)
-                    .gfControlsBesideSideColumn()
+                    .offset(x: model.host?.screenCentreShift() ?? 0)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.92)))
                     .allowsHitTesting(false)
             }
@@ -282,6 +283,14 @@ extension View {
 
         var screen: UIScreen? {
             window?.windowScene?.screen
+        }
+
+        /// How far the window's middle is to the right of the player's (this view sits in the player's middle): 0 on
+        /// an iPhone, whose sides are kept clear alike; on the Duo's outer screen half its side column.
+        func screenCentreShift() -> CGFloat {
+            guard let window else { return 0 }
+            let middle = convert(CGPoint(x: bounds.midX, y: bounds.midY), to: window).x
+            return window.bounds.midX - middle
         }
 
         /// The system volume, through the volume view's own slider (apps have no other way to set it).

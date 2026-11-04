@@ -145,8 +145,9 @@ class FocusPlanTests(unittest.TestCase):
 
 
 class BannerTests(unittest.TestCase):
-    PHONE = "GFDemo banner: x=10.0 y=63.0 w=373.0 h=62.0 screenW=393.0 screenH=852.0 tv=0\n"
-    TV = "GFDemo banner: x=1140.0 y=100.0 w=640.0 h=88.0 screenW=1920.0 screenH=1080.0 tv=1\n"
+    # the iPhone's in the tab bar's accessory place; the Apple TV's 60 points down, 96 in from the right
+    PHONE = "GFDemo banner: x=21.0 y=702.0 w=351.0 h=48.0 screenW=393.0 screenH=852.0 tv=0\n"
+    TV = "GFDemo banner: x=1184.0 y=60.0 w=640.0 h=99.0 screenW=1920.0 screenH=1080.0 tv=1\n"
 
     def fields(self, line):
         d = tempfile.mkdtemp()
@@ -155,11 +156,11 @@ class BannerTests(unittest.TestCase):
             f.write("other line\n" + line)
         return gc.last_fields(path, gc.BANNER)
 
-    def test_the_iphones_banner_at_the_top_and_centred_passes(self):
+    def test_the_iphones_banner_above_the_tab_bar_and_centred_passes(self):
         ok, _ = gc.banner_ok(self.fields(self.PHONE))
         self.assertTrue(ok)
 
-    def test_the_apple_tvs_banner_top_right_passes(self):
+    def test_the_apple_tvs_banner_top_right_on_the_margins_passes(self):
         ok, _ = gc.banner_ok(self.fields(self.TV))
         self.assertTrue(ok)
 
@@ -169,24 +170,30 @@ class BannerTests(unittest.TestCase):
         self.assertIn("no banner", detail)
 
     def test_an_iphone_banner_off_centre_fails(self):
-        ok, detail = gc.banner_ok(self.fields(self.PHONE.replace("x=10.0", "x=0.0")))
+        ok, detail = gc.banner_ok(self.fields(self.PHONE.replace("x=21.0", "x=10.0")))
         self.assertFalse(ok)
         self.assertIn("not centred", detail)
 
-    def test_a_banner_low_on_the_screen_fails(self):
-        ok, detail = gc.banner_ok(self.fields(self.PHONE.replace("y=63.0", "y=700.0")))
+    def test_an_iphone_banner_back_at_the_top_fails(self):
+        ok, detail = gc.banner_ok(self.fields(self.PHONE.replace("y=702.0", "y=63.0")))
         self.assertFalse(ok)
-        self.assertIn("not at the top", detail)
+        self.assertIn("not above the tab bar", detail)
 
     def test_a_banner_past_the_edge_fails(self):
-        ok, detail = gc.banner_ok(self.fields(self.TV.replace("x=1140.0", "x=1400.0")))
+        ok, detail = gc.banner_ok(self.fields(self.TV.replace("x=1184.0", "x=1400.0")))
         self.assertFalse(ok)
         self.assertIn("off the screen", detail)
 
-    def test_an_apple_tv_banner_on_the_left_fails(self):
-        ok, detail = gc.banner_ok(self.fields(self.TV.replace("x=1140.0", "x=80.0")))
+    def test_the_apple_tvs_old_place_fails(self):
+        # build 92's: 40 points below the safe area's top, 60 more in from the right than Home's margin
+        ok, detail = gc.banner_ok(self.fields(self.TV.replace("x=1184.0 y=60.0", "x=1140.0 y=100.0")))
         self.assertFalse(ok)
-        self.assertIn("not on the right", detail)
+        self.assertIn("safe area", detail)
+
+    def test_an_apple_tv_banner_off_homes_margin_fails(self):
+        ok, detail = gc.banner_ok(self.fields(self.TV.replace("x=1184.0", "x=80.0")))
+        self.assertFalse(ok)
+        self.assertIn("margin", detail)
 
 
 class RowTests(unittest.TestCase):
