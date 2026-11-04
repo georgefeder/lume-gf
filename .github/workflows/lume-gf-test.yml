@@ -46,6 +46,7 @@ jobs:
           sh ci/test_workflows.sh
           sh ci/test_apply_dep_patches.sh
           sh ci/test_screenshots.sh
+          sh ci/test_wait_for_gates.sh
           python3 -m unittest discover -s ci -p 'test_*.py'
       - name: swift test
         working-directory: guide
@@ -150,7 +151,9 @@ jobs:
             -clonedSourcePackagesDirPath "$GF_SPM" -disableAutomaticPackageResolution
   screenshots:
     name: Screenshots (simulators)
-    if: ${{ !inputs.baseline && !inputs.only_logic }}
+    # "[no shots]" in a pushed commit's message: nothing to look at changed, so no pictures (Georgs, 4 Nov: the
+    # pictures are the longest job, 46 minutes)
+    if: ${{ !inputs.baseline && !inputs.only_logic && !contains(github.event.head_commit.message, '[no shots]') }}
     runs-on: xcode-27
     timeout-minutes: 120
     steps:
