@@ -20,31 +20,41 @@ struct GFZapTimingTests {
             ("12345.ts playable", 102.500)
         ]
         for (line, time) in lines {
-            #expect(!timing.note(line, at: time))
+            let over1 = timing.note(line, at: time)
+            #expect(!over1)
         }
-        #expect(timing.note("picture moving", at: 103.400))
+        let over2 = timing.note("picture moving", at: 103.400)
+        #expect(over2)
         #expect(timing.query(device: "iphone", build: "95")
             == "d=iphone&b=95&ch=12345&close=240&open=1100&info=1900&dec=1950&pic=2300&play=2310&move=3400")
     }
 
     @Test func `a failed open ends it with what happened, the steps that did not are left out`() {
         var timing = GFZapTiming(stream: "77.ts", started: 10)
-        #expect(timing.note("77.ts input opened (-5)", at: 12.5))
+        let over1 = timing.note("77.ts input opened (-5)", at: 12.5)
+        #expect(over1)
         #expect(timing.query(device: "atv", build: "95") == "d=atv&b=95&ch=77&open=2500")
         var info = GFZapTiming(stream: "78.ts", started: 10)
-        #expect(!info.note("78.ts input opened (0)", at: 11))
-        #expect(info.note("78.ts stream info (-1094995529, state opening)", at: 13))
+        let over2 = info.note("78.ts input opened (0)", at: 11)
+        #expect(!over2)
+        let over3 = info.note("78.ts stream info (-1094995529, state opening)", at: 13)
+        #expect(over3)
     }
 
     @Test func `a picture moving before it is playable, or another stream's lines, do not count`() {
         var timing = GFZapTiming(stream: "5.ts", started: 0)
-        #expect(!timing.note("picture moving", at: 0.5))
-        #expect(!timing.note("6.ts input opened (0)", at: 0.6))
-        #expect(!timing.note("6.ts playable", at: 0.7))
+        let over1 = timing.note("picture moving", at: 0.5)
+        #expect(!over1)
+        let over2 = timing.note("6.ts input opened (0)", at: 0.6)
+        #expect(!over2)
+        let over3 = timing.note("6.ts playable", at: 0.7)
+        #expect(!over3)
         #expect(timing.query(device: "ipad", build: "95") == "d=ipad&b=95&ch=5")
         // the player closed before the picture moved: over, with what there was
-        #expect(!timing.note("5.ts playable", at: 1))
-        #expect(timing.note("5.ts shuts down (was playable, reading: true)", at: 2))
+        let over4 = timing.note("5.ts playable", at: 1)
+        #expect(!over4)
+        let over5 = timing.note("5.ts shuts down (was playable, reading: true)", at: 2)
+        #expect(over5)
         #expect(timing.query(device: "ipad", build: "95") == "d=ipad&b=95&ch=5&play=1000")
     }
 
