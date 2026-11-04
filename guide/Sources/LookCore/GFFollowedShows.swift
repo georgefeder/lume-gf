@@ -219,6 +219,55 @@ nonisolated enum GFFollowedShows {
         }
     }
 
+    // MARK: - One a show a day
+
+    /// A show's first airing of a TV day and the day's later starts: one card on the Coming Up row, one heads-up and
+    /// one reminder (Georgs, 4 Nov: Shark Tank's two episodes back to back, 03:00 and 04:00, made two cards).
+    struct Entry: Equatable, Sendable, Identifiable {
+        var airing: Airing
+        var later: [Date]
+
+        var id: String {
+            airing.id
+        }
+    }
+
+    /// `airings` as one entry a show a TV day, soonest first.
+    static func days(_ airings: [Airing], calendar: Calendar) -> [Entry] {
+        var order: [String] = []
+        var entries: [String: Entry] = [:]
+        for airing in airings.sorted(by: { $0.start < $1.start }) {
+            let day = tvDay(of: airing.start, calendar: calendar)
+            let key = airing.show.id + "@" + String(Int(day.timeIntervalSince1970))
+            if entries[key] == nil {
+                entries[key] = Entry(airing: airing, later: [])
+                order.append(key)
+            } else {
+                entries[key]?.later.append(airing.start)
+            }
+        }
+        return order.compactMap { entries[$0] }
+    }
+
+    /// The Coming Up row: each show once, its next day with airings.
+    static func row(_ airings: [Airing], calendar: Calendar) -> [Entry] {
+        var shown = Set<String>()
+        return days(airings, calendar: calendar).filter { shown.insert($0.airing.show.id).inserted }
+    }
+
+    /// A card's "when" with the day's later starts: "Tonight 03:00 · 04:00".
+    static func when(_ entry: Entry, now: Date, calendar: Calendar, locale: Locale) -> String {
+        let later: [String] = entry.later.map { time($0, calendar: calendar, locale: locale) }
+        return ([when(entry.airing, now: now, calendar: calendar, locale: locale)] + later).joined(separator: " · ")
+    }
+
+    /// "03:00", "03:00 and 04:00", "03:00, 04:00 and 05:00".
+    static func times(_ dates: [Date], calendar: Calendar, locale: Locale) -> String {
+        let clocks: [String] = dates.map { time($0, calendar: calendar, locale: locale) }
+        guard clocks.count > 1, let last = clocks.last else { return clocks.first ?? "" }
+        return clocks.dropLast().joined(separator: ", ") + " and " + last
+    }
+
     // MARK: - Reminders
 
     struct Reminder: Equatable, Sendable, Identifiable {
@@ -232,6 +281,8 @@ nonisolated enum GFFollowedShows {
         var kind: Kind
         var airing: Airing
         var fire: Date
+        /// The same day's later starts of the show (back-to-back episodes), named in the heads-up.
+        var later: [Date] = []
 
         var id: String {
             "gf.follow." + airing.id + "." + kind.rawValue
@@ -246,30 +297,32 @@ nonisolated enum GFFollowedShows {
             switch kind {
             case .headsUp:
                 let part = GFFollowedShows.isEvening(airing.start, calendar: calendar) ? "Tonight" : "Today"
-                return "\(part) at \(clock) on \(airing.show.channel)"
+                let clocks = GFFollowedShows.times([airing.start] + later, calendar: calendar, locale: locale)
+                return "\(part) at \(clocks) on \(airing.show.channel)"
             case .hourBefore:
                 return "Starts in an hour, at \(clock), on \(airing.show.channel)"
             }
         }
     }
 
-    /// The reminders for `airings` still to come: an hour before each, and one heads-up on each show's TV day (the
-    /// first airing's) unless it would come after the hour-before one. The soonest `limit`, soonest first.
+    /// The reminders for `airings` still to come, for each show's first airing of a TV day (back-to-back episodes or a
+    /// later repeat get none of their own; one already on gets none for the rest of its day): an hour before, and a
+    /// heads-up at `headsUpHour` unless that would come after the hour-before one. The soonest `limit`, soonest first.
     static func reminders(for airings: [Airing], now: Date, calendar: Calendar,
                           limit: Int = reminderLimit) -> [Reminder] {
         var result: [Reminder] = []
-        var headsUpDays = Set<String>()
-        for airing in airings.sorted(by: { $0.start < $1.start }) where airing.start > now {
+        for entry in days(airings, calendar: calendar) where entry.airing.start > now {
+            let airing = entry.airing
             let hourBefore = airing.start.addingTimeInterval(-3600)
             if hourBefore > now {
-                result.append(Reminder(kind: .hourBefore, airing: airing, fire: hourBefore))
+                result.append(Reminder(kind: .hourBefore, airing: airing, fire: hourBefore, later: entry.later))
             }
             let day = tvDay(of: airing.start, calendar: calendar)
-            guard headsUpDays.insert(airing.show.id + "@" + String(Int(day.timeIntervalSince1970))).inserted,
-                  let headsUp = calendar.date(bySettingHour: headsUpHour, minute: 0, second: 0, of: day),
+            guard let headsUp = calendar.date(bySettingHour: headsUpHour, minute: 0, second: 0, of: day),
                   headsUp > now, headsUp < hourBefore else { continue }
-            result.append(Reminder(kind: .headsUp, airing: airing, fire: headsUp))
+            result.append(Reminder(kind: .headsUp, airing: airing, fire: headsUp, later: entry.later))
         }
-        return Array(result.sorted { $0.fire < $1.fire }.prefix(limit))
+        result.sort { $0.fire < $1.fire }
+        return Array(result.prefix(limit))
     }
 }
