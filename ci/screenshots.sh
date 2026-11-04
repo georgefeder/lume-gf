@@ -155,6 +155,8 @@ shoot "$IOS" "$BID" iphone-home-dark -GFDemo home
 # Home's rows below the first screen are never drawn (Lume builds them as they scroll in): Recently Watched and
 # Favorites switched off in Lume's own Home settings bring the recently added rows to the top
 shoot "$IOS" "$BID" iphone-home-added-dark -GFDemo home -home.disabledSections.v1 favorites,recentlyWatched
+# Home's Coming Up row: three programmes followed (GFFollowStore; Georgs, 4 Nov: Shark Tank on ABC)
+shoot "$IOS" "$BID" iphone-home-follow-dark -GFDemo home -GFDemoFollow 1
 shoot "$IOS" "$BID" iphone-movies-dark -GFDemo movies
 shoot "$IOS" "$BID" iphone-series-dark -GFDemo series
 # the continue banner over Home (another device played BBC One three minutes ago): above the tab bar, as wide as it
@@ -220,6 +222,7 @@ shoot "$TV" "$BID" tv-guide-bottom -GFDemo guide -GFDemoMoves down,down,down,dow
 shoot "$TV" "$BID" tv-guide-long -GFDemo guide -GFDemoMoves right,down
 shoot "$TV" "$BID" tv-home -GFDemo home
 shoot "$TV" "$BID" tv-home-added -GFDemo home -home.disabledSections.v1 favorites,recentlyWatched
+shoot "$TV" "$BID" tv-home-follow -GFDemo home -GFDemoFollow 1  # the Coming Up row, three programmes followed
 shoot "$TV" "$BID" tv-movies -GFDemo movies
 shoot "$TV" "$BID" tv-banner -GFDemo banner  # top right on the safe area and Home's margin, never focusable
 shoot "$TV" "$BID" tv-list -GFDemo list

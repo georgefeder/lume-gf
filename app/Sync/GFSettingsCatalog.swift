@@ -23,7 +23,9 @@ enum GFSettingsCatalog {
         SportsSyncService.tabEnabledKey, SportsSyncService.hideScoresKey, RecommendationSettings.enabledKey,
         RecommendationSettings.manualRecalculationKey, SearchSettings.searchAllPlaylistsKey,
         // Lume 2.8.0
-        PlayerSettings.Playback.chooseSourceBeforePlayingKey, PlayerSettings.Playback.liveQualitySwitchKey
+        PlayerSettings.Playback.chooseSourceBeforePlayingKey, PlayerSettings.Playback.liveQualitySwitchKey,
+        // Lume GF: the shows followed (GFFollowStore)
+        GFFollowedShows.storageKey
     ]
 
     static let perKind: [String] = [

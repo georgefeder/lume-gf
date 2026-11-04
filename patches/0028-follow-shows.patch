@@ -1,0 +1,60 @@
+diff --git a/Lume/LumeAppDelegate.swift b/Lume/LumeAppDelegate.swift
+index 0ef144e..8f1c0af 100644
+--- a/Lume/LumeAppDelegate.swift
++++ b/Lume/LumeAppDelegate.swift
+@@ -16,6 +16,8 @@
+             _: UIApplication,
+             didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]?
+         ) -> Bool {
++            // Lume GF: a followed show's reminder, tapped, can launch the app (GFShowReminders)
++            if !LumeApp.isTestOrPreviewHost { GFShowReminders.installDelegate() }
+             #if canImport(GoogleCast)
+                 if !LumeApp.isTestOrPreviewHost {
+                     GoogleCastProvider.configure()
+diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
+index af8a2b9..67b8e0f 100644
+--- a/Lume/Views/Home/HomeView.swift
++++ b/Lume/Views/Home/HomeView.swift
+@@ -204,6 +204,7 @@ struct HomeView: View {
+                 }
+             }
+             .profileMenuToolbar()
++            .gfComingUpSource(playlistPrefix: playlistPrefix ?? "") // Lume GF: Coming Up's airings
+             .libraryToolbar(config: LibraryToolbarConfiguration(
+                 playlists: playlists,
+                 selectedPlaylistID: $selectedPlaylistID,
+@@ -278,7 +279,10 @@ struct HomeView: View {
+     /// The horizontal rails, shared by the iOS/macOS scroll layout and the tvOS
+     /// immersive home. Rows render in the user's chosen order (Settings › Layout ›
+     /// Home); each only appears when it has content.
++    @ViewBuilder
+     private var homeRows: some View {
++        // Lume GF: the followed shows' next airings (GFComingUpRow, Georgs 4 Nov)
++        GFComingUpRow(onPlay: playChannel)
+         ForEach(HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw)) { section in
+             homeRow(for: section)
+         }
+diff --git a/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift b/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
+index 65483a8..e5ce708 100644
+--- a/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
++++ b/Lume/Views/LiveTV/EPG/EPGProgramDetailView.swift
+@@ -95,6 +95,9 @@ struct EPGProgramDetailView: View {
+                         watchButton
+ 
+                         recordActions
++
++                        // Lume GF: follow the programme on this channel (GFFollowButton, Georgs 4 Nov)
++                        if !cell.isGap { GFFollowButton(title: cell.title, streamName: stream.name) }
+                     }
+                     .padding(.horizontal)
+                     .padding(.vertical, 24)
+@@ -186,6 +189,9 @@ struct EPGProgramDetailView: View {
+                             }
+ 
+                             recordActions
++
++                            // Lume GF: follow the programme on this channel (GFFollowButton, Georgs 4 Nov)
++                            if !cell.isGap { GFFollowButton(title: cell.title, streamName: stream.name) }
+                         }
+                         .frame(maxWidth: 460)
+                         .padding(.top, 16)
