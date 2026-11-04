@@ -39,6 +39,13 @@
             value(after: "-GFDemoNoPanel") == "1"
         }
 
+        /// `-GFDemoFollow 1`: three of the demo's programmes followed, for Home's Coming Up row (GFComingUpRow).
+        static var followedShows: [GFFollowedShow]? {
+            guard value(after: "-GFDemoFollow") == "1" else { return nil }
+            return [("Grand Designs", "BBC One"), ("Question Time", "BBC One"), ("Motorsport Tonight", "Sky Sports F1")]
+                .map { GFFollowedShow(title: $0.0, channel: $0.1, followedAt: Date()) }
+        }
+
         /// `-GFDemoFold 1`: the player behaves as on an iPhone Duo stood up half folded, the fold across the middle
         /// (no simulator command folds one).
         static var fold: Bool {

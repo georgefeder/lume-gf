@@ -25,6 +25,7 @@ struct GFSettingsSyncTests {
         #expect(GFSettingsCatalog.group(for: HomeLayoutSettings.sectionOrderKey) == .tv) // a TV's Home is the TV's
         #expect(GFSettingsCatalog.group(for: PlayerSettings.Language.preferredAudioLanguagesKey) == .all)
         #expect(GFSettingsCatalog.group(for: PlaylistSelectionStore.key) == .device)
+        #expect(GFSettingsCatalog.group(for: GFFollowedShows.storageKey) == .all) // the shows followed, everywhere
         #expect(GFSettingsCatalog.group(for: "not.a.lume.key") == nil)
     }
 

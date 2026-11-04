@@ -39,6 +39,14 @@ final class GFContinueBannerModel {
         self.offered = nil
     }
 
+    /// A channel by its id, in its own playlist (a followed show's reminder).
+    func media(streamID id: String) -> PlayableMedia? {
+        let playlists = (try? context.fetch(FetchDescriptor<Playlist>())) ?? []
+        guard let stream = try? context.fetch(FetchDescriptor<LiveStream>(predicate: #Predicate { $0.id == id }))
+            .first, let playlist = playlists.owner(ofContentID: id) ?? playlists.first else { return nil }
+        return PlayableMedia.from(stream: stream, playlist: playlist)
+    }
+
     /// With the playlists as they are now: the tab bar's accessory can ask long after the host last drew.
     func media(selectedID: String) -> PlayableMedia? {
         media(playlists: (try? context.fetch(FetchDescriptor<Playlist>())) ?? [], selectedID: selectedID)
@@ -377,7 +385,13 @@ private struct GFContinueBannerHost: ViewModifier {
                 ContentRestrictionProvider { FullScreenPlayerView(media: media) }
             }
         #endif
-            .task(id: scenePhase) { await refresh() }
+            .task(id: scenePhase) {
+                await refresh()
+                if scenePhase == .active { GFShowReminders.start() }
+                openRequested()
+            }
+            // a followed show's reminder was tapped: its channel
+            .onChange(of: GFShowOpenRequest.shared.streamID) { openRequested() }
             .animation(.smooth, value: model?.offered)
             .onChange(of: model?.offered, initial: true) { publish() }
     }
@@ -418,6 +432,19 @@ private struct GFContinueBannerHost: ViewModifier {
         shownAt = Date()
         await model?.refresh(now: shownAt)
         publish() // an offer still standing gets the new "minutes ago"
+    }
+
+    /// Opens the channel a reminder's tap asked for, once the app is up (a tap can launch it).
+    private func openRequested() {
+        guard let id = GFShowOpenRequest.shared.streamID, scenePhase == .active else { return }
+        // never on a child profile (the reminder can be a grown-up's channel), and not later after a switch either
+        guard profileManager?.activeProfileIsChild != true else {
+            GFShowOpenRequest.shared.streamID = nil
+            return
+        }
+        guard let model else { return }
+        GFShowOpenRequest.shared.streamID = nil
+        if let media = model.media(streamID: id) { playing = media }
     }
 
     private func play() {

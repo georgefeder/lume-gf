@@ -66,6 +66,11 @@ final class GuideScheduler {
         self.container = container
     }
 
+    /// The app's catalogue, for the followed shows' reminders (GFShowReminders).
+    var currentContainer: ModelContainer? {
+        container
+    }
+
     /// Only enabled sources count, so a disabled or deleted source never keeps the guide "due".
     func enabledStates() -> [GuideSourceState] {
         guard let container else { return [] }
@@ -120,6 +125,7 @@ final class GuideScheduler {
         GuideStatus.shared.reload()
         if isActive { armTimer() }
         submitBackgroundRefresh()
+        GFShowReminders.rescheduleSoon() // the followed shows' airings may have moved
     }
 
     /// While the app is open, check again when the next check is due (at least a minute, at most an hour away).
@@ -162,6 +168,8 @@ final class GuideScheduler {
             Logger.database.info("Guide: \(kind, privacy: .public) \(outcome, privacy: .public)")
             submitBackgroundRefresh()
             if finished, task is BGProcessingTask { submitImportTask(onPower: true) }
+            // the followed shows' reminders from the new guide, before iOS takes the time back
+            if finished { await GFShowReminders.reschedule() }
             task.setTaskCompleted(success: finished)
         }
 

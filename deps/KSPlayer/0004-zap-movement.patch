@@ -1,0 +1,64 @@
+Lume GF: after a stream becomes playable, the next different frame drawn is logged ("picture moving", gfZapLog), so a
+channel change's timings show a picture that stands still after it appears (Georgs, 4 Nov: about a second's freeze).
+Made against KSPlayer bdfa2da (deps/KSPlayer/REVISION) with 0001 to 0003 applied.
+
+diff --git a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+index 119a2cf..b497251 100644
+--- a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
++++ b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+@@ -263,6 +263,8 @@ extension KSMEPlayer: MEPlayerDelegate {
+             }
+             var progress = 100
+             if loadingState.isPlayable {
++                // Lume GF: once playable, the next new frame on screen is logged too ("picture moving", gfZapLog)
++                if loadState != .playable { (videoOutput as? MetalPlayView)?.gfAwaitMovement() }
+                 loadState = .playable
+                 gfZapLog("\(playerItem.gfName) playable")
+             } else {
+diff --git a/Sources/KSPlayer/MEPlayer/MetalPlayView.swift b/Sources/KSPlayer/MEPlayer/MetalPlayView.swift
+index af11ece..462970b 100644
+--- a/Sources/KSPlayer/MEPlayer/MetalPlayView.swift
++++ b/Sources/KSPlayer/MEPlayer/MetalPlayView.swift
+@@ -54,6 +54,9 @@ public final class MetalPlayView: UIView, VideoOutput {
+     }
+ 
+     public private(set) var pixelBuffer: PixelBufferProtocol?
++    /// Lume GF: after `gfAwaitMovement`, the first frame drawn (its time), and whether a different one is awaited.
++    private var gfMovementBase: CMTime?
++    private var gfAwaitingMovement = false
+     /// 用displayLink会导致锁屏无法draw，
+     /// 用DispatchSourceTimer的话，在播放4k视频的时候repeat的时间会变长,
+     /// 用MTKView的draw(in:)也是不行，会卡顿
+@@ -168,6 +171,24 @@ extension MetalPlayView {
+         draw(force: false)
+     }
+ 
++    /// Lume GF: a stream just became playable: the next frame drawn after the first one is logged ("picture
++    /// moving"), which shows a picture standing still after it appeared (Georgs, 4 Nov: about a second's freeze).
++    func gfAwaitMovement() {
++        gfMovementBase = nil
++        gfAwaitingMovement = true
++    }
++
++    private func gfNoteFrame(_ time: CMTime) {
++        guard gfAwaitingMovement else { return }
++        guard let base = gfMovementBase else {
++            gfMovementBase = time
++            return
++        }
++        guard time != base else { return }
++        gfAwaitingMovement = false
++        gfZapLog("picture moving")
++    }
++
+     private func draw(force: Bool) {
+         autoreleasepool {
+             guard let frame = renderSource?.getVideoOutputRender(force: force) else {
+@@ -180,6 +201,7 @@ extension MetalPlayView {
+             isDovi = frame.isDovi
+             fps = frame.fps
+             let cmtime = frame.cmtime
++            gfNoteFrame(cmtime)
+             let par = pixelBuffer.size
+             let sar = pixelBuffer.aspectRatio
+             if let pixelBuffer = pixelBuffer.cvPixelBuffer, options.isUseDisplayLayer() {

@@ -1,0 +1,40 @@
+diff --git a/Lume/Views/LiveTV/LiveTVCategorySelectors.swift b/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
+index dacc9b9..dcaa56b 100644
+--- a/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
++++ b/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
+@@ -18,6 +18,8 @@ struct CategorySidebar: View {
+     @Binding var selectedSection: LiveTVSection?
+ 
+     var body: some View {
++        // Lume GF: the list opens where the chosen category is (gfShowsSelection)
++        ScrollViewReader { proxy in
+         List(sections) { section in
+             let isSelected = selectedSection?.id == section.id
+             Button {
+@@ -46,6 +48,8 @@ struct CategorySidebar: View {
+         #if !os(tvOS)
+         .listStyle(.sidebar)
+         #endif
++        .gfShowsSelection(selectedSection?.id, in: proxy)
++        }
+     }
+ }
+ 
+@@ -120,6 +124,8 @@ struct CategorySidebar: View {
+ 
+         var body: some View {
+             NavigationStack {
++                // Lume GF: the list opens where the chosen category is (gfShowsSelection)
++                ScrollViewReader { proxy in
+                 List(filteredSections) { section in
+                     let isSelected = selectedSection?.id == section.id
+                     Button {
+@@ -145,6 +151,8 @@ struct CategorySidebar: View {
+                     .buttonStyle(.plain)
+                 }
+                 .listStyle(.plain)
++                .gfShowsSelection(selectedSection?.id, in: proxy)
++                }
+                 .overlay {
+                     if filteredSections.isEmpty {
+                         ContentUnavailableView.search(text: query)
