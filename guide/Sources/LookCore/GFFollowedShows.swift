@@ -70,27 +70,28 @@ nonisolated enum GFFollowedShows {
     }
 
     /// A title's words as compared: folded, without picture quality, numbers and episode marks ("S17E03", "Ep4"), so
-    /// "Shark Tank S17E03" is Shark Tank.
+    /// "Shark Tank S17E03" is Shark Tank. A title of numbers alone keeps them ("24", "9-1-1").
     static func titleWords(_ title: String) -> [String] {
-        GFSearchText.words(title).filter { word in
-            !GFSearchText.noiseWords.contains(word) && !word.allSatisfy(\.isNumber) && !isEpisodeMark(word)
-        }
+        let words = GFSearchText.words(title).filter { !GFSearchText.noiseWords.contains($0) && !isEpisodeMark($0) }
+        let named = words.filter { !$0.allSatisfy(\.isNumber) }
+        return named.isEmpty ? words : named
     }
 
-    /// Words a guide adds to a show's title for one airing: "Shark Tank (New)", "Shark Tank - Season Finale".
+    /// Whether a programme's title can be followed: it has words to find it by.
+    static func canFollow(title: String) -> Bool {
+        !titleWords(title).isEmpty
+    }
+
+    /// Words a guide adds to a show's title for one airing: "Shark Tank (New)", "Shark Tank - Season Finale",
+    /// "Shark Tank: Best Of".
     static let extraWords: Set<String> = ["new", "premiere", "finale", "special", "live", "season", "series",
-                                          "episode", "ep", "part", "repeat"]
+                                          "episode", "ep", "part", "repeat", "encore", "best", "of"]
 
     /// Whether a listing titled with `listing`'s words is the show titled with `show`'s: the same words, or the show's
     /// then only words a guide adds ("Shark Tank Mexico" is another show).
     static func titleMatches(_ show: [String], _ listing: [String]) -> Bool {
         guard !show.isEmpty, listing.count >= show.count, Array(listing.prefix(show.count)) == show else { return false }
         return listing.dropFirst(show.count).allSatisfy(extraWords.contains)
-    }
-
-    /// The longest word of the title as written: the guide is first narrowed to titles holding it.
-    static func searchWord(_ title: String) -> String? {
-        title.split { !$0.isLetter && !$0.isNumber }.map(String.init).max { $0.count < $1.count }
     }
 
     private static func isEpisodeMark(_ word: String) -> Bool {
@@ -159,9 +160,12 @@ nonisolated enum GFFollowedShows {
 
     // MARK: - When
 
-    /// The TV day a moment belongs to (from five in the morning), as the start of its calendar day.
+    /// The TV day a moment belongs to (from five in the morning), as the start of its calendar day: by the clock, so
+    /// the days the clocks change are no different.
     static func tvDay(of date: Date, calendar: Calendar) -> Date {
-        calendar.startOfDay(for: date.addingTimeInterval(-Double(tvDayStartHour) * 3600))
+        let day = calendar.startOfDay(for: date)
+        guard calendar.component(.hour, from: date) < tvDayStartHour else { return day }
+        return calendar.date(byAdding: .day, value: -1, to: day) ?? day
     }
 
     /// Whether a programme starting at `date` is an evening one (from five in the afternoon into the night).
@@ -176,13 +180,14 @@ nonisolated enum GFFollowedShows {
     }
 
     /// When an airing is, as the Coming Up row says it: "Live now", "Tonight 01:00", "Today 14:00", "Tomorrow 20:00",
-    /// "Tomorrow night 01:00", "Friday 20:00", then the date.
+    /// "Tomorrow night 01:00", "Friday 20:00", then the date. Counted from today's date (at two in the morning,
+    /// this evening is tonight), the airing's day being its TV day.
     static func when(_ airing: Airing, now: Date, calendar: Calendar, locale: Locale) -> String {
         if airing.start <= now { return "Live now" }
         let time = time(airing.start, calendar: calendar, locale: locale)
         let night = calendar.component(.hour, from: airing.start) < tvDayStartHour
-        let days = calendar.dateComponents([.day], from: tvDay(of: now, calendar: calendar),
-                                           to: tvDay(of: airing.start, calendar: calendar)).day ?? 0
+        let days = max(0, calendar.dateComponents([.day], from: calendar.startOfDay(for: now),
+                                                  to: tvDay(of: airing.start, calendar: calendar)).day ?? 0)
         switch days {
         case 0:
             return (isEvening(airing.start, calendar: calendar) ? "Tonight " : "Today ") + time

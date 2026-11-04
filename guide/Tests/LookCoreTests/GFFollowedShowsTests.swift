@@ -54,8 +54,8 @@ struct GFFollowedShowsTests {
     }
 
     @Test(arguments: [("Shark Tank", true), ("Shark Tank (New)", true), ("Shark Tank S17E03", true),
-                      ("SHARK TANK - Season Finale", true), ("Shark Tank Mexico", false), ("Shark Tanks", false),
-                      ("Tank", false)])
+                      ("SHARK TANK - Season Finale", true), ("Shark Tank: Best Of", true), ("Shark Tank Mexico", false),
+                      ("Shark Tanks", false), ("Tank", false)])
     func `a guide's own additions to the title still match, another show does not`(title: String, matches: Bool) {
         #expect(GFFollowedShows.titleMatches(GFFollowedShows.titleWords("Shark Tank"),
                                              GFFollowedShows.titleWords(title)) == matches)
@@ -92,6 +92,28 @@ struct GFFollowedShowsTests {
         #expect(when(date(20, days: 4), now: date(8)) == "Tuesday 20:00")
         #expect(when(date(1, days: 5), now: date(8)) == "Tuesday night 01:00")
         #expect(when(date(20, days: 9), now: date(8)) == "15 Nov 20:00")
+        // at two in the morning this evening is tonight, and the night under way is still tonight
+        #expect(when(date(20, days: 1), now: date(2, days: 1)) == "Tonight 20:00")
+        #expect(when(date(3, days: 1), now: date(0, 30, days: 1)) == "Tonight 03:00")
+    }
+
+    @Test func `the clocks going forward or back do not move a TV day`() {
+        // 29 Mar 2026, London's clocks go forward at one: half past five is that day's, half past four the day before
+        let spring = { (hour: Int, minute: Int) in
+            london.date(from: DateComponents(year: 2026, month: 3, day: 29, hour: hour, minute: minute))!
+        }
+        let day = london.startOfDay(for: spring(12, 0))
+        #expect(GFFollowedShows.tvDay(of: spring(5, 30), calendar: london) == day)
+        #expect(GFFollowedShows.tvDay(of: spring(4, 30), calendar: london) == london.date(byAdding: .day, value: -1,
+                                                                                         to: day))
+    }
+
+    @Test func `a title of numbers alone can be followed, one with no words cannot`() {
+        #expect(GFFollowedShows.titleMatches(GFFollowedShows.titleWords("24"), GFFollowedShows.titleWords("24 S01E02")))
+        #expect(GFFollowedShows.titleMatches(GFFollowedShows.titleWords("9-1-1"), GFFollowedShows.titleWords("9-1-1")))
+        #expect(!GFFollowedShows.titleMatches(GFFollowedShows.titleWords("9-1-1"), GFFollowedShows.titleWords("24")))
+        #expect(GFFollowedShows.canFollow(title: "24"))
+        #expect(!GFFollowedShows.canFollow(title: "!!"))
     }
 
     @Test func `a heads-up on the day and a reminder an hour before, in the phones own time zone`() {
@@ -130,11 +152,5 @@ struct GFFollowedShowsTests {
         let many = (0 ..< 40).map { airing(date(20, days: $0)) }
         #expect(GFFollowedShows.reminders(for: many, now: date(8), calendar: london).count
             == GFFollowedShows.reminderLimit)
-    }
-
-    @Test func `the guide is narrowed by the title's longest word as written`() {
-        #expect(GFFollowedShows.searchWord("Shark Tank") == "Shark")
-        #expect(GFFollowedShows.searchWord("Акули бізнесу") == "бізнесу")
-        #expect(GFFollowedShows.searchWord("!!") == nil)
     }
 }

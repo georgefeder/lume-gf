@@ -20,10 +20,13 @@ final class GFFollowStore {
     private(set) var shows: [GFFollowedShow]
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var observer: NSObjectProtocol?
+    /// The stored text last read or written: a change of any other setting is not read again.
+    @ObservationIgnored private var raw: String?
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
-        shows = GFFollowedShows.decode(defaults.string(forKey: GFFollowedShows.storageKey))
+        raw = defaults.string(forKey: GFFollowedShows.storageKey)
+        shows = GFFollowedShows.decode(raw)
         #if GF_DEMO
             if let demo = GFDemo.followedShows {
                 shows = demo
@@ -46,13 +49,17 @@ final class GFFollowStore {
         guard next != shows else { return }
         let followed = next.count > shows.count
         shows = next
-        defaults.set(GFFollowedShows.encode(next), forKey: GFFollowedShows.storageKey)
+        raw = GFFollowedShows.encode(next)
+        defaults.set(raw, forKey: GFFollowedShows.storageKey)
         if followed { GFShowReminders.askPermission() }
         GFShowReminders.rescheduleSoon()
     }
 
     private func reload() {
-        let stored = GFFollowedShows.decode(defaults.string(forKey: GFFollowedShows.storageKey))
+        let text = defaults.string(forKey: GFFollowedShows.storageKey)
+        guard text != raw else { return }
+        raw = text
+        let stored = GFFollowedShows.decode(text)
         guard stored != shows else { return }
         shows = stored
         GFShowReminders.rescheduleSoon()
@@ -64,34 +71,37 @@ enum GFComingUp {
     /// How far ahead the guide is searched.
     nonisolated static let horizon: TimeInterval = 8 * 86400
 
-    /// The next airings of `shows` on the channels of the playlist whose streams' ids start with `prefix`, in a
-    /// context of its own (it runs away from the main actor: the guide is narrowed by title, a scan of its table).
-    nonisolated static func airings(of shows: [GFFollowedShow], container: ModelContainer, prefix: String, now: Date,
-                                    perShow: Int) -> [GFFollowedShows.Airing] {
+    /// The next airings of `shows` on the channels of the playlist whose streams' ids start with `prefix`: in a
+    /// context of its own, away from the main actor, stopping when cancelled. The followed channels are found first,
+    /// then only their listings are read, by channel and time as the guide's own lookups are (indexed).
+    @concurrent nonisolated static func airings(of shows: [GFFollowedShow], container: ModelContainer, prefix: String,
+                                                now: Date, perShow: Int) async -> [GFFollowedShows.Airing] {
         guard !shows.isEmpty, !prefix.isEmpty else { return [] }
         let context = ModelContext(container)
-        let until = now.addingTimeInterval(horizon)
-        var listings: [GFFollowedShows.Listing] = []
-        for word in Set(shows.compactMap { GFFollowedShows.searchWord($0.title) }) {
-            var descriptor = FetchDescriptor<EPGListing>(
-                predicate: #Predicate { $0.end > now && $0.start < until && $0.title.localizedStandardContains(word) }
-            )
-            descriptor.fetchLimit = 2000
-            listings += ((try? context.fetch(descriptor)) ?? []).map {
-                GFFollowedShows.Listing(title: $0.title, channelId: $0.channelId, start: $0.start, end: $0.end)
-            }
-        }
-        guard !listings.isEmpty else { return [] }
-        let wanted = Set(listings.map(\.channelId))
+        let followed = Set(shows.map { GFSearchText.fold($0.channel) })
         var streams = FetchDescriptor<LiveStream>(
             predicate: #Predicate { $0.id.starts(with: prefix) && $0.isHidden == false },
             sortBy: [SortDescriptor(\.num)]
         )
-        streams.propertiesToFetch = [\.epgChannelId, \.name]
-        let channels = ((try? context.fetch(streams)) ?? []).compactMap { stream -> GFFollowedShows.Channel? in
-            guard let epg = stream.epgChannelId, wanted.contains(epg) else { return nil }
-            return GFFollowedShows.Channel(epgId: epg, name: stream.name, streamID: stream.id)
+        streams.propertiesToFetch = [\.id, \.epgChannelId, \.name]
+        var channels: [GFFollowedShows.Channel] = []
+        for stream in (try? context.fetch(streams)) ?? [] {
+            guard let epg = stream.epgChannelId, !epg.isEmpty,
+                  let base = GFFollowedShows.channel(ofStreamName: stream.name).map(GFSearchText.fold),
+                  followed.contains(base) else { continue }
+            channels.append(GFFollowedShows.Channel(epgId: epg, name: stream.name, streamID: stream.id))
         }
+        guard !channels.isEmpty, !Task.isCancelled else { return [] }
+        let ids = Array(Set(channels.map(\.epgId)))
+        let until = now.addingTimeInterval(horizon)
+        let descriptor = FetchDescriptor<EPGListing>(
+            predicate: #Predicate { ids.contains($0.channelId) && $0.end > now && $0.start < until },
+            sortBy: [SortDescriptor(\.start)]
+        )
+        let listings = ((try? context.fetch(descriptor)) ?? []).map {
+            GFFollowedShows.Listing(title: $0.title, channelId: $0.channelId, start: $0.start, end: $0.end)
+        }
+        guard !Task.isCancelled else { return [] }
         return GFFollowedShows.airings(of: shows, listings: listings, channels: channels, now: now, perShow: perShow)
     }
 
@@ -117,9 +127,7 @@ final class GFComingUpModel {
     func keepLoading(shows: [GFFollowedShow], container: ModelContainer, prefix: String) async {
         while !Task.isCancelled {
             let now = Date()
-            let found = await Task.detached(priority: .utility) {
-                GFComingUp.airings(of: shows, container: container, prefix: prefix, now: now, perShow: 3)
-            }.value
+            let found = await GFComingUp.airings(of: shows, container: container, prefix: prefix, now: now, perShow: 3)
             guard !Task.isCancelled else { return }
             self.now = now
             airings = Array(found.prefix(Self.rowLimit))
@@ -216,6 +224,8 @@ private struct GFComingUpCard: View {
     let airing: GFFollowedShows.Airing
     let now: Date
     let onPlay: () -> Void
+    /// Wider with larger text, so "Tomorrow night 01:00" still fits.
+    @ScaledMetric(relativeTo: .headline) private var width: CGFloat = GFComingUpCard.baseWidth
 
     private var isLive: Bool {
         airing.start <= now
@@ -243,7 +253,7 @@ private struct GFComingUpCard: View {
                     .lineLimit(1)
             }
             .padding(Self.padding)
-            .frame(width: Self.width, alignment: .leading)
+            .frame(width: width, alignment: .leading)
             #if !os(tvOS)
                 .background(.quaternary.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -263,10 +273,13 @@ private struct GFComingUpCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityHint(isLive ? "Plays the channel" : "Plays the channel; the show is still to come")
+        .accessibilityAction(named: Text("Unfollow")) {
+            GFFollowStore.shared.toggle(title: airing.show.title, streamName: airing.channel.name)
+        }
     }
 
     #if os(tvOS)
-        private static let width: CGFloat = 420
+        private static let baseWidth: CGFloat = 420
         private static let padding: CGFloat = 28
         private static let lineSpacing: CGFloat = 8
         private static let dot: CGFloat = 12
@@ -274,7 +287,7 @@ private struct GFComingUpCard: View {
         private static let titleFont = Font.headline
         private static let channelFont = Font.callout
     #else
-        private static let width: CGFloat = 200
+        private static let baseWidth: CGFloat = 200
         private static let padding: CGFloat = 14
         private static let lineSpacing: CGFloat = 4
         private static let dot: CGFloat = 7
@@ -307,7 +320,7 @@ struct GFFollowButton: View {
     }
 
     var body: some View {
-        if GFFollowedShows.channel(ofStreamName: streamName) != nil {
+        if GFFollowedShows.channel(ofStreamName: streamName) != nil, GFFollowedShows.canFollow(title: title) {
             let followed = store.isFollowed(title: title, streamName: streamName)
             #if os(tvOS)
                 TVPlayButton(title: followed ? "Following" : "Follow", systemImage: followed ? "bell.fill" : "bell") {
@@ -326,6 +339,7 @@ struct GFFollowButton: View {
                     .buttonStyle(.bordered)
                     .controlSize(.large)
                     .sensoryFeedback(.selection, trigger: followed)
+                    .accessibilityAddTraits(.isToggle)
                     Text(followed
                         ? "On Home's Coming Up, with a reminder on the day and an hour before it starts."
                         : "Follow to see it on Home's Coming Up and get a reminder an hour before it starts.")
@@ -354,6 +368,8 @@ final class GFShowOpenRequest {
 @MainActor
 enum GFShowReminders {
     private static var pending: Task<Void, Never>?
+    /// The last run: a new one waits for it, so an unfollow's run never meets an older one still adding.
+    private static var running: Task<Void, Never>?
     private static var started = false
     private static let userInfoKey = "gf.follow.stream"
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "lume", category: "follow")
@@ -365,18 +381,20 @@ enum GFShowReminders {
         #endif
     }
 
-    /// Once, from the app's root: watches the time zone and works the reminders out.
+    /// From the app's root each time it comes to the front: works the reminders out again (once, it also starts
+    /// watching the time zone).
     static func start() {
-        guard !started else { return }
-        started = true
-        #if os(iOS)
-            for name in [NSNotification.Name.NSSystemTimeZoneDidChange,
-                         UIApplication.significantTimeChangeNotification] {
-                NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
-                    MainActor.assumeIsolated { rescheduleSoon() }
+        if !started {
+            started = true
+            #if os(iOS)
+                for name in [NSNotification.Name.NSSystemTimeZoneDidChange,
+                             UIApplication.significantTimeChangeNotification] {
+                    NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+                        MainActor.assumeIsolated { rescheduleSoon() }
+                    }
                 }
-            }
-        #endif
+            #endif
+        }
         rescheduleSoon()
     }
 
@@ -403,21 +421,33 @@ enum GFShowReminders {
         }
     }
 
+    /// One run after another (see `running`).
     static func reschedule() async {
+        let previous = running
+        let run = Task {
+            await previous?.value
+            await work()
+        }
+        running = run
+        await run.value
+    }
+
+    private static func work() async {
         #if os(iOS)
             guard let container = GuideScheduler.shared.currentContainer else { return }
             let center = UNUserNotificationCenter.current()
             let shows = GFFollowStore.shared.shows
             let now = Date()
             let prefix = GFComingUp.activePrefix(context: ModelContext(container))
-            let airings = await Task.detached(priority: .utility) {
-                GFComingUp.airings(of: shows, container: container, prefix: prefix, now: now, perShow: 8)
-            }.value
+            let airings = await GFComingUp.airings(of: shows, container: container, prefix: prefix, now: now,
+                                                   perShow: 8)
             let calendar = Calendar.current
             let reminders = GFFollowedShows.reminders(for: airings, now: now, calendar: calendar)
             let old = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix("gf.follow.") }
             center.removePendingNotificationRequests(withIdentifiers: old)
             let status = await center.notificationSettings().authorizationStatus
+            // shows followed on another device: this one asks too
+            if !shows.isEmpty, status == .notDetermined { askPermission() }
             guard !reminders.isEmpty, status == .authorized || status == .provisional || status == .ephemeral
             else {
                 log.info("Follow: \(shows.count) shows, no reminders set")

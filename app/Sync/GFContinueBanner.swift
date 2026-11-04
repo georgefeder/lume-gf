@@ -436,8 +436,13 @@ private struct GFContinueBannerHost: ViewModifier {
 
     /// Opens the channel a reminder's tap asked for, once the app is up (a tap can launch it).
     private func openRequested() {
-        guard let id = GFShowOpenRequest.shared.streamID, scenePhase == .active, let model,
-              profileManager?.activeProfileIsChild != true else { return }
+        guard let id = GFShowOpenRequest.shared.streamID, scenePhase == .active else { return }
+        // never on a child profile (the reminder can be a grown-up's channel), and not later after a switch either
+        guard profileManager?.activeProfileIsChild != true else {
+            GFShowOpenRequest.shared.streamID = nil
+            return
+        }
+        guard let model else { return }
         GFShowOpenRequest.shared.streamID = nil
         if let media = model.media(streamID: id) { playing = media }
     }
