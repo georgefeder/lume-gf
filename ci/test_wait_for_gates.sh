@@ -8,14 +8,17 @@ cat > "$T/bin/gh" <<'GH'
 #!/bin/sh
 # the job's name is in the --jq filter: select(.name=="NAME")
 name=$(printf '%s' "$*" | sed -n 's/.*select(.name=="\([^"]*\)").*/\1/p')
+attempt=$(printf '%s' "$*" | sed -n 's/.*--attempt \([0-9]*\).*/\1/p')
 [ -e "$JOBS/fail" ] && exit 1
+if [ -d "$JOBS/a$attempt" ]; then [ -e "$JOBS/a$attempt/$name" ] && cat "$JOBS/a$attempt/$name"; exit 0; fi
 [ -e "$JOBS/$name" ] && cat "$JOBS/$name"
 exit 0
 GH
 chmod +x "$T/bin/gh"
 run() { PATH="$T/bin:$PATH" JOBS="$T/jobs" GF_GATE_POLL=0.1 GITHUB_RUN_ID=1 GITHUB_REPOSITORY=r \
+  GITHUB_RUN_ATTEMPT=${ATTEMPT:-1} GF_GATE_ERRORS=${ERRORS:-15} GF_AFTER_LIMIT=${LIMIT:-3600} \
   AFTER="$1" sh "$CI/wait-for-gates.sh" 2>&1; }
-reset() { rm -f "$T/jobs"/*; }
+reset() { rm -rf "$T/jobs"/*; }
 
 reset; echo "completed success" > "$T/jobs/Tests before upload"
 out=$(run "") && ok "passes once the tests passed" || no "passed tests ($out)"
@@ -48,6 +51,29 @@ reset; touch "$T/jobs/fail"; echo "completed success" > "$T/jobs/Tests before up
 ( sleep 1; rm -f "$T/jobs/fail" ) &
 start=$(date +%s); run "" >/dev/null; status=$?; took=$(( $(date +%s) - start )); wait
 [ "$status" = 0 ] && [ "$took" -ge 1 ] && ok "a moment without GitHub is waited out" || no "gh errors ($status, ${took}s)"
+
+# two jobs of the name (a match on more than one): never a pass
+reset; printf 'completed success\ncompleted failure\n' > "$T/jobs/Tests before upload"
+run "" >/dev/null && no "two matching jobs let it upload" || ok "two matching jobs: no upload"
+
+# only the failed legs run again (attempt 2 without the tests): the tests of attempt 1, the same commit, count
+reset; mkdir -p "$T/jobs/a2" "$T/jobs/a1"; echo "completed success" > "$T/jobs/a1/Tests before upload"
+ATTEMPT=2 run "" >/dev/null && ok "a leg run again finds the tests of the attempt before" || no "re-run of a leg"
+reset; mkdir -p "$T/jobs/a2" "$T/jobs/a1"; echo "completed failure" > "$T/jobs/a1/Tests before upload"
+ATTEMPT=2 run "" >/dev/null && no "re-run uploads after failed tests" || ok "a leg run again after failed tests: no upload"
+# the tests run again too: this attempt's count, not the old failure
+reset; mkdir -p "$T/jobs/a2" "$T/jobs/a1"; echo "completed failure" > "$T/jobs/a1/Tests before upload"
+echo "completed success" > "$T/jobs/a2/Tests before upload"
+ATTEMPT=2 run "" >/dev/null && ok "tests run again and passing count" || no "tests re-run"
+
+# GitHub never answering: given up, nothing uploaded
+reset; touch "$T/jobs/fail"
+ERRORS=3 run "" >/dev/null && no "no answer let it upload" || ok "GitHub not answering: no upload"
+
+# the other leg still queued an hour on (only one runner free): it goes on, with a warning
+reset; echo "completed success" > "$T/jobs/Tests before upload"; echo "queued " > "$T/jobs/iOS to TestFlight"
+out=$(LIMIT=1 run "iOS to TestFlight") && printf '%s' "$out" | grep -q "going on" && ok "a leg queued behind it is not waited for for ever" \
+  || no "other leg queued ($out)"
 
 [ "$fails" -eq 0 ] && echo "test_wait_for_gates: all passed" || echo "test_wait_for_gates: $fails failed"
 exit "$fails"

@@ -9,7 +9,7 @@ check() {  # $1 = name, $2 = ruby, $3 = workflow file (default: the build workfl
 check "a tests job exists" 'y=YAML.load_file(ARGV[0]); exit(y["jobs"].key?("tests") ? 0 : 1)'
 # the legs archive side by side with the tests and wait for them (ci/wait-for-gates.sh) before anything is signed
 check "every build leg waits for the tests before it signs or uploads" \
-  'y=YAML.load_file(ARGV[0]); s=y["jobs"]["build"]["steps"]; g=s.index { |x| x["run"].to_s.include?("wait-for-gates.sh") }; a=s.index { |x| (x["run"].to_s + x["env"].to_s) =~ /exportArchive|ASC_KEY/ }; exit(g && a && g < a && y["jobs"]["tests"]["name"] == "Tests before upload" ? 0 : 1)'
+  'y=YAML.load_file(ARGV[0]); s=y["jobs"]["build"]["steps"]; g=s.index { |x| x["run"].to_s.include?("wait-for-gates.sh") }; a=s.index { |x| (x["run"].to_s + x["env"].to_s) =~ /exportArchive|ASC_KEY/ }; exit(g && a && g < a && !s[g].key?("if") && !s[g].key?("continue-on-error") && y["jobs"]["tests"]["name"] == "Tests before upload" ? 0 : 1)'
 check "the Apple TV leg signs and uploads only after the iPhone leg" \
   'y=YAML.load_file(ARGV[0]); b=y["jobs"]["build"]; m=b["strategy"]["matrix"]["include"]; tv=m.find { |x| x["platform"] == "tvOS" }; w=b["steps"].find { |x| x["run"].to_s.include?("wait-for-gates.sh") }; exit(tv["after"] == "iOS to TestFlight" && b["name"].to_s.include?("${{ matrix.platform }} to TestFlight") && w["env"]["AFTER"].to_s.include?("matrix.after") && y["permissions"]["actions"] == "read" ? 0 : 1)'
 check "the screenshots can be skipped by a commit's message" \
