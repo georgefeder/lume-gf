@@ -131,8 +131,14 @@ final class GFComingUpModel {
             guard !Task.isCancelled else { return }
             self.now = now
             airings = Array(found.prefix(Self.rowLimit))
-            let next = found.flatMap { [$0.start, $0.end] }.filter { $0 > now }.min() ?? now.addingTimeInterval(900)
-            try? await Task.sleep(for: .seconds(min(max(next.timeIntervalSince(now) + 1, 60), 900)))
+            // the next start or end on the row (a card turns live or goes), at least a minute, at most 15 away
+            var next = now.addingTimeInterval(900)
+            for airing in found {
+                if airing.start > now, airing.start < next { next = airing.start }
+                if airing.end > now, airing.end < next { next = airing.end }
+            }
+            let wait: TimeInterval = min(max(next.timeIntervalSince(now) + 1, 60), 900)
+            try? await Task.sleep(for: .seconds(wait))
         }
     }
 }

@@ -135,7 +135,9 @@ nonisolated enum GFFollowedShows {
                         perShow: Int = 8) -> [Airing] {
         guard !shows.isEmpty else { return [] }
         let byEPG = Dictionary(grouping: channels, by: \.epgId)
-        let wanted = shows.map { (show: $0, words: titleWords($0.title), channel: GFSearchText.fold($0.channel)) }
+        let wanted: [(show: GFFollowedShow, words: [String], channel: String)] = shows.map { show in
+            (show: show, words: titleWords(show.title), channel: GFSearchText.fold(show.channel))
+        }
         var best: [String: Airing] = [:]
         for listing in listings where listing.end > now {
             let words = titleWords(listing.title)
@@ -149,9 +151,20 @@ nonisolated enum GFFollowedShows {
                 }
             }
         }
-        return Dictionary(grouping: best.values, by: \.show.id).values
-            .flatMap { $0.sorted { $0.start < $1.start }.prefix(perShow) }
-            .sorted { $0.start != $1.start ? $0.start < $1.start : $0.show.title < $1.show.title }
+        // split up: as one chain the type checker gave up (CI run 41876824587)
+        let byShow: [String: [Airing]] = Dictionary(grouping: Array(best.values), by: { $0.show.id })
+        var result: [Airing] = []
+        for airings in byShow.values {
+            let soonest: [Airing] = airings.sorted { $0.start < $1.start }
+            result += soonest.prefix(perShow)
+        }
+        result.sort(by: Self.earlier)
+        return result
+    }
+
+    private static func earlier(_ lhs: Airing, _ rhs: Airing) -> Bool {
+        if lhs.start != rhs.start { return lhs.start < rhs.start }
+        return lhs.show.title < rhs.show.title
     }
 
     private static func quality(_ channel: Channel) -> Double {
@@ -184,23 +197,25 @@ nonisolated enum GFFollowedShows {
     /// this evening is tonight), the airing's day being its TV day.
     static func when(_ airing: Airing, now: Date, calendar: Calendar, locale: Locale) -> String {
         if airing.start <= now { return "Live now" }
-        let time = time(airing.start, calendar: calendar, locale: locale)
+        let clock = Self.time(airing.start, calendar: calendar, locale: locale)
         let night = calendar.component(.hour, from: airing.start) < tvDayStartHour
-        let days = max(0, calendar.dateComponents([.day], from: calendar.startOfDay(for: now),
-                                                  to: tvDay(of: airing.start, calendar: calendar)).day ?? 0)
+        let offset: Int = calendar.dateComponents([.day], from: calendar.startOfDay(for: now),
+                                                  to: tvDay(of: airing.start, calendar: calendar)).day ?? 0
+        let days = max(0, offset)
         switch days {
         case 0:
-            return (isEvening(airing.start, calendar: calendar) ? "Tonight " : "Today ") + time
+            let part = isEvening(airing.start, calendar: calendar) ? "Tonight" : "Today"
+            return "\(part) \(clock)"
         case 1:
-            return (night ? "Tomorrow night " : "Tomorrow ") + time
+            return night ? "Tomorrow night \(clock)" : "Tomorrow \(clock)"
         case 2 ..< 7:
             let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
             let day = tvDay(of: airing.start, calendar: calendar)
                 .addingTimeInterval(12 * 3600).formatted(style.weekday(.wide))
-            return day + (night ? " night " : " ") + time
+            return night ? "\(day) night \(clock)" : "\(day) \(clock)"
         default:
             let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
-            return airing.start.formatted(style.day().month(.abbreviated)) + " " + time
+            return airing.start.formatted(style.day().month(.abbreviated)) + " " + clock
         }
     }
 
@@ -227,13 +242,13 @@ nonisolated enum GFFollowedShows {
         }
 
         func body(calendar: Calendar, locale: Locale) -> String {
-            let time = GFFollowedShows.time(airing.start, calendar: calendar, locale: locale)
+            let clock = GFFollowedShows.time(airing.start, calendar: calendar, locale: locale)
             switch kind {
             case .headsUp:
                 let part = GFFollowedShows.isEvening(airing.start, calendar: calendar) ? "Tonight" : "Today"
-                return "\(part) at \(time) on \(airing.show.channel)"
+                return "\(part) at \(clock) on \(airing.show.channel)"
             case .hourBefore:
-                return "Starts in an hour, at \(time), on \(airing.show.channel)"
+                return "Starts in an hour, at \(clock), on \(airing.show.channel)"
             }
         }
     }
