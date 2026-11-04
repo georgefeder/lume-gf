@@ -41,7 +41,7 @@ nonisolated final class GFZapReporter: @unchecked Sendable {
     /// The full-screen player is set up for `url` (KSPlayerOptionsFactory.make, on every redraw): a new live
     /// stream's change is timed from now; the one before, if not over, is reported as it is (replaced).
     @MainActor
-    func expect(url: URL, isLive: Bool) {
+    func expect(url: URL, isLive: Bool, lowLatency: Bool? = nil, liveBuffer: Int? = nil) {
         let now = CACurrentMediaTime()
         let kind = Self.deviceKind
         lock.withLock {
@@ -56,7 +56,7 @@ nonisolated final class GFZapReporter: @unchecked Sendable {
             }
             endpoint = URL(string: "\(scheme)://\(host)/gf-zap")
             device = kind
-            current = GFZapTiming(stream: stream, started: now)
+            current = GFZapTiming(stream: stream, started: now, lowLatency: lowLatency, liveBuffer: liveBuffer)
         }
     }
 

@@ -1,8 +1,21 @@
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Options.swift b/Lume/Views/Player/KSPlayerEngineView+Options.swift
-index 3db0243..4623959 100644
+index 3db0243..9158fdd 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Options.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Options.swift
-@@ -179,6 +179,13 @@ enum KSPlayerOptionsFactory {
+@@ -155,7 +155,11 @@ enum KSPlayerOptionsFactory {
+             Logger.player.info("Zap: \(line, privacy: .public)")
+             GFZapReporter.shared.note(line)
+         }
+-        if !isEmbedded { GFZapReporter.shared.expect(url: media.url, isLive: media.isLive) }
++        // with the Low Latency and Live Buffer settings, which the server cannot see
++        if !isEmbedded {
++            GFZapReporter.shared.expect(url: media.url, isLive: media.isLive, lowLatency: settings.noBuffer,
++                                        liveBuffer: settings.liveBuffer)
++        }
+ 
+         let options = LumeKSOptions(
+             preferredAudioLanguages: PlayerLanguageOptions.load().preferredAudioLanguages,
+@@ -179,6 +183,13 @@ enum KSPlayerOptionsFactory {
          options.autoSelectEmbedSubtitle = settings.autoSelectSubtitle
          options.maxBufferDuration = Double(settings.maxBuffer)
          options.preferredForwardBufferDuration = Double(media.isLive ? settings.liveBuffer : settings.vodBuffer)
