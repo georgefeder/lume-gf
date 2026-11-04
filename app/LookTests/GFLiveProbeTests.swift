@@ -18,4 +18,13 @@ struct GFLiveProbeTests {
         #expect(film.probesize == nil)
         #expect(film.maxAnalyzeDuration == nil)
     }
+
+    @Test func `Low Latency stays off, even where it was switched on before`() {
+        let key = PlayerSettings.KSPlayer.noBufferKey
+        let before = UserDefaults.standard.object(forKey: key)
+        defer { UserDefaults.standard.set(before, forKey: key) }
+        UserDefaults.standard.set(true, forKey: key)
+        #expect(!KSPlayerOptions.load().noBuffer)
+        #expect(!KSPlayerOptionsFactory.make(for: media(.live)).nobuffer)
+    }
 }
