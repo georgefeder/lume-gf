@@ -488,16 +488,24 @@ enum GFShowReminders {
         @unchecked Sendable {
         static let shared = GFShowReminderDelegate()
 
-        nonisolated func userNotificationCenter(_: UNUserNotificationCenter, willPresent _: UNNotification)
-            async -> UNNotificationPresentationOptions {
-            [.banner, .list, .sound]
+        // the completion-handler forms: Swift 6.3.3 crashed making an async delegate method's Objective-C thunk
+        // (CI run 41885691907, GFZapReporter's)
+        nonisolated func userNotificationCenter(
+            _: UNUserNotificationCenter, willPresent _: UNNotification,
+            withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void
+        ) {
+            completionHandler([.banner, .list, .sound])
         }
 
-        nonisolated func userNotificationCenter(_: UNUserNotificationCenter,
-                                                didReceive response: UNNotificationResponse) async {
+        nonisolated func userNotificationCenter(
+            _: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+            withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+        ) {
             let info = response.notification.request.content.userInfo
-            guard let streamID = info["gf.follow.stream"] as? String else { return }
-            await MainActor.run { GFShowReminders.opened(streamID: streamID) }
+            if let streamID = info["gf.follow.stream"] as? String {
+                Task { @MainActor in GFShowReminders.opened(streamID: streamID) }
+            }
+            completionHandler()
         }
     }
 #endif

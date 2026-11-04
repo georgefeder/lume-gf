@@ -97,10 +97,11 @@ nonisolated final class GFZapReporter: @unchecked Sendable {
     }
 }
 
-/// The report's answer is a redirect to the server's login page: never followed.
+/// The report's answer is a redirect to the server's login page: never followed. The completion-handler form: Swift
+/// 6.3.3 crashed making the async form's Objective-C thunk (CI run 41885691907).
 nonisolated private final class GFNoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(_: URLSession, task _: URLSessionTask, willPerformHTTPRedirection _: HTTPURLResponse,
-                    newRequest _: URLRequest) async -> URLRequest? {
-        nil
+                    newRequest _: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        completionHandler(nil)
     }
 }
