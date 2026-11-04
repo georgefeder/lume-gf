@@ -8,8 +8,17 @@ set -eu
 USAGE="usage: apply-dep-patches.sh OURS_DIR LUME_DIR PACKAGES_DIR"
 OURS=$(cd "${1:?$USAGE}" && pwd); LUME=$(cd "${2:?$USAGE}" && pwd); SPM="${3:?$USAGE}"
 mkdir -p "$SPM"; SPM=$(cd "$SPM" && pwd)
-(cd "$LUME" && xcodebuild -resolvePackageDependencies -project Lume.xcodeproj -scheme Lume \
-  -clonedSourcePackagesDirPath "$SPM") >/dev/null
+resolve() {
+  (cd "$LUME" && xcodebuild -resolvePackageDependencies -project Lume.xcodeproj -scheme Lume \
+    -clonedSourcePackagesDirPath "$SPM") >/dev/null
+}
+if ! resolve; then
+  # a runner's SwiftPM cache can be broken (build 95's Apple TV leg, run 41898807748 attempt 2: a cached VLCKit clone
+  # missing): once more from nothing, SwiftPM's caches and our folder emptied
+  echo "apply-dep-patches: resolving failed; once more with SwiftPM's caches emptied" >&2
+  rm -rf "${HOME:?}/Library/Caches/org.swift.swiftpm" "$SPM" && mkdir -p "$SPM"
+  resolve
+fi
 n=0
 for D in "$OURS"/deps/*/; do
   [ -d "$D" ] || continue

@@ -29,6 +29,25 @@ printf '%s\n' "$REV" > "$T/ours/deps/KSPlayer/REVISION"; printf 'nope\n' > "$T/o
 run >/dev/null && no "a patch that does not apply must stop the build" || ok "a patch that does not apply stops the build"
 rm "$T/ours/deps/KSPlayer/0002-bad.patch"; mkdir -p "$T/ours/deps/NotAPackage"; printf 'x\n' > "$T/ours/deps/NotAPackage/REVISION"
 run >/dev/null && no "a package Lume does not use must stop the build" || ok "a package Lume does not use stops the build"
+# a broken SwiftPM cache on the runner: the first resolve fails, the second (caches emptied) works
+rm -rf "$T/ours/deps/NotAPackage"; cp "$T/bin/xcodebuild" "$T/xcodebuild.real"
+cat > "$T/bin/xcodebuild" <<EOF
+#!/bin/sh
+if [ ! -e "$T/failed-once" ]; then touch "$T/failed-once"; echo "Could not resolve package dependencies" >&2; exit 74; fi
+exec "$T/xcodebuild.real" "\$@"
+EOF
+chmod +x "$T/bin/xcodebuild"; mkdir -p "$T/home/Library/Caches/org.swift.swiftpm/repositories"
+out=$(HOME="$T/home" run) && ok "a failed resolve is tried once more" || no "retry ($out)"
+[ ! -d "$T/home/Library/Caches/org.swift.swiftpm" ] && ok "SwiftPM's caches are emptied before it" || no "cache kept"
+printf '%s' "$out" | grep -q "once more" && ok "says it tries again" || no "retry message ($out)"
+# failing twice still stops the build
+cat > "$T/bin/xcodebuild" <<'EOF'
+#!/bin/sh
+exit 74
+EOF
+chmod +x "$T/bin/xcodebuild"
+HOME="$T/home" run >/dev/null && no "two failed resolves must stop the build" || ok "two failed resolves stop the build"
+cp "$T/xcodebuild.real" "$T/bin/xcodebuild"
 rm -rf "$T/ours/deps"; out=$(run) && printf '%s' "$out" | grep -q "0 patch(es) applied" && ok "no deps folder, nothing to do" \
   || no "no deps folder ($out)"
 [ "$fails" -eq 0 ] && echo "test_apply_dep_patches: all passed" || echo "test_apply_dep_patches: $fails failed"
