@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: read
+  # the TestFlight legs read this run's jobs to wait for the tests and for each other (ci/wait-for-gates.sh)
+  actions: read
 
 concurrency:
   group: lume-gf-build
@@ -17,7 +19,8 @@ concurrency:
 
 jobs:
   # Guide logic (swift test) and Lume's whole unit test target with our changes, on the iOS Simulator. Both TestFlight
-  # legs wait for this job: a failing test stops the upload for iPhone/iPad and Apple TV alike.
+  # legs archive meanwhile and wait for this job before signing for the App Store (ci/wait-for-gates.sh): a failing
+  # test stops the upload for iPhone/iPad and Apple TV alike.
   tests:
     name: Tests before upload
     # the simulator tests stay on macOS 26 / iOS 26: on the xcode-27 image the simulator stalled for seconds at a time
@@ -45,6 +48,7 @@ jobs:
           sh gf/ci/test_workflows.sh
           sh gf/ci/test_apply_dep_patches.sh
           sh gf/ci/test_screenshots.sh
+          sh gf/ci/test_wait_for_gates.sh
 
       - name: Lume ${{ inputs.tag }}
         uses: actions/checkout@v5
@@ -150,21 +154,25 @@ jobs:
 
   build:
     name: ${{ matrix.platform }} to TestFlight
-    needs: [tests, icloud-gate]
+    # not `needs: tests`: both legs build their archives side by side with the tests (Georgs, 4 Nov: builds took 77
+    # minutes, tests, iPhone and Apple TV one after the other) and wait for them only before signing for the App Store
+    needs: [icloud-gate]
     runs-on: xcode-27
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      # one platform after the other, so the two uploads never create the same App Store profile at the same moment
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         include:
           - platform: iOS
             destination: generic/platform=iOS
             sdk: iphoneos
+            after: ""
+          # its signing and upload wait for the iPhone's, so the two never create the same App Store profile at once
           - platform: tvOS
             destination: generic/platform=tvOS
             sdk: appletvos
+            after: iOS to TestFlight
     steps:
       - name: Our changes
         uses: actions/checkout@v5
@@ -302,6 +310,14 @@ jobs:
             N=$(basename "$X" .appex); set -- "$@" "$N=$(ent "$N")"
           done
           sh ../gf/ci/sign-local.sh "$@"
+
+      # before anything is signed for the App Store: the tests passed (or nothing is uploaded), and the Apple TV leg's
+      # turn after the iPhone's
+      - name: Wait for the tests (and the other upload)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AFTER: ${{ matrix.after }}
+        run: sh gf/ci/wait-for-gates.sh
 
       - name: App Store Connect key
         env:
