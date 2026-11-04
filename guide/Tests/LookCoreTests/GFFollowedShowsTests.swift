@@ -100,6 +100,33 @@ struct GFFollowedShowsTests {
         #expect(when(date(3, days: 1), now: date(0, 30, days: 1)) == "Tonight \(clock(date(3, days: 1)))")
     }
 
+    @Test func `two episodes back to back are one card, one heads-up and one reminder`() {
+        // Georgs, 4 Nov: Shark Tank at 03:00 and 04:00 on one ABC station made two cards
+        func airing(_ start: Date) -> GFFollowedShows.Airing {
+            GFFollowedShows.Airing(show: shark, title: "Shark Tank", start: start, end: start.addingTimeInterval(3600),
+                                   channel: channels[0])
+        }
+        let airings = [airing(date(3, days: 1)), airing(date(4, days: 1)), airing(date(3, days: 8))]
+        let row = GFFollowedShows.row(airings, calendar: london)
+        #expect(row.count == 1)
+        #expect(row[0].airing.start == date(3, days: 1))
+        #expect(row[0].later == [date(4, days: 1)])
+        let clock = { (date: Date) in GFFollowedShows.time(date, calendar: london, locale: locale) }
+        #expect(GFFollowedShows.when(row[0], now: date(8), calendar: london, locale: locale)
+            == "Tonight \(clock(date(3, days: 1))) · \(clock(date(4, days: 1)))")
+        // a week later is its own day: its own reminders
+        let reminders = GFFollowedShows.reminders(for: airings, now: date(8), calendar: london)
+        #expect(reminders.map(\.kind) == [.headsUp, .hourBefore, .headsUp, .hourBefore])
+        #expect(reminders.map(\.airing.start) == [date(3, days: 1), date(3, days: 1), date(3, days: 8), date(3, days: 8)])
+        #expect(reminders[0].body(calendar: london, locale: locale)
+            == "Tonight at \(clock(date(3, days: 1))) and \(clock(date(4, days: 1))) on ABC")
+        // the first one already on: nothing more that day
+        #expect(GFFollowedShows.reminders(for: Array(airings.prefix(2)), now: date(3, 10, days: 1), calendar: london)
+            .isEmpty)
+        #expect(GFFollowedShows.times([date(3), date(4), date(5)], calendar: london, locale: locale)
+            == "\(clock(date(3))), \(clock(date(4))) and \(clock(date(5)))")
+    }
+
     @Test func `the clocks going forward or back do not move a TV day`() {
         // 29 Mar 2026, London's clocks go forward at one: half past five is that day's, half past four the day before
         let spring = { (hour: Int, minute: Int) in
@@ -149,11 +176,11 @@ struct GFFollowedShowsTests {
         // on at ten past ten in the morning: its reminder comes before ten, so no heads-up after it
         #expect(GFFollowedShows.reminders(for: [airing(date(10, 10))], now: date(6), calendar: london).map(\.kind)
             == [.hourBefore])
-        // twice tonight: one heads-up, for the first
+        // twice tonight: one heads-up and one reminder, for the first
         let twice = GFFollowedShows.reminders(for: [airing(date(20)), airing(date(1, days: 1))], now: date(8),
                                               calendar: london)
         #expect(twice.filter { $0.kind == .headsUp }.map(\.airing.start) == [date(20)])
-        #expect(twice.filter { $0.kind == .hourBefore }.count == 2)
+        #expect(twice.filter { $0.kind == .hourBefore }.map(\.airing.start) == [date(20)])
         // the soonest few only
         let many = (0 ..< 40).map { airing(date(20, days: $0)) }
         #expect(GFFollowedShows.reminders(for: many, now: date(8), calendar: london).count

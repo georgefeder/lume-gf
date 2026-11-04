@@ -118,7 +118,8 @@ enum GFComingUp {
 @MainActor
 @Observable
 final class GFComingUpModel {
-    private(set) var airings: [GFFollowedShows.Airing] = []
+    /// One a show: its next day with airings (GFFollowedShows.row).
+    private(set) var entries: [GFFollowedShows.Entry] = []
     private(set) var now = Date()
 
     /// The row's most cards.
@@ -127,10 +128,10 @@ final class GFComingUpModel {
     func keepLoading(shows: [GFFollowedShow], container: ModelContainer, prefix: String) async {
         while !Task.isCancelled {
             let now = Date()
-            let found = await GFComingUp.airings(of: shows, container: container, prefix: prefix, now: now, perShow: 3)
+            let found = await GFComingUp.airings(of: shows, container: container, prefix: prefix, now: now, perShow: 8)
             guard !Task.isCancelled else { return }
             self.now = now
-            airings = Array(found.prefix(Self.rowLimit))
+            entries = Array(GFFollowedShows.row(found, calendar: .current).prefix(Self.rowLimit))
             // the next start or end on the row (a card turns live or goes), at least a minute, at most 15 away
             var next = now.addingTimeInterval(900)
             for airing in found {
@@ -180,7 +181,7 @@ struct GFComingUpRow: View {
     @Environment(\.modelContext) private var context
 
     var body: some View {
-        if let model, !model.airings.isEmpty {
+        if let model, !model.entries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Coming Up")
                     .font(.subheadline)
@@ -189,8 +190,8 @@ struct GFComingUpRow: View {
                     .padding(.horizontal)
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: Self.spacing) {
-                        ForEach(model.airings) { airing in
-                            GFComingUpCard(airing: airing, now: model.now) { play(airing) }
+                        ForEach(model.entries) { entry in
+                            GFComingUpCard(entry: entry, now: model.now) { play(entry.airing) }
                         }
                     }
                     .padding(.horizontal)
@@ -227,11 +228,15 @@ struct GFComingUpRow: View {
 
 /// One airing: when ("Live now" in red, "Tonight 01:00"), the show, the channel.
 private struct GFComingUpCard: View {
-    let airing: GFFollowedShows.Airing
+    let entry: GFFollowedShows.Entry
     let now: Date
     let onPlay: () -> Void
     /// Wider with larger text, so "Tomorrow night 01:00" still fits.
     @ScaledMetric(relativeTo: .headline) private var width: CGFloat = GFComingUpCard.baseWidth
+
+    private var airing: GFFollowedShows.Airing {
+        entry.airing
+    }
 
     private var isLive: Bool {
         airing.start <= now
@@ -244,7 +249,7 @@ private struct GFComingUpCard: View {
                     if isLive {
                         Circle().fill(.red).frame(width: Self.dot, height: Self.dot)
                     }
-                    Text(GFFollowedShows.when(airing, now: now, calendar: .current, locale: .current))
+                    Text(GFFollowedShows.when(entry, now: now, calendar: .current, locale: .current))
                         .font(Self.whenFont)
                         .foregroundStyle(isLive ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
                         .lineLimit(1)
