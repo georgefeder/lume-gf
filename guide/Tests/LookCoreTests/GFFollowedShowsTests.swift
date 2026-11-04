@@ -83,18 +83,21 @@ struct GFFollowedShowsTests {
                                                 end: start.addingTimeInterval(3600), channel: channels[0])
             return GFFollowedShows.when(airing, now: now, calendar: london, locale: locale)
         }
+        // the time as the phone's own format writes it ("1:00" or "01:00")
+        func clock(_ date: Date) -> String { GFFollowedShows.time(date, calendar: london, locale: locale) }
+        #expect(clock(date(1, days: 1)).hasSuffix("1:00"))
         #expect(when(date(7), now: date(7, 30)) == "Live now")
         #expect(when(date(14), now: date(8)) == "Today 14:00")
         #expect(when(date(20), now: date(8)) == "Tonight 20:00")
-        #expect(when(date(1, days: 1), now: date(8)) == "Tonight 01:00")
+        #expect(when(date(1, days: 1), now: date(8)) == "Tonight \(clock(date(1, days: 1)))")
         #expect(when(date(20, days: 1), now: date(8)) == "Tomorrow 20:00")
-        #expect(when(date(1, days: 2), now: date(8)) == "Tomorrow night 01:00")
+        #expect(when(date(1, days: 2), now: date(8)) == "Tomorrow night \(clock(date(1, days: 2)))")
         #expect(when(date(20, days: 4), now: date(8)) == "Tuesday 20:00")
-        #expect(when(date(1, days: 5), now: date(8)) == "Tuesday night 01:00")
+        #expect(when(date(1, days: 5), now: date(8)) == "Tuesday night \(clock(date(1, days: 5)))")
         #expect(when(date(20, days: 9), now: date(8)) == "15 Nov 20:00")
         // at two in the morning this evening is tonight, and the night under way is still tonight
         #expect(when(date(20, days: 1), now: date(2, days: 1)) == "Tonight 20:00")
-        #expect(when(date(3, days: 1), now: date(0, 30, days: 1)) == "Tonight 03:00")
+        #expect(when(date(3, days: 1), now: date(0, 30, days: 1)) == "Tonight \(clock(date(3, days: 1)))")
     }
 
     @Test func `the clocks going forward or back do not move a TV day`() {
@@ -124,12 +127,15 @@ struct GFFollowedShowsTests {
         #expect(here.map(\.kind) == [.headsUp, .hourBefore])
         #expect(here.map(\.fire) == [date(10), date(0, days: 1)])
         #expect(here[0].title == "Shark Tank")
-        #expect(here[0].body(calendar: london, locale: locale) == "Tonight at 01:00 on ABC")
-        #expect(here[1].body(calendar: london, locale: locale) == "Starts in an hour, at 01:00, on ABC")
+        let one = GFFollowedShows.time(date(1, days: 1), calendar: london, locale: locale)
+        #expect(here[0].body(calendar: london, locale: locale) == "Tonight at \(one) on ABC")
+        #expect(here[1].body(calendar: london, locale: locale) == "Starts in an hour, at \(one), on ABC")
         // Riga, two hours ahead: the same programme starts at 03:00 there, its heads-up at ten Riga time
         let away = GFFollowedShows.reminders(for: [airing], now: date(6), calendar: riga)
         #expect(away.map(\.fire) == [date(8), date(0, days: 1)])
-        #expect(away[0].body(calendar: riga, locale: locale) == "Tonight at 03:00 on ABC")
+        let three = GFFollowedShows.time(date(1, days: 1), calendar: riga, locale: locale)
+        #expect(three.hasSuffix("3:00"))
+        #expect(away[0].body(calendar: riga, locale: locale) == "Tonight at \(three) on ABC")
     }
 
     @Test func `nothing already past, no heads-up after its reminder, one heads-up a show a day`() {
