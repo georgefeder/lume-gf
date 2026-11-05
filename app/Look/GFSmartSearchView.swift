@@ -164,6 +164,8 @@ final class GFSmartSearchModel {
                                  restriction: ContentRestriction, now: Date) -> [ResultGroup] {
         var rows: [GFSearchLayout.Row<String>] = []
         var lookup: [String: Row] = [:]
+        /// Programmes on now: each leads its match in Top Results (GFSearchLayout.liveFirst)
+        var live = Set<String>()
         func add(_ row: Row, _ kind: GFSearchIndex.Kind, _ score: Double, family: String? = nil) {
             guard lookup[row.id] == nil else { return }
             lookup[row.id] = row
@@ -201,8 +203,9 @@ final class GFSmartSearchModel {
             let score = GFSearchLayout.channelScore(airing.score, isFavorite: stream.isFavorite,
                                                     lastWatched: stream.lastWatchedDate, now: now)
                 * GFSearchEvents.quality(channelName: stream.name)
-            add(.programme(GFProgrammeRow(hit: airing.hit, stream: stream)), .programme, score,
-                family: "event \(airing.event)")
+            let row = Row.programme(GFProgrammeRow(hit: airing.hit, stream: stream))
+            add(row, .programme, score, family: "match \(airing.match)")
+            if airing.hit.start <= now, now < airing.hit.end { live.insert(row.id) }
         }
         let filmIDs = ids(.film)
         if !filmIDs.isEmpty {
@@ -222,7 +225,7 @@ final class GFSmartSearchModel {
                 add(.series(series), .series, scores[series.id] ?? 0)
             }
         }
-        return GFSearchLayout.sections(rows, allKinds: allKinds).map { section in
+        return GFSearchLayout.sections(GFSearchLayout.liveFirst(rows, live: live), allKinds: allKinds).map { section in
             ResultGroup(kind: section.kind, rows: section.ids.compactMap { lookup[$0] })
         }
     }

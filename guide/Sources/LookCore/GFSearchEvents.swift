@@ -44,6 +44,43 @@ nonisolated enum GFSearchEvents {
         return airings.indices.map(root)
     }
 
+    /// How far apart two airings of one match can start and still be one in Top Results: the live one and its replays.
+    static let replayWindow: TimeInterval = 24 * 3600
+
+    /// For each airing, the number of its match within this search (the first airing's index in it): its event
+    /// (`events`) together with the same match shown again within `replayWindow` (Georgs, 5 Nov: Celtic v Beşiktaş was
+    /// live on TNT Sports 3, and Top Results led with three later replays titled "Celtic vs Beşiktaş"). Titles of one
+    /// match share two distinctive words, at least one of them not searched for: two matches of a league searched by
+    /// its name ("premier league") stay apart.
+    static func matches(_ airings: [Airing], searched: Set<String>) -> [Int] {
+        var parent = Array(airings.indices)
+        func root(_ index: Int) -> Int {
+            var index = index
+            while parent[index] != index {
+                parent[index] = parent[parent[index]]
+                index = parent[index]
+            }
+            return index
+        }
+        func join(_ lhs: Int, _ rhs: Int) {
+            let (left, right) = (root(lhs), root(rhs))
+            if left != right { parent[max(left, right)] = min(left, right) }
+        }
+        for (index, event) in events(airings).enumerated() {
+            join(index, event)
+        }
+        let words = airings.map { Self.words($0.title) }
+        for lhs in airings.indices {
+            for rhs in airings.indices where rhs > lhs {
+                guard abs(airings[lhs].start.timeIntervalSince(airings[rhs].start)) <= replayWindow else { continue }
+                let shared = words[lhs].intersection(words[rhs])
+                guard shared.count >= 2, !shared.isSubset(of: searched) else { continue }
+                join(lhs, rhs)
+            }
+        }
+        return airings.indices.map(root)
+    }
+
     /// How much more an event on `channels` channels at once counts: four per cent a channel, up to six.
     static func popularity(channels: Int) -> Double {
         1 + 0.04 * Double(min(max(channels - 1, 0), 5))
