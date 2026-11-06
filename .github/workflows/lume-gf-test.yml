@@ -33,6 +33,7 @@ jobs:
       # defaults to 27.0 and also carries 27.2 betas, so 27.1 is picked by its path.
       - name: Select Xcode
         run: |
+          ls -d /Applications/Xcode*.app  # which Xcodes this image has (Georgs, 6 Nov: is 27.3 here yet?)
           sudo xcode-select -s /Applications/Xcode_27.1.app
           xcodebuild -version
       - name: Script tests
