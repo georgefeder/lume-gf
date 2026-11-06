@@ -1,0 +1,28 @@
+diff --git a/Lume/Views/Movies/MovieDetailView.swift b/Lume/Views/Movies/MovieDetailView.swift
+index 5d1386b..80f9635 100644
+--- a/Lume/Views/Movies/MovieDetailView.swift
++++ b/Lume/Views/Movies/MovieDetailView.swift
+@@ -74,7 +74,8 @@ struct MovieDetailView: View {
+             .background(backgroundColor)
+             .paywall(isPresented: $showDownloadPaywall, highlight: .downloads)
+             #if os(iOS)
+-                .toolbar(.hidden, for: .tabBar)
++                // Lume GF: the tab bar stays (Georgs, 6 Nov: back on Home it came a second late or never on the
++                // iPhone and the iPhone Duo); hidden here, iOS did not always bring it back
+                 .navigationBarBackButtonHidden(true)
+                 .toolbarBackground(.hidden, for: .navigationBar)
+             #endif
+diff --git a/Lume/Views/Series/SeriesDetailView.swift b/Lume/Views/Series/SeriesDetailView.swift
+index 3686f35..39dfa73 100644
+--- a/Lume/Views/Series/SeriesDetailView.swift
++++ b/Lume/Views/Series/SeriesDetailView.swift
+@@ -79,7 +79,8 @@ struct SeriesDetailView: View {
+             }
+             .background(backgroundColor)
+             #if os(iOS)
+-                .toolbar(.hidden, for: .tabBar)
++                // Lume GF: the tab bar stays (Georgs, 6 Nov: back on Home it came a second late or never on the
++                // iPhone and the iPhone Duo); hidden here, iOS did not always bring it back
+                 .navigationBarBackButtonHidden(true)
+                 .toolbarBackground(.hidden, for: .navigationBar)
+             #endif
