@@ -1,0 +1,32 @@
+diff --git a/Lume/Views/Components/Detail/MediaDetailComponents.swift b/Lume/Views/Components/Detail/MediaDetailComponents.swift
+index a96306c..4753f36 100644
+--- a/Lume/Views/Components/Detail/MediaDetailComponents.swift
++++ b/Lume/Views/Components/Detail/MediaDetailComponents.swift
+@@ -270,10 +270,9 @@ struct GlassIconButton: View {
+                 // place; constant-symbol callers such as Back are unaffected.
+                 .symbolReplaceTransition(value: systemImage)
+                 .font(.system(size: 15, weight: .semibold))
+-                .foregroundStyle(.white)
+                 .frame(width: 34, height: 34)
+-                .background(.ultraThinMaterial, in: Circle())
+-                .overlay(Circle().stroke(.white.opacity(0.15), lineWidth: 0.5))
++                // Lume GF: its own glass below iOS 26 only, the toolbar's on iOS 26 (gfDetailButtonGlass)
++                .gfDetailButtonGlass()
+         }
+         .buttonStyle(.plain)
+         .accessibilityLabel(accessibilityLabel)
+diff --git a/Lume/Views/Downloads/DownloadButton.swift b/Lume/Views/Downloads/DownloadButton.swift
+index 56e1d3b..b8fe2ab 100644
+--- a/Lume/Views/Downloads/DownloadButton.swift
++++ b/Lume/Views/Downloads/DownloadButton.swift
+@@ -69,8 +69,8 @@
+     private extension View {
+         func glassCircleFrame() -> some View {
+             frame(width: 34, height: 34)
+-                .background(.ultraThinMaterial, in: Circle())
+-                .overlay(Circle().stroke(.white.opacity(0.15), lineWidth: 0.5))
++                // Lume GF: its own glass below iOS 26 only, the toolbar's on iOS 26 (gfDetailButtonGlass)
++                .gfDetailButtonGlass()
+         }
+     }
+ #endif
