@@ -177,6 +177,9 @@ nonisolated enum GFSmartSearch {
         /// The broadcast event it belongs to, within this search (`GFSearchEvents`): one match under several titles
         /// on several channels is one event.
         let event: Int
+        /// The match it belongs to, within this search: its event and the same match shown again within a day
+        /// (`GFSearchEvents.matches`); Top Results shows a match once, on now if it is.
+        let match: Int
     }
 
     struct Found: Sendable {
@@ -301,9 +304,13 @@ nonisolated enum GFSmartSearch {
             }
         }
         // one match under several titles on several channels is one event; the more channels, the more it counts
-        let events = GFSearchEvents.events(chosen.map {
+        let shown: [GFSearchEvents.Airing] = chosen.map {
             GFSearchEvents.Airing(title: $0.hit.title, start: $0.hit.start, end: $0.hit.end)
-        })
+        }
+        let events = GFSearchEvents.events(shown)
+        // and the same match shown again within a day is one in Top Results (Georgs, 5 Nov)
+        let searched = Set(query.parts.flatMap(\.words))
+        let matches = GFSearchEvents.matches(shown, searched: searched)
         var channels: [Int: Set<PersistentIdentifier>] = [:]
         for (index, event) in events.enumerated() {
             channels[event, default: []].insert(chosen[index].stream)
@@ -313,7 +320,7 @@ nonisolated enum GFSmartSearch {
             return Airing(hit: airing.hit, stream: airing.stream, score: GFSearchLayout.programmeScore(
                 airing.score, start: airing.hit.start, end: airing.hit.end, now: now, time: query.time,
                 calendar: calendar, channels: channels[events[index]]?.count ?? 1
-            ), event: events[index])
+            ), event: events[index], match: matches[index])
         }
         result.sort { $0.score != $1.score ? $0.score > $1.score : $0.hit.start < $1.hit.start }
         return Array(result.prefix(GFGuideSearch.limit))

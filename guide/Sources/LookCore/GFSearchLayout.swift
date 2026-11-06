@@ -50,6 +50,20 @@ nonisolated enum GFSearchLayout {
         return result
     }
 
+    /// Each family's airing on now leads it, with the family's best score (Top Results shows a family once, by its
+    /// best row: the match on now, not a replay whose title matched the search better; Georgs, 5 Nov). Several on now
+    /// keep their own order; the family keeps its place among the others.
+    static func liveFirst<ID: Hashable & Sendable>(_ rows: [Row<ID>], live: Set<ID>) -> [Row<ID>] {
+        var best: [String: Double] = [:]
+        for row in rows {
+            if let family = row.family { best[family] = max(best[family] ?? 0, row.score) }
+        }
+        return rows.map { row in
+            guard let family = row.family, live.contains(row.id), let top = best[family] else { return row }
+            return Row(kind: row.kind, id: row.id, score: top + 0.0001 + row.score * 0.001, family: family)
+        }
+    }
+
     /// A channel's score, a little more when it is a favourite or was watched in the last week.
     static func channelScore(_ score: Double, isFavorite: Bool, lastWatched: Date?, now: Date) -> Double {
         var score = score
