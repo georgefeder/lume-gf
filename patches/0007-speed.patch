@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
-index 346574b..076c121 100644
+index 5ea7766..621fac2 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
 +++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 @@ -31,6 +31,11 @@
@@ -62,10 +62,10 @@ index 346574b..076c121 100644
  
          /// Clears a channel's watch timestamp so it drops out of the Recently
 diff --git a/Lume/Views/Player/TVPlayerContent.swift b/Lume/Views/Player/TVPlayerContent.swift
-index 8c11e54..f806125 100644
+index 81f566b..04f9b06 100644
 --- a/Lume/Views/Player/TVPlayerContent.swift
 +++ b/Lume/Views/Player/TVPlayerContent.swift
-@@ -92,9 +92,11 @@
+@@ -90,9 +90,11 @@
              let epgIds = Set(channels.compactMap(\.epgChannelId).filter { !$0.isEmpty })
              guard !epgIds.isEmpty else { return [:] }
              let now = Date()

@@ -12,18 +12,18 @@ index 0ef144e..8f1c0af 100644
                  if !LumeApp.isTestOrPreviewHost {
                      GoogleCastProvider.configure()
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index af8a2b9..67b8e0f 100644
+index 414714a..39abe6a 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
-@@ -204,6 +204,7 @@ struct HomeView: View {
+@@ -208,6 +208,7 @@ struct HomeView: View {
                  }
              }
              .profileMenuToolbar()
-+            .gfComingUpSource(playlistPrefix: playlistPrefix ?? "") // Lume GF: Coming Up's airings
++            .gfComingUpSource(playlistPrefix: catalogScope.prefixes(for: .liveTV).first ?? "") // Lume GF: Coming Up's airings
              .libraryToolbar(config: LibraryToolbarConfiguration(
                  playlists: playlists,
                  selectedPlaylistID: $selectedPlaylistID,
-@@ -278,7 +279,10 @@ struct HomeView: View {
+@@ -264,7 +265,10 @@ struct HomeView: View {
      /// The horizontal rails, shared by the iOS/macOS scroll layout and the tvOS
      /// immersive home. Rows render in the user's chosen order (Settings › Layout ›
      /// Home); each only appears when it has content.

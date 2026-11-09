@@ -1,0 +1,5 @@
+# The LumeEngine, LumeRecorder and LumeCloud refs each Lume release was built with, for releases since Lume 3.1
+# (which deleted the sideload workflow that named them; ci/engine-ref.sh). One line a release, newest last:
+# v<version> ENGINE=<LumeEngine tag> RECORDER=<LumeRecorder tag> CLOUD=<LumeCloud ref>
+# v3.1.0: the values of Lume's own workflow at its last commit before the deletion (30c6b97, "v3.1.0 (build 36)").
+v3.1.0 ENGINE=v0.5.0 RECORDER=v0.1.1 CLOUD=main

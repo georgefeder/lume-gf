@@ -1,5 +1,5 @@
 diff --git a/Lume/Info.plist b/Lume/Info.plist
-index 6d77a06..d01dbde 100644
+index 760c8c9..4b3a189 100644
 --- a/Lume/Info.plist
 +++ b/Lume/Info.plist
 @@ -2,6 +2,11 @@
@@ -14,7 +14,7 @@ index 6d77a06..d01dbde 100644
  	<key>CFBundleAllowMixedLocalizations</key>
  	<true/>
  	<key>CFBundleLocalizations</key>
-@@ -61,6 +66,8 @@
+@@ -62,6 +67,8 @@
  	<array>
  		<string>audio</string>
  		<string>remote-notification</string>
@@ -24,7 +24,7 @@ index 6d77a06..d01dbde 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 10d2313..5466768 100644
+index 74f851c..0eeb085 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -33,6 +33,7 @@ struct LumeApp: App {
@@ -45,7 +45,7 @@ index 10d2313..5466768 100644
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -442,6 +446,8 @@ struct LumeApp: App {
+@@ -457,6 +461,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
@@ -54,7 +54,7 @@ index 10d2313..5466768 100644
  
                      // Seed the widget / Top Shelf snapshot once services are up
                      // (after profile bootstrap, so the catalog is profile-scoped).
-@@ -470,6 +476,7 @@ struct LumeApp: App {
+@@ -485,6 +491,7 @@ struct LumeApp: App {
                      Task { await backendChoiceWatcher.refresh() }
                  }
                  .onChange(of: scenePhase) { _, phase in

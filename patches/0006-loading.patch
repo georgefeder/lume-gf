@@ -1,5 +1,5 @@
 diff --git a/Lume/Services/Indexing/ContentIndexingService.swift b/Lume/Services/Indexing/ContentIndexingService.swift
-index acd933c..ddd6d42 100644
+index c3da12b..637a066 100644
 --- a/Lume/Services/Indexing/ContentIndexingService.swift
 +++ b/Lume/Services/Indexing/ContentIndexingService.swift
 @@ -50,10 +50,13 @@ final class ContentIndexingService {
@@ -16,6 +16,23 @@ index acd933c..ddd6d42 100644
      }
  
      /// Set by `ICloudBackend` while `NSPersistentCloudKitContainer` is
+diff --git a/Lume/Services/Sync/AutoSyncQueue.swift b/Lume/Services/Sync/AutoSyncQueue.swift
+index e1d9cc7..50014f8 100644
+--- a/Lume/Services/Sync/AutoSyncQueue.swift
++++ b/Lume/Services/Sync/AutoSyncQueue.swift
+@@ -104,4 +104,12 @@ final class AutoSyncQueue {
+             }
+         }
+     }
++
++    /// Lume GF: a playlist tried earlier in this run may be due again (an Apple TV keeps the app for days); only what
++    /// is queued or syncing now stays marked.
++    func gfForgetFinished() {
++        attempted = attempted.filter { id in
++            coverPlaylist?.id == id || backgroundPlaylist?.id == id || pending.contains { $0.id == id }
++        }
++    }
+ }
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
 index 219c697..c38ae3f 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
@@ -109,7 +126,7 @@ index 97c3f39..9767d13 100644
  
      private var isDue: Bool {
 diff --git a/Lume/Views/LiveTV/ChannelsListView.swift b/Lume/Views/LiveTV/ChannelsListView.swift
-index ef03247..17d6379 100644
+index e00aad9..890db8f 100644
 --- a/Lume/Views/LiveTV/ChannelsListView.swift
 +++ b/Lume/Views/LiveTV/ChannelsListView.swift
 @@ -97,7 +97,7 @@ struct ChannelsList: View {
@@ -122,10 +139,10 @@ index ef03247..17d6379 100644
              if scope == .recentlyWatched, !channels.isEmpty {
                  clearHeader
 diff --git a/Lume/Views/LiveTV/EPG/EPGGuideView.swift b/Lume/Views/LiveTV/EPG/EPGGuideView.swift
-index a45a126..0df10d2 100644
+index 5528ae1..396a00a 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGuideView.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGuideView.swift
-@@ -127,7 +127,7 @@ struct EPGGuideView: View {
+@@ -128,7 +128,7 @@ struct EPGGuideView: View {
          // Reload when the channel set changes or a guide import settles. Keyed on
          // `isSyncing` (which flips twice per sync) rather than observing the store,
          // so the grid rebuilds a handful of times — not on every batch write.
@@ -135,7 +152,7 @@ index a45a126..0df10d2 100644
          }
      }
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
-index 8ccf4ba..346574b 100644
+index 02fadb1..5ea7766 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
 +++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 @@ -102,7 +102,7 @@
@@ -148,18 +165,16 @@ index 8ccf4ba..346574b 100644
              }
              .alert("Clear Recently Watched", isPresented: $confirmingClear) {
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index 563ddb6..70e8910 100644
+index f1f8b0f..f3b0524 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
-@@ -181,6 +181,11 @@ struct MainTabView: View {
+@@ -171,6 +171,9 @@ struct MainTabView: View {
                  // Returning to the foreground re-checks staleness — for a long-lived
                  // app this is the practical equivalent of "on launch".
                  if phase == .active {
 +                    // Lume GF: a playlist tried earlier in this run may be due again (an Apple TV keeps the app
 +                    // for days); only what is queued or syncing now stays marked
-+                    autoSyncAttempted = autoSyncAttempted.filter { id in
-+                        activeSyncPlaylist?.id == id || syncQueue.contains { $0.id == id }
-+                    }
++                    autoSyncQueue.gfForgetFinished()
                      enqueueDueSyncs(playlists)
                  }
                  // Coming back to `.active` also refreshes stale sports data.

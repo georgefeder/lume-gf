@@ -168,6 +168,15 @@
         let scope: LiveChannelScope
         let categories: [Category]
         let playlist: Playlist
+        /// Lume 3.1: the demo playlist on its own, and its categories as the rail's one untitled group
+        var catalogScope: CatalogScope {
+            .isolated(playlist.id)
+        }
+
+        var groups: [LiveTVSectionGroup] {
+            [LiveTVSectionGroup(id: playlist.id, title: nil, sections: categories.map { LiveTVSection.category($0) })]
+        }
+
         /// The first channel, for `-GFDemoMoves play` (the iPhone opens it as Lume's Live TV screen does).
         let firstStream: LiveStream?
 
@@ -424,14 +433,14 @@
         @ViewBuilder private var liveTV: some View {
             #if os(tvOS)
                 TVLiveTVScreen(
-                    sections: store.categories.map { LiveTVSection.category($0) },
+                    groups: store.groups,
                     selectedSection: $section,
                     displayedSection: section,
                     contentSort: .playlist,
                     onPlay: { _ in },
                     onPlayCatchup: { _, _ in },
                     onStartMultiView: { _ in },
-                    playlistPrefix: "",
+                    catalogScope: store.catalogScope,
                     sourceType: nil,
                     // Lume 2.3: List or Guide comes from Settings, no longer from a switch on the rail
                     layoutMode: LiveTVLayoutMode(rawValue: layoutMode) ?? .guide
@@ -440,15 +449,16 @@
                 NavigationStack {
                     Group {
                         if GFDemo.mode == "list" {
-                            ChannelsList(scope: store.scope, playlistPrefix: "", sort: .playlist,
+                            ChannelsList(scope: store.scope, catalogScope: store.catalogScope, sort: .playlist,
                                          onStartMultiView: { _ in }, onPlay: play)
                         } else {
-                            EPGGuideView(scope: store.scope, playlistPrefix: "", sort: .playlist, onPlay: play)
+                            EPGGuideView(scope: store.scope, catalogScope: store.catalogScope, sort: .playlist,
+                                         onPlay: play)
                         }
                     }
                     // as Lume's Live TV screen: the floating category button and its toolbar (layout switch,
                     // Multi-View, sort, sync, settings), so the screenshots show the real top and bottom
-                    .gfCategoryButton(sections: store.categories.map { LiveTVSection.category($0) },
+                    .gfCategoryButton(groups: store.groups,
                                       selection: $section, guide: GFDemo.mode != "list")
                     .navigationTitle("Sport")
                     .navigationBarTitleDisplayMode(.inline)
@@ -470,7 +480,7 @@
                     .libraryToolbar(config: LibraryToolbarConfiguration(
                         playlists: [], selectedPlaylistID: .constant(""), categorySortRaw: .constant(""),
                         contentSortRaw: .constant(""), showingSync: .constant(false),
-                        showingSettings: .constant(false), activePlaylist: nil
+                        showingSettings: .constant(false)
                     ))
                     // as Lume's Live TV screen opens a channel (LiveTVView)
                     .fullScreenCover(item: $playing) { media in

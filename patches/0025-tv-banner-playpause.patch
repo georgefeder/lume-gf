@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index 35139e1..c97a69f 100644
+index f3b0524..a3b9064 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
-@@ -130,10 +130,12 @@ struct MainTabView: View {
+@@ -117,10 +117,12 @@ struct MainTabView: View {
              // `onPlayPauseCommand` sits above this one in the focused chain and is
              // never shadowed. The guard covers the plain overlays instead, which
              // tvOS focus reaches straight through.
@@ -16,4 +16,4 @@ index 35139e1..c97a69f 100644
 +            })
          #endif
              .environment(router)
-             .environment(\.contentRestriction, contentRestriction)
+             .environment(autoSyncQueue)
