@@ -29,7 +29,9 @@ public nonisolated enum GFCloudSchema {
             .init(name: "password", type: .string, encrypted: true),
             .init(name: "macAddress", type: .string, encrypted: true), .init(name: "sourceTypeRaw", type: .string),
             .init(name: "epgURL", type: .string), .init(name: "syncEnabled", type: .bool),
-            .init(name: "hiddenTabsRaw", type: .string), .init(name: "updatedAt", type: .date)
+            .init(name: "hiddenTabsRaw", type: .string), .init(name: "updatedAt", type: .date),
+            // Lume 3.1: the playlist's part in the Combined view (the types it brings, its place in the order)
+            .init(name: "combinedTypesRaw", type: .string), .init(name: "combinedPriority", type: .integer)
         ]),
         Entity(name: "UserContentState", attributes: [
             .init(name: "contentId", type: .string), .init(name: "kindRaw", type: .string),
