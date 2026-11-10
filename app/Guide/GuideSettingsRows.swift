@@ -49,6 +49,11 @@ struct GuideStatusLine: View {
             Text(status.backgroundLine)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+            #if os(tvOS)
+                Text(status.wipeLine)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            #endif
         }
         .task { status.reload() }
     }

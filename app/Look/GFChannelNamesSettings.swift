@@ -3,7 +3,7 @@ import SwiftUI
 private let gfChannelNamesFooter: LocalizedStringKey =
     "“BBC One FHD” shows as “BBC One” with a small FHD badge, and live events get a LIVE badge. Search still finds the full names."
 
-/// iPhone/iPad (Form): Settings → TV Guide → Channel Names.
+/// iPhone/iPad (Form): Settings → Live TV → Channel Names.
 struct GFChannelNamesSection: View {
     @AppStorage(GFChannelNames.settingKey) private var enabled = true
 
@@ -19,7 +19,7 @@ struct GFChannelNamesSection: View {
 }
 
 #if os(tvOS)
-    /// Apple TV: Settings → TV Guide → Channel Names, one row that switches on and off.
+    /// Apple TV: Settings → Live TV → Channel Names, one row that switches on and off.
     struct GFChannelNamesTVSection: View {
         @AppStorage(GFChannelNames.settingKey) private var enabled = true
 

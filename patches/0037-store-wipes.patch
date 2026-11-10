@@ -1,0 +1,16 @@
+diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
+index 0d3ea45..584426f 100644
+--- a/Lume/LumeApp.swift
++++ b/Lume/LumeApp.swift
+@@ -44,6 +44,11 @@ struct LumeApp: App {
+             // can resume a Cast session, which may end before that task runs.
+             CastService.shared.progressCommitter = CastProgressCommitter(container: catalog)
+         #endif
++        // Lume GF: tvOS clearing the saved channels and guide shows as a store with no playlists; counted before
++        // anything syncs them back (GFStoreWipes, shown in the Apple TV's TV Guide settings)
++        if let playlists = try? ModelContext(catalog).fetchCount(FetchDescriptor<Playlist>()) {
++            GFStoreWipes.noteLaunch(playlistCount: playlists)
++        }
+         // Lume GF: set up before anything else can run, so a background launch (no scene yet) finds its guide data.
+         EPGSyncService.shared.configure(container: catalog)
+         GuideScheduler.shared.configure(container: catalog)

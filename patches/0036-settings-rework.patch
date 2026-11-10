@@ -1,0 +1,379 @@
+diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+index fa38dfc..3ecbd57 100644
+--- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+@@ -265,6 +265,7 @@ import SwiftUI
+                 PlayerQualityButton(onResetHideTimer: onResetHideTimer)
+                 PlayerRecordButton(media: media, onResetHideTimer: onResetHideTimer)
+                 PlayerVolumeControl(onResetHideTimer: onResetHideTimer)
++                GFPlayerSettingsButton(onResetHideTimer: onResetHideTimer) // Lume GF: the player settings, here
+             }
+             .padding(.horizontal, 4)
+             .glassEffectCompat(.regularInteractive, in: Capsule())
+diff --git a/Lume/Views/Player/EngineControlsOverlay.swift b/Lume/Views/Player/EngineControlsOverlay.swift
+index cdc006d..06fd0ec 100644
+--- a/Lume/Views/Player/EngineControlsOverlay.swift
++++ b/Lume/Views/Player/EngineControlsOverlay.swift
+@@ -311,6 +311,7 @@ import SwiftUI
+                 PlayerQualityButton(onResetHideTimer: onResetHideTimer)
+                 PlayerRecordButton(media: media, onResetHideTimer: onResetHideTimer)
+                 PlayerVolumeControl(onResetHideTimer: onResetHideTimer)
++                GFPlayerSettingsButton(onResetHideTimer: onResetHideTimer) // Lume GF: the player settings, here
+             }
+             .padding(.horizontal, 4)
+             .glassEffectCompat(.regularInteractive, in: Capsule())
+diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
+index 89534b8..99beace 100644
+--- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
+@@ -292,6 +292,7 @@ import SwiftUI
+                 PlayerQualityButton(onResetHideTimer: onResetHideTimer)
+                 PlayerRecordButton(media: media, onResetHideTimer: onResetHideTimer)
+                 PlayerVolumeControl(onResetHideTimer: onResetHideTimer)
++                GFPlayerSettingsButton(onResetHideTimer: onResetHideTimer) // Lume GF: the player settings, here
+             }
+             .padding(.horizontal, 4)
+             .glassEffectCompat(.regularInteractive, in: Capsule())
+diff --git a/Lume/Views/Player/TVPlayerControlsOverlay.swift b/Lume/Views/Player/TVPlayerControlsOverlay.swift
+index 915a03d..9acac45 100644
+--- a/Lume/Views/Player/TVPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/TVPlayerControlsOverlay.swift
+@@ -385,12 +385,26 @@
+                     favoriteButton
+                 }
+                 recordButton
++                gfSettingsMenu
+             }
+             .tvPlayerRecordFocusHandoff(media: media, focus: $focus)
+             .tvPlayerQualityFocusHandoff(media: media, focus: $focus)
+             .tvPlayerHueMenu(media: media, focus: $focus)
+         }
+ 
++        /// Lume GF: the player settings changed most, from the player (Georgs, 10 Nov 2026)
++        private var gfSettingsMenu: some View {
++            Menu {
++                GFPlayerSettingsItems()
++            } label: {
++                Image(systemName: "gearshape")
++            }
++            .menuIndicator(.hidden)
++            .buttonStyle(TVPlayerCircleButtonStyle())
++            .focused($focus, equals: .gfSettings)
++            .accessibilityLabel("Player Settings")
++        }
++
+         @ViewBuilder
+         private var audioTrackMenu: some View {
+             let tracks = coordinator.audioTrackOptions
+diff --git a/Lume/Views/Player/TVPlayerPanels.swift b/Lume/Views/Player/TVPlayerPanels.swift
+index 395b39a..ffbfb85 100644
+--- a/Lume/Views/Player/TVPlayerPanels.swift
++++ b/Lume/Views/Player/TVPlayerPanels.swift
+@@ -33,6 +33,7 @@
+         case hue
+         case favorite
+         case record
++        case gfSettings // Lume GF: the player settings (GFPlayerSettingsItems)
+         case panelClose
+         case episode(String)
+         case channel(String)
+diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+index ad1c010..f1b692d 100644
+--- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+@@ -273,6 +273,7 @@ import VLCKit
+                 PlayerQualityButton(onResetHideTimer: onResetHideTimer)
+                 PlayerRecordButton(media: media, onResetHideTimer: onResetHideTimer)
+                 PlayerVolumeControl(onResetHideTimer: onResetHideTimer)
++                GFPlayerSettingsButton(onResetHideTimer: onResetHideTimer) // Lume GF: the player settings, here
+             }
+             .padding(.horizontal, 4)
+             .glassEffectCompat(.regularInteractive, in: Capsule())
+diff --git a/Lume/Views/Settings/EPGSettingsView.swift b/Lume/Views/Settings/EPGSettingsView.swift
+index c017d62..b7ca9f0 100644
+--- a/Lume/Views/Settings/EPGSettingsView.swift
++++ b/Lume/Views/Settings/EPGSettingsView.swift
+@@ -69,8 +69,6 @@ struct EPGSettingsView: View {
+             Form {
+                 sourcesSection
+                 refreshSection
+-                // Lume GF: Clean Channel Names (docs/superpowers/specs/2026-09-29-lume-gf-3-look-design.md)
+-                GFChannelNamesSection()
+             }
+             #if os(macOS)
+             .formStyle(.grouped)
+@@ -278,8 +276,6 @@ struct EPGSettingsView: View {
+                 tvSourcesSection
+                 tvAddSection
+                 tvRefreshSection
+-                // Lume GF: Clean Channel Names
+-                GFChannelNamesTVSection()
+             }
+             .frame(maxWidth: .infinity, alignment: .leading)
+         }
+diff --git a/Lume/Views/Settings/LiveTVSettingsView.swift b/Lume/Views/Settings/LiveTVSettingsView.swift
+index 1140566..d348bd4 100644
+--- a/Lume/Views/Settings/LiveTVSettingsView.swift
++++ b/Lume/Views/Settings/LiveTVSettingsView.swift
+@@ -78,6 +78,10 @@
+                     Text("Shows these collections above your categories in Live TV.")
+                 }
+ 
++                // Lume GF: moved here from Player and TV Guide (Georgs, 10 Nov)
++                GFLiveTVWatchingSection()
++                GFChannelNamesSection()
++
+                 #if os(iOS)
+                     // macOS always shows both buttons; its toolbar has room.
+                     Section {
+diff --git a/Lume/Views/Settings/PlayerEngineSettingsViews.swift b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
+index f75ce2c..9c1047a 100644
+--- a/Lume/Views/Settings/PlayerEngineSettingsViews.swift
++++ b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
+@@ -336,8 +336,6 @@ import SwiftUI
+         @AppStorage(PlayerSettings.KSPlayer.liveBufferKey) private var liveBuffer = PlayerSettings.KSPlayer.liveBufferDefault
+         @AppStorage(PlayerSettings.KSPlayer.vodBufferKey) private var vodBuffer = PlayerSettings.KSPlayer.vodBufferDefault
+         @AppStorage(PlayerSettings.KSPlayer.maxBufferKey) private var maxBuffer = PlayerSettings.KSPlayer.maxBufferDefault
+-        /// Lume GF: Apple's super resolution on SD and 720p channels (GFEnhancer), off until switched on.
+-        @AppStorage(GFEnhancePlan.settingKey) private var gfEnhance = false
+ 
+         @State private var showResetConfirmation = false
+ 
+@@ -354,7 +352,6 @@ import SwiftUI
+                     TVOptionToggleRow(title: "Codec Low Delay", isOn: $codecLowDelay)
+                     TVOptionToggleRow(title: "Auto Deinterlace", isOn: $autoDeinterlace)
+                     TVOptionToggleRow(title: "Auto Rotate", isOn: $autoRotate)
+-                    TVOptionToggleRow(title: "Enhance SD & 720p", isOn: $gfEnhance) // Lume GF (GFEnhancer)
+                 }
+ 
+                 VStack(alignment: .leading, spacing: 8) {
+diff --git a/Lume/Views/Settings/PlayerSettingsView.swift b/Lume/Views/Settings/PlayerSettingsView.swift
+index b4025a4..f751577 100644
+--- a/Lume/Views/Settings/PlayerSettingsView.swift
++++ b/Lume/Views/Settings/PlayerSettingsView.swift
+@@ -21,8 +21,6 @@
+         private var chooseSourceBeforePlaying = PlayerSettings.Playback.chooseSourceBeforePlayingDefault
+         @AppStorage(PlayerSettings.Playback.rotateToLandscapeKey)
+         private var rotateToLandscape = PlayerSettings.Playback.rotateToLandscapeDefault
+-        @AppStorage(PlayerSettings.Playback.liveQualitySwitchKey)
+-        private var liveQualitySwitch = PlayerSettings.Playback.liveQualitySwitchDefault
+         @AppStorage(PlayerSettings.StreamInfo.enabledKey)
+         private var streamInfoEnabled = PlayerSettings.StreamInfo.enabledDefault
+         @AppStorage(PlayerSettings.StreamInfo.detailLevelKey)
+@@ -51,6 +49,8 @@
+ 
+         var body: some View {
+             List {
++                GFKSPlayerQuickSection() // Lume GF: the options changed most, first (Georgs, 10 Nov)
++
+                 Section {
+                     if showsRotateToLandscape {
+                         Toggle("Rotate to Landscape", isOn: $rotateToLandscape)
+@@ -108,13 +108,7 @@
+                     }
+                 }
+ 
+-                Section {
+-                    Toggle("Show Quality Switch", isOn: $liveQualitySwitch)
+-                } header: {
+-                    Text("Live TV")
+-                } footer: {
+-                    Text("While watching a live channel, switch to the same channel in another quality, such as HD, FHD or 4K, when your playlist lists it more than once.")
+-                }
++                // Lume GF: Show Quality Switch is in Settings › Live TV (GFLiveTVWatchingSection)
+ 
+                 // Free for everyone — deliberately not premium-gated like the
+                 // Playback toggles above.
+diff --git a/Lume/Views/Settings/SettingsCategory.swift b/Lume/Views/Settings/SettingsCategory.swift
+index 7f62b57..898fcb7 100644
+--- a/Lume/Views/Settings/SettingsCategory.swift
++++ b/Lume/Views/Settings/SettingsCategory.swift
+@@ -11,12 +11,12 @@ import SwiftUI
+ /// A top-level Settings category — one root row on iOS / macOS, one sidebar
+ /// entry on tvOS.
+ enum SettingsCategory: String, CaseIterable, Identifiable {
+-    case premium, profiles
+-    case playlists, epg, library
+-    case home, liveTV, sports, appearance
+-    case player, downloads
++    // Lume GF: what is changed most first: watching, then the library, then sync and the rest, Lume Pro (unlocked
++    // in this build) near the end (Georgs, 10 Nov 2026)
++    case player, liveTV, epg, playlists
++    case home, library, profiles, sports, appearance, downloads
+     case iCloud, connectedServices
+-    case storage, help, about, developer
++    case storage, premium, help, about, developer
+ 
+     var id: String {
+         rawValue
+@@ -46,12 +46,10 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
+ 
+     var group: SettingsCategoryGroup {
+         switch self {
+-        case .premium, .profiles: .account
+-        case .playlists, .epg, .library: .content
+-        case .home, .liveTV, .sports, .appearance: .experience
+-        case .player, .downloads: .playback
++        case .player, .liveTV, .epg, .playlists: .watching
++        case .home, .library, .profiles, .sports, .appearance, .downloads: .content
+         case .iCloud, .connectedServices: .sync
+-        case .storage, .help, .about, .developer: .system
++        case .storage, .premium, .help, .about, .developer: .system
+         }
+     }
+ 
+@@ -105,15 +103,13 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
+ /// The groups the iOS / macOS root list is split into. The tvOS rail lists
+ /// the categories ungrouped.
+ enum SettingsCategoryGroup: CaseIterable {
+-    case account, content, experience, playback, sync, system
++    case watching, content, sync, system
+ 
+     /// The group header; the first group has none.
+     var title: LocalizedStringKey? {
+         switch self {
+-        case .account: nil
++        case .watching: nil
+         case .content: "Your Content"
+-        case .experience: "Experience"
+-        case .playback: "Playback"
+         case .sync: "Accounts & Sync"
+         case .system: "System"
+         }
+diff --git a/Lume/Views/Settings/SettingsView+TVPlayer.swift b/Lume/Views/Settings/SettingsView+TVPlayer.swift
+index 7abb583..0d3e05d 100644
+--- a/Lume/Views/Settings/SettingsView+TVPlayer.swift
++++ b/Lume/Views/Settings/SettingsView+TVPlayer.swift
+@@ -56,6 +56,14 @@ import SwiftUI
+ 
+         var tvPlayerDetail: some View {
+             VStack(alignment: .leading, spacing: 28) {
++                // Lume GF: the options changed most, first (Georgs, 10 Nov)
++                VStack(alignment: .leading, spacing: 8) {
++                    GFKSPlayerQuickTVRows()
++                    tvDrillInRow("All KSPlayer Options", opens: .engineOptions(.ksPlayer)) {
++                        selectedEngineOptions = .ksPlayer
++                    }
++                }
++
+                 VStack(alignment: .leading, spacing: 8) {
+                     TVSettingsSectionLabel("Playback")
+                     tvPremiumToggleRow("Autoplay Next Episode", isOn: $autoPlayNext, feature: .playbackControls)
+@@ -83,30 +91,7 @@ import SwiftUI
+                     }
+                 }
+ 
+-                // Viewer-facing too, so it belongs up here with Languages
+-                // rather than under Advanced — and it is engine-independent:
+-                // all four hosts route their up/down presses through
+-                // LiveChannelNavigator. It is how the player reads the remote,
+-                // so it stays here; the Live TV tab's own layout and Guide
+-                // Preview live in the Live TV category (TVLiveTVSettingsPane).
+-                VStack(alignment: .leading, spacing: 8) {
+-                    TVSettingsSectionLabel("Live TV")
+-
+-                    TVOptionCycleRow(
+-                        title: "Channel Surfing",
+-                        valueLabel: LiveSurfMode.resolve(liveSurfModeRaw).displayName
+-                    ) {
+-                        liveSurfModeRaw = nextLiveSurfModeRaw(after: liveSurfModeRaw)
+-                    }
+-
+-                    Text("Up and down move to the next and previous channel, like a TV remote. List Order moves the way the channel list reads on screen instead — up goes to the row above.")
+-                        .font(.system(size: 20))
+-                        .foregroundStyle(.secondary)
+-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+-                        .padding(.top, 6)
+-
+-                    TVLiveQualitySwitchRow()
+-                }
++                // Lume GF: Channel Surfing and Show Quality Switch are in Settings › Live TV (GFLiveTVWatchingTVRows)
+ 
+                 // Its own section rather than a row under Live TV: it governs
+                 // every direction the player reads, VOD scrubbing included,
+diff --git a/Lume/Views/Settings/SettingsView.swift b/Lume/Views/Settings/SettingsView.swift
+index 19b0948..721d384 100644
+--- a/Lume/Views/Settings/SettingsView.swift
++++ b/Lume/Views/Settings/SettingsView.swift
+@@ -81,7 +81,15 @@ struct SettingsView: View {
+         /// The category whose content is shown in the right pane. Changes only
+         /// when a rail row is activated (Live TV's model): moving focus through
+         /// the rail just highlights.
+-        @State private var selectedCategory: SettingsCategory = .profiles
++        @State private var selectedCategory: SettingsCategory = Self.gfLastCategory
++        /// Lume GF: the section last opened, where Settings opens again (GFSettingsPlace)
++        @AppStorage(GFSettingsPlace.lastCategoryKey) private var gfLastCategoryRaw = SettingsCategory.player.rawValue
++
++        private static var gfLastCategory: SettingsCategory {
++            let last = UserDefaults.standard.string(forKey: GFSettingsPlace.lastCategoryKey)
++                .flatMap(SettingsCategory.init(rawValue:))
++            return last.flatMap { $0.isAvailableOnPlatform ? $0 : nil } ?? .player
++        }
+         /// Bumped to hand focus to the rail's selected category — Menu from a
+         /// pane's top level, or the tab-bar entry catcher.
+         @State private var railFocusRequest = 0
+@@ -345,6 +353,7 @@ struct SettingsView: View {
+         /// out of any sub-page — and moves focus into its pane.
+         private func activate(_ category: SettingsCategory) {
+             selectedCategory = category
++            gfLastCategoryRaw = category.rawValue // Lume GF: opens here next time
+             closeDrillIns()
+             paneFocusRequest += 1
+             // Deferred: the pane only holds the new category's rows a render
+diff --git a/Lume/Views/Settings/TVLiveTVSettingsPane.swift b/Lume/Views/Settings/TVLiveTVSettingsPane.swift
+index b41430a..515d039 100644
+--- a/Lume/Views/Settings/TVLiveTVSettingsPane.swift
++++ b/Lume/Views/Settings/TVLiveTVSettingsPane.swift
+@@ -56,6 +56,9 @@
+             VStack(alignment: .leading, spacing: 28) {
+                 layoutSection
+                 categoriesSection
++                // Lume GF: moved here from Player and TV Guide (Georgs, 10 Nov)
++                GFLiveTVWatchingTVRows()
++                GFChannelNamesTVSection()
+                 recordingSection
+             }
+             // Entry from the rail lands on the first row, not the one
+diff --git a/LumeTests/Models/PlaylistTabTests.swift b/LumeTests/Models/PlaylistTabTests.swift
+index 587bdb8..ca77b9e 100644
+--- a/LumeTests/Models/PlaylistTabTests.swift
++++ b/LumeTests/Models/PlaylistTabTests.swift
+@@ -103,15 +103,16 @@ struct PlaylistTabTests {
+ }
+ 
+ struct SettingsCategoryTests {
++    // Lume GF: what is changed most first (Georgs, 10 Nov 2026), Lume Pro near the end
+     @Test func `the root follows the shared order and groups`() {
+         let visible = SettingsCategory.visible(hasConnectedServices: true)
+-        #expect(visible.first == .premium)
+-        #expect(visible.starts(with: [.premium, .profiles, .playlists, .epg, .library]))
++        #expect(visible.first == .player)
++        #expect(visible.starts(with: [.player, .liveTV, .epg, .playlists, .home, .library, .profiles, .sports]))
+         #expect(visible.last == .developer)
+ 
+         let grouped = SettingsCategory.grouped(hasConnectedServices: true)
+         #expect(grouped.map(\.group) == SettingsCategoryGroup.allCases)
+-        #expect(grouped.first?.categories == [.premium, .profiles])
++        #expect(grouped.first?.categories == [.player, .liveTV, .epg, .playlists])
+         #expect(grouped.first?.group.title == nil)
+     }
+ 
+@@ -129,11 +130,13 @@ struct SettingsCategoryTests {
+         #expect(!visible.contains(.about))
+     }
+ 
+-    @Test func `live TV sits in the experience group between home and sports`() {
+-        let experience = SettingsCategory.grouped(hasConnectedServices: false).first { $0.group == .experience }
+-        #expect(experience?.categories == [.home, .liveTV, .sports, .appearance])
+-        let playback = SettingsCategory.grouped(hasConnectedServices: false).first { $0.group == .playback }
+-        #expect(playback?.categories == [.player, .downloads])
++    // Lume GF: the library, the profiles and the iPhone's own pages after the watching ones; Lume Pro with System
++    @Test func `the library group follows watching, Lume Pro sits with System`() {
++        let grouped = SettingsCategory.grouped(hasConnectedServices: false)
++        let content = grouped.first { $0.group == .content }
++        #expect(content?.categories == [.home, .library, .profiles, .sports, .appearance, .downloads])
++        let system = grouped.first { $0.group == .system }
++        #expect(system?.categories.starts(with: [.storage, .premium]) == true)
+     }
+ 
+     @Test func `a raw value from an older build resolves to nothing rather than crashing`() {
