@@ -29,6 +29,29 @@ index cbb439e..187c24c 100644
      }
  
      private func liveID(_ playlist: UUID, _ index: Int) -> String {
+diff --git a/LumeTests/Services/HueFrameSamplerTests.swift b/LumeTests/Services/HueFrameSamplerTests.swift
+index a6b2770..b6f9a1c 100644
+--- a/LumeTests/Services/HueFrameSamplerTests.swift
++++ b/LumeTests/Services/HueFrameSamplerTests.swift
+@@ -202,13 +202,12 @@ struct HueFrameSamplerTests {
+ 
+     private static func channels(in packet: Data) -> [HueStreamMessage.Channel] {
+         let bytes = [UInt8](packet)
++        // Lume GF: one big-endian word at a time, for the simulator tests' older Swift (it gave up on the whole)
++        func word(_ index: Int) -> UInt16 {
++            UInt16(bytes[index]) << 8 | UInt16(bytes[index + 1])
++        }
+         return stride(from: HueStreamMessage.headerLength, to: bytes.count, by: HueStreamMessage.channelLength).map {
+-            HueStreamMessage.Channel(
+-                id: bytes[$0],
+-                red: UInt16(bytes[$0 + 1]) << 8 | UInt16(bytes[$0 + 2]),
+-                green: UInt16(bytes[$0 + 3]) << 8 | UInt16(bytes[$0 + 4]),
+-                blue: UInt16(bytes[$0 + 5]) << 8 | UInt16(bytes[$0 + 6])
+-            )
++            HueStreamMessage.Channel(id: bytes[$0], red: word($0 + 1), green: word($0 + 3), blue: word($0 + 5))
+         }
+     }
+ 
 diff --git a/LumeTests/Services/LiveChannelNavigatorScopeTests.swift b/LumeTests/Services/LiveChannelNavigatorScopeTests.swift
 index 0328483..35f0a8f 100644
 --- a/LumeTests/Services/LiveChannelNavigatorScopeTests.swift

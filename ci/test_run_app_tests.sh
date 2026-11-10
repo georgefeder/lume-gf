@@ -26,6 +26,8 @@ printf '%s' "$MAIN" | grep -q -- "-only-testing:LumeTests " \
   && ok "the whole target runs, the skip list skipped" || no "main run ($MAIN)"
 # GFZapTests times a channel change to the second; in the parallel run the switch alone waited ~30 s (runs 37028529816,
 # 37037167206), so it runs on its own after the rest
+printf '%s' "$MAIN" | grep -qF -- 'OTHER_SWIFT_FLAGS=$(inherited) -continue-building-after-errors' \
+  && ok "the build reports every file's errors, keeping the project's flags" || no "no continue-after-errors ($MAIN)"
 printf '%s' "$MAIN" | grep -q -- "-skip-testing:LumeTests/GFZapTests" && ok "the timing test is left out of the parallel run" \
   || no "GFZapTests still in the parallel run"
 printf '%s' "$ALONE" | grep -q -- "-only-testing:LumeTests/GFZapTests" \
