@@ -4,7 +4,7 @@ import SwiftData
 
 /// When this device last fetched a playlist's films and series (device-local: each device keeps its own catalogue).
 nonisolated enum GFCatalogStamps {
-    private static func key(_ playlistID: UUID) -> String {
+    static func key(_ playlistID: UUID) -> String {
         "gf.catalog.vodSyncedAt." + playlistID.uuidString
     }
 

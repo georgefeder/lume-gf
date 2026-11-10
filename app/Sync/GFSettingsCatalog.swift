@@ -82,6 +82,8 @@ enum GFSettingsCatalog {
         // Lume 3.1: Hue lights follow the picture on this Apple TV, paired with its own bridge and room
         PlayerSettings.Hue.enabledKey, PlayerSettings.Hue.intensityKey, PlayerSettings.Hue.entertainmentAreaKey,
         // Lume GF: the Apple TV's Settings opens where it was left, each device its own
-        GFSettingsPlace.lastCategoryKey
+        GFSettingsPlace.lastCategoryKey,
+        // Lume GF: films and series on this Apple TV or not (GFTVFilms), each device its own
+        GFCatalogPlan.tvFilmsAndSeriesKey
     ]
 }
