@@ -1,0 +1,21 @@
+diff --git a/LumeTests/Services/ScopedBrowseQueryTests.swift b/LumeTests/Services/ScopedBrowseQueryTests.swift
+index e98b327..d348f73 100644
+--- a/LumeTests/Services/ScopedBrowseQueryTests.swift
++++ b/LumeTests/Services/ScopedBrowseQueryTests.swift
+@@ -24,11 +24,14 @@ struct ScopedBrowseQueryTests {
+     private let outsider = UUID()
+ 
+     private var combined: CatalogScope {
+-        .combined([
++        // Lume GF: the members' type spelled out for the simulator tests' Swift 6.2 (Xcode 26.6), which cannot infer
++        // it from the literal
++        let members: [(id: UUID, tabs: Set<PlaylistTab>)] = [
+             (id: first, tabs: [.movies, .series]),
+             (id: second, tabs: [.movies, .series, .liveTV]),
+             (id: liveOnly, tabs: [.liveTV])
+-        ])
++        ]
++        return CatalogScope.combined(members)
+     }
+ 
+     private static let kinds: [LibraryCollection.Kind] = [.recentlyWatched, .favorites, .recentlyAdded]

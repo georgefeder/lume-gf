@@ -363,6 +363,8 @@
                     }
                 }
                 .environment(router)
+                // Lume 3.1: the screens read their playlists from here (MainTabView sets it in the app)
+                .catalogScope(store.catalogScope, playlists: [store.playlist])
                 .modelContainer(store.container)
         }
 
