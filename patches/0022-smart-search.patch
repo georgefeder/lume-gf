@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/SearchView.swift b/Lume/Views/SearchView.swift
-index 3f9da7c..e6090e5 100644
+index 3f9da7c..57179ee 100644
 --- a/Lume/Views/SearchView.swift
 +++ b/Lume/Views/SearchView.swift
 @@ -33,8 +33,11 @@ struct SearchView: View {
@@ -91,7 +91,7 @@ index 3f9da7c..e6090e5 100644
              .navigationDestination(for: Movie.self) { movie in
                  MovieDetailView(movie: movie, animationNamespace: animationNamespace)
                  #if os(iOS)
-@@ -205,6 +183,53 @@ struct SearchView: View {
+@@ -205,6 +183,55 @@ struct SearchView: View {
          return playlists.owner(ofContentID: result.contentID)?.name
      }
  
@@ -134,9 +134,11 @@ index 3f9da7c..e6090e5 100644
 +    /// Lume GF: a category found opens Live TV on it (Georgs, 29 Oct), in its own playlist.
 +    private func gfOpenCategory(_ category: Category) {
 +        guard let owner = playlists.owner(ofContentID: category.id) else { return }
-+        if !catalogScope.playlistIDs.contains(owner.id) { selectedPlaylistID = owner.id.uuidString }
++        // a Combined member that brings no Live TV is not in Live TV's list: its own playlist then
++        let inScope = catalogScope.members(for: .liveTV).contains(owner.id)
++        if !inScope { selectedPlaylistID = owner.id.uuidString }
 +        // Live TV starts a playlist it has not shown yet on its first category: this one is chosen already
-+        let landing = catalogScope.playlistIDs.contains(owner.id) ? catalogScope : .isolated(owner.id)
++        let landing = inScope ? catalogScope : .isolated(owner.id)
 +        gfRouter?.liveTVSeededScopeToken = landing.token
 +        gfRouter?.liveTVSection = .category(category)
 +        gfRouter?.selectedTab = .liveTV
@@ -145,7 +147,7 @@ index 3f9da7c..e6090e5 100644
      private func playChannel(_ stream: LiveStream) {
          // Cross-playlist search surfaces channels the active playlist can't
          // stream: a live URL is built from its playlist's server, credentials
-@@ -237,13 +262,9 @@ struct SearchView: View {
+@@ -237,13 +264,9 @@ struct SearchView: View {
              return
          }
  
@@ -159,7 +161,7 @@ index 3f9da7c..e6090e5 100644
  
          // A Stalker portal's movies/series aren't synced locally, so they can
          // only be found through the portal's own search API — asked of every
-@@ -251,18 +272,13 @@ struct SearchView: View {
+@@ -251,18 +274,13 @@ struct SearchView: View {
          // *is* synced) and every other source type use the local predicate
          // search. Cross-playlist search still runs the local pass too, so other
          // playlists' synced content is included.
@@ -181,7 +183,7 @@ index 3f9da7c..e6090e5 100644
  
          results = assembleResults(portal: portal, localHits: localHits)
      }
-@@ -471,7 +487,12 @@ private struct SearchFieldModifier: ViewModifier {
+@@ -471,7 +489,12 @@ private struct SearchFieldModifier: ViewModifier {
      /// The search field's latest text. A class, and deliberately not
      /// observable: writing it must not schedule a view update of its own.
      private final class FieldText {

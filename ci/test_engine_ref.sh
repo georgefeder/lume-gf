@@ -39,6 +39,16 @@ expect "an unlisted version takes the newest line's engine" v0.6.0 "$T/new"
 grep -q "warning" "$T/err" && ok "and warns" || no "no warning for an unlisted version"
 expect "a ref the line does not name prints nothing" "" "$T/new" CLOUD
 
+# a quoted version with a suffix reads as its number; two different versions stop the build
+printf '\t\t\t\tMARKETING_VERSION = "3.1.0-beta";\n' > "$T/new/Lume.xcodeproj/project.pbxproj"
+expect "a quoted, suffixed version reads as its number" v0.5.0 "$T/new"
+printf '\t\t\t\tMARKETING_VERSION = 3.1.0;\n\t\t\t\tMARKETING_VERSION = 3.10.0;\n' > "$T/new/Lume.xcodeproj/project.pbxproj"
+sh "$T/ci/engine-ref.sh" "$T/new" >/dev/null 2>&1 && no "two different versions passed" \
+  || ok "two different versions in the project fail"
+# a version matches its own line only: 3.1 is not v3.1.0's (it takes the newest line, as unlisted)
+printf '\t\t\t\tMARKETING_VERSION = 3.1;\n' > "$T/new/Lume.xcodeproj/project.pbxproj"
+expect "3.1 is not read as 3.1.0" v0.6.0 "$T/new"
+
 # a project without a version stops the build
 printf 'nothing here\n' > "$T/new/Lume.xcodeproj/project.pbxproj"
 sh "$T/ci/engine-ref.sh" "$T/new" >/dev/null 2>&1 && no "a project without a version passed" \

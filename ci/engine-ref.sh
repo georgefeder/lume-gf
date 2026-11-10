@@ -25,9 +25,13 @@ fi
 PINS="$(cd "$(dirname "$0")" && pwd)/paired-refs.txt"
 [ -f "$PINS" ] || { echo "engine-ref: $PINS missing" >&2; exit 1; }
 PBX="$LUME/Lume.xcodeproj/project.pbxproj"
-VERSION=$(sed -nE 's/.*MARKETING_VERSION = ([0-9][0-9.]*);.*/\1/p' "$PBX" 2>/dev/null | sort -u | tail -1)
-[ -n "$VERSION" ] || { echo "engine-ref: no MARKETING_VERSION in $PBX - Lume changed its project" >&2; exit 1; }
-LINE=$(grep -E "^v$VERSION( |$)" "$PINS" | head -1 || true)
+# the app's version (quoted or not, a suffix such as -beta dropped); more than one in the project stops the build
+VERSIONS=$(sed -nE 's/.*MARKETING_VERSION = "?([0-9]+(\.[0-9]+)*)[^;]*;.*/\1/p' "$PBX" 2>/dev/null | sort -u)
+[ -n "$VERSIONS" ] || { echo "engine-ref: no MARKETING_VERSION in $PBX - Lume changed its project" >&2; exit 1; }
+VERSION=$(printf '%s\n' "$VERSIONS" | head -1)
+[ "$VERSION" = "$(printf '%s\n' "$VERSIONS" | tail -1)" ] \
+  || { echo "engine-ref: several versions in $PBX: $(echo $VERSIONS)" >&2; exit 1; }
+LINE=$(awk -v v="v$VERSION" '$1 == v { print; exit }' "$PINS")
 if [ -z "$LINE" ]; then
   LINE=$(grep -E '^v[0-9]' "$PINS" | tail -1)
   [ -n "$LINE" ] || { echo "engine-ref: no release listed in $PINS" >&2; exit 1; }
