@@ -1,11 +1,11 @@
 diff --git a/Lume/Views/LiveTV/LiveTVCategorySelectors.swift b/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
-index 41533ef..dacc9b9 100644
+index a1fa314..be4bb10 100644
 --- a/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
 +++ b/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
-@@ -83,22 +83,22 @@ struct CategorySidebar: View {
-                         .font(.headline)
-                         .foregroundStyle(.primary)
-                         .lineLimit(1)
+@@ -152,22 +152,22 @@ struct LiveTVSectionGroupSection<Row: View>: View {
+                             .foregroundStyle(.secondary)
+                             .lineLimit(1)
+                     }
 -                    Spacer()
                      Image(systemName: "chevron.up.chevron.down")
                          .font(.caption.weight(.semibold))
@@ -25,7 +25,7 @@ index 41533ef..dacc9b9 100644
              .buttonStyle(.plain)
 -            .background(.bar)
              .sheet(isPresented: $showingPicker) {
-                 CategoryPickerSheet(sections: sections, selectedSection: $selectedSection)
+                 CategoryPickerSheet(groups: groups, selectedSection: $selectedSection)
              }
 -
 -            Divider()
@@ -33,16 +33,16 @@ index 41533ef..dacc9b9 100644
      }
  
 diff --git a/Lume/Views/LiveTV/LiveTVView.swift b/Lume/Views/LiveTV/LiveTVView.swift
-index edd3240..f2b9eb7 100644
+index ab9e4bd..4b32e3d 100644
 --- a/Lume/Views/LiveTV/LiveTVView.swift
 +++ b/Lume/Views/LiveTV/LiveTVView.swift
-@@ -226,12 +226,7 @@ struct LiveTVView: View {
+@@ -228,12 +228,7 @@ struct LiveTVView: View {
  
      #if os(iOS)
-         private func iOSLayout(sections: [LiveTVSection], displayed: LiveTVSection?) -> some View {
+         private func iOSLayout(groups: [LiveTVSectionGroup], displayed: LiveTVSection?) -> some View {
 -            VStack(spacing: 0) {
 -                CategoryBar(
--                    sections: sections,
+-                    groups: groups,
 -                    selectedSection: selectedSectionBinding
 -                )
 -
@@ -50,12 +50,12 @@ index edd3240..f2b9eb7 100644
                  if let displayed {
                      detail(for: displayed)
                  } else {
-@@ -242,6 +237,8 @@ struct LiveTVView: View {
+@@ -244,6 +239,8 @@ struct LiveTVView: View {
                      )
                  }
              }
 +            // Lume GF: the category picker floats as a glass button above the tab bar (Georgs on build 21)
-+            .gfCategoryButton(sections: sections, selection: selectedSectionBinding)
++            .gfCategoryButton(groups: groups, selection: selectedSectionBinding)
          }
      #endif
  

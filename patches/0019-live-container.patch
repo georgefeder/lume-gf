@@ -1,8 +1,8 @@
 diff --git a/Lume/Models/Playlist.swift b/Lume/Models/Playlist.swift
-index 4766212..a9ec178 100644
+index c3e1094..189ba0e 100644
 --- a/Lume/Models/Playlist.swift
 +++ b/Lume/Models/Playlist.swift
-@@ -255,6 +255,20 @@ nonisolated enum PlaylistStreamFormat: String, CaseIterable, Identifiable, Codab
+@@ -270,6 +270,20 @@ nonisolated enum PlaylistStreamFormat: String, CaseIterable, Identifiable, Codab
          components.path = String(live.stem) + "." + target.rawValue
          return components.url ?? url
      }
@@ -55,7 +55,7 @@ index 342d98d..bc98b83 100644
          return adoption.engineAttempt == engineAttempt && adoption.mediaID == activeMedia.id
      }
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index 673d523..cf5aaf1 100644
+index fad355e..bd3499b 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
 @@ -93,6 +93,11 @@ struct FullScreenPlayerView: View {
@@ -78,7 +78,7 @@ index 673d523..cf5aaf1 100644
          guard hasFallbackEngine else { return recoverWithAnotherSource() }
          let failed = engine
          engineAttempt += 1
-@@ -411,17 +417,40 @@ struct FullScreenPlayerView: View {
+@@ -412,17 +418,40 @@ struct FullScreenPlayerView: View {
          case .pending: return nil
          case .notSourced: break
          }

@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/SearchView.swift b/Lume/Views/SearchView.swift
-index 04084f5..48d9abd 100644
+index 3f9da7c..57179ee 100644
 --- a/Lume/Views/SearchView.swift
 +++ b/Lume/Views/SearchView.swift
-@@ -31,8 +31,9 @@ struct SearchView: View {
+@@ -33,8 +33,11 @@ struct SearchView: View {
      @State private var selectedFilter: ContentFilter = .all
      @State private var results: [SearchResult] = []
      @State private var playingMedia: PlayableMedia?
@@ -11,10 +11,12 @@ index 04084f5..48d9abd 100644
 +    /// Lume GF: the search itself (GFSmartSearch: typos forgiven, Latvian and Cyrillic, categories, a ranked "All")
 +    @State private var gfSmart = GFSmartSearchModel()
 +    @Environment(DeepLinkRouter.self) private var gfRouter: DeepLinkRouter?
++    /// Lume GF: a category found in another playlist switches to it (gfOpenCategory)
++    @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID = ""
  
      /// Max matches fetched per content type. Keeps the result set bounded so the
      /// list stays responsive even when a playlist holds tens of thousands of items.
-@@ -86,59 +87,34 @@ struct SearchView: View {
+@@ -90,59 +93,34 @@ struct SearchView: View {
                  } else {
                      // Results — only show "No Results" once a query has actually
                      // been run, so it doesn't flash while the input is debouncing.
@@ -32,7 +34,7 @@ index 04084f5..48d9abd 100644
 -                                switch result {
 -                                case let .movie(movie):
 -                                    NavigationLink(value: movie) {
--                                        SearchResultRow(result: result, playlistName: playlistName(for: result))
+-                                        SearchResultRow(result: result, playlistName: playlistName(for: result, in: searched))
 -                                            .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
 -                                    }
 -                                    .mediaFavoriteMenu(
@@ -41,7 +43,7 @@ index 04084f5..48d9abd 100644
 -                                    )
 -                                case let .series(series):
 -                                    NavigationLink(value: series) {
--                                        SearchResultRow(result: result, playlistName: playlistName(for: result))
+-                                        SearchResultRow(result: result, playlistName: playlistName(for: result, in: searched))
 -                                            .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
 -                                    }
 -                                    .mediaFavoriteMenu(
@@ -52,7 +54,7 @@ index 04084f5..48d9abd 100644
 -                                    Button {
 -                                        playChannel(stream)
 -                                    } label: {
--                                        SearchResultRow(result: result, playlistName: playlistName(for: result))
+-                                        SearchResultRow(result: result, playlistName: playlistName(for: result, in: searched))
 -                                    }
 -                                    .buttonStyle(.plain)
 -                                    .liveChannelMenu(
@@ -61,7 +63,7 @@ index 04084f5..48d9abd 100644
 -                                        onToggleFavorite: { LiveChannelFavorites.toggle(stream, in: modelContext) }
 -                                    )
 -                                }
-+                                lumeRow(result)
++                                lumeRow(result, in: searched)
                              }
                          } header: {
                              Text("\(results.count) Results")
@@ -71,7 +73,7 @@ index 04084f5..48d9abd 100644
 -                    GFGuideSearchSection(model: gfGuide, onPlay: playChannel)
 +                    // Lume GF: categories, channels, programmes, films and series, best first (Georgs, 29 Oct)
 +                    GFSmartSearchSections(model: gfSmart, onPlay: playChannel, onOpenCategory: gfOpenCategory) {
-+                        lumeRow($0)
++                        lumeRow($0, in: searched)
 +                    }
                  }
              }
@@ -81,7 +83,7 @@ index 04084f5..48d9abd 100644
 -                               .map(\.id.uuidString),
 -                           isWanted: selectedFilter == .all || selectedFilter == .liveTV, onPlay: playChannel)
 +            .gfSmartSearch(gfSmart, query: debouncedSearchText, filter: selectedFilter, playlists: playlists,
-+                           scope: searchAllPlaylists ? playlists : [activePlaylist].compactMap(\.self),
++                           scope: playlists.members(of: searched),
 +                           onPlay: playChannel)
 +            #if GF_DEMO
 +                .task { if let query = GFDemo.searchQuery { searchText = query } }
@@ -89,16 +91,16 @@ index 04084f5..48d9abd 100644
              .navigationDestination(for: Movie.self) { movie in
                  MovieDetailView(movie: movie, animationNamespace: animationNamespace)
                  #if os(iOS)
-@@ -193,6 +169,52 @@ struct SearchView: View {
+@@ -205,6 +183,55 @@ struct SearchView: View {
          return playlists.owner(ofContentID: result.contentID)?.name
      }
  
 +    /// A movie, series or channel row as Lume draws it (Lume GF: GFSmartSearchSections draws its rows with it too).
-+    @ViewBuilder private func lumeRow(_ result: SearchResult) -> some View {
++    @ViewBuilder private func lumeRow(_ result: SearchResult, in searched: CatalogScope) -> some View {
 +        switch result {
 +        case let .movie(movie):
 +            NavigationLink(value: movie) {
-+                SearchResultRow(result: result, playlistName: playlistName(for: result))
++                SearchResultRow(result: result, playlistName: playlistName(for: result, in: searched))
 +                    .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
 +            }
 +            .mediaFavoriteMenu(
@@ -107,7 +109,7 @@ index 04084f5..48d9abd 100644
 +            )
 +        case let .series(series):
 +            NavigationLink(value: series) {
-+                SearchResultRow(result: result, playlistName: playlistName(for: result))
++                SearchResultRow(result: result, playlistName: playlistName(for: result, in: searched))
 +                    .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
 +            }
 +            .mediaFavoriteMenu(
@@ -118,7 +120,7 @@ index 04084f5..48d9abd 100644
 +            Button {
 +                playChannel(stream)
 +            } label: {
-+                SearchResultRow(result: result, playlistName: playlistName(for: result))
++                SearchResultRow(result: result, playlistName: playlistName(for: result, in: searched))
 +            }
 +            .buttonStyle(.plain)
 +            .liveChannelMenu(
@@ -132,9 +134,12 @@ index 04084f5..48d9abd 100644
 +    /// Lume GF: a category found opens Live TV on it (Georgs, 29 Oct), in its own playlist.
 +    private func gfOpenCategory(_ category: Category) {
 +        guard let owner = playlists.owner(ofContentID: category.id) else { return }
-+        if owner.id != activePlaylist?.id { selectedPlaylistID = owner.id.uuidString }
++        // a Combined member that brings no Live TV is not in Live TV's list: its own playlist then
++        let inScope = catalogScope.members(for: .liveTV).contains(owner.id)
++        if !inScope { selectedPlaylistID = owner.id.uuidString }
 +        // Live TV starts a playlist it has not shown yet on its first category: this one is chosen already
-+        gfRouter?.liveTVSeededPrefix = "\(owner.id.uuidString)-"
++        let landing = inScope ? catalogScope : .isolated(owner.id)
++        gfRouter?.liveTVSeededScopeToken = landing.token
 +        gfRouter?.liveTVSection = .category(category)
 +        gfRouter?.selectedTab = .liveTV
 +    }
@@ -142,11 +147,13 @@ index 04084f5..48d9abd 100644
      private func playChannel(_ stream: LiveStream) {
          // Cross-playlist search surfaces channels the active playlist can't
          // stream: a live URL is built from its playlist's server, credentials
-@@ -226,11 +248,9 @@ struct SearchView: View {
+@@ -237,13 +264,9 @@ struct SearchView: View {
              return
          }
  
--        let playlist = activePlaylist
+-        let scope = catalogScope
+-        // Outside Combined the scope is the one playlist shown.
+-        let playlist = scope.isCombined ? nil : playlists.primaryMember(of: scope)
          let filter = selectedFilter
          let wantMovies = filter == .all || filter == .movies
          let wantSeries = filter == .all || filter == .series
@@ -154,16 +161,17 @@ index 04084f5..48d9abd 100644
  
          // A Stalker portal's movies/series aren't synced locally, so they can
          // only be found through the portal's own search API — asked of every
-@@ -238,17 +258,12 @@ struct SearchView: View {
+@@ -251,18 +274,13 @@ struct SearchView: View {
          // *is* synced) and every other source type use the local predicate
          // search. Cross-playlist search still runs the local pass too, so other
          // playlists' synced content is included.
 -        let usePortalForVODSeries = playlist?.sourceType == .stalker && !searchAllPlaylists
-         let portal = await portalSearch(query: query, wantMovies: wantMovies, wantSeries: wantSeries)
+         let searched = searchedScope
+         let portal = await portalSearch(query: query, scope: searched, wantMovies: wantMovies, wantSeries: wantSeries)
          guard !Task.isCancelled else { return }
  
 -        let localHits = await localSearch(
--            query: query, playlist: playlist,
+-            query: query, scope: searched,
 -            wantMovies: wantMovies && !usePortalForVODSeries,
 -            wantSeries: wantSeries && !usePortalForVODSeries,
 -            wantLive: wantLive
@@ -175,7 +183,7 @@ index 04084f5..48d9abd 100644
  
          results = assembleResults(portal: portal, localHits: localHits)
      }
-@@ -455,7 +470,12 @@ private struct SearchFieldModifier: ViewModifier {
+@@ -471,7 +489,12 @@ private struct SearchFieldModifier: ViewModifier {
      /// The search field's latest text. A class, and deliberately not
      /// observable: writing it must not schedule a view update of its own.
      private final class FieldText {

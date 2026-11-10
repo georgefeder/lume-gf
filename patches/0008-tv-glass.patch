@@ -44,7 +44,7 @@ index 92cb0c8..5e97af3 100644
      }
  }
 diff --git a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
-index df7b18b..d5e1f6b 100644
+index e846c58..3ad23ec 100644
 --- a/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGComponents+Chrome.swift
 @@ -58,12 +58,25 @@ struct EPGChannelCell: View {
@@ -151,7 +151,7 @@ index 25c42ec..706f8c4 100644
          }
          .frame(
 diff --git a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
-index 7769457..0adc78b 100644
+index ff6ab66..714c2f5 100644
 --- a/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 +++ b/Lume/Views/LiveTV/EPG/EPGGridScroller.swift
 @@ -104,6 +104,10 @@ struct EPGGridScroller: View {

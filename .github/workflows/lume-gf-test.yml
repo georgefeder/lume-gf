@@ -40,6 +40,7 @@ jobs:
           sh ci/test_add_sources.sh
           sh ci/test_run_app_tests.sh
           sh ci/test_settings_tripwire.sh
+          sh ci/test_engine_ref.sh
           sh ci/test_patch_scripts.sh
           sh ci/test_check_export.sh
           sh ci/test_apply_patches.sh
@@ -145,9 +146,11 @@ jobs:
       - name: tvOS compiles
         if: ${{ !inputs.baseline }}
         working-directory: Lume
+        # Apple Silicon only: Lume 3.1's AetherEngine links LibDovi's Dovi.xcframework, which has no Intel simulator
+        # slice ("symbol(s) not found for architecture x86_64", run 42745562528); our runners and every Apple TV are arm64
         run: |
           xcodebuild build -project Lume.xcodeproj -scheme Lume -configuration Debug \
-            -destination 'generic/platform=tvOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet \
+            -destination 'generic/platform=tvOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO -quiet \
             -clonedSourcePackagesDirPath "$GF_SPM" -disableAutomaticPackageResolution
   screenshots:
     name: Screenshots (simulators)

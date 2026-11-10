@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index 2ee945c..7a36b8c 100644
+index e0f27ff..00be82b 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -83,6 +83,10 @@ struct KSPlayerEngineView: View {

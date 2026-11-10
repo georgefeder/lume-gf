@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/LiveTV/LiveTVCategorySelectors.swift b/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
-index dacc9b9..dcaa56b 100644
+index be4bb10..6c06d58 100644
 --- a/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
 +++ b/Lume/Views/LiveTV/LiveTVCategorySelectors.swift
 @@ -18,6 +18,8 @@ struct CategorySidebar: View {
@@ -8,33 +8,33 @@ index dacc9b9..dcaa56b 100644
      var body: some View {
 +        // Lume GF: the list opens where the chosen category is (gfShowsSelection)
 +        ScrollViewReader { proxy in
-         List(sections) { section in
-             let isSelected = selectedSection?.id == section.id
-             Button {
-@@ -46,6 +48,8 @@ struct CategorySidebar: View {
+         List {
+             ForEach(groups) { group in
+                 LiveTVSectionGroupSection(group: group) { section in
+@@ -28,6 +30,8 @@ struct CategorySidebar: View {
          #if !os(tvOS)
          .listStyle(.sidebar)
          #endif
 +        .gfShowsSelection(selectedSection?.id, in: proxy)
 +        }
      }
- }
  
-@@ -120,6 +124,8 @@ struct CategorySidebar: View {
- 
+     private func row(_ section: LiveTVSection) -> some View {
+@@ -195,6 +199,8 @@ struct LiveTVSectionGroupSection<Row: View>: View {
          var body: some View {
+             let visibleGroups = filteredGroups
              NavigationStack {
 +                // Lume GF: the list opens where the chosen category is (gfShowsSelection)
 +                ScrollViewReader { proxy in
-                 List(filteredSections) { section in
-                     let isSelected = selectedSection?.id == section.id
-                     Button {
-@@ -145,6 +151,8 @@ struct CategorySidebar: View {
-                     .buttonStyle(.plain)
+                 List {
+                     ForEach(visibleGroups) { group in
+                         LiveTVSectionGroupSection(group: group, titleAsRow: true) { section in
+@@ -203,6 +209,8 @@ struct LiveTVSectionGroupSection<Row: View>: View {
+                     }
                  }
                  .listStyle(.plain)
 +                .gfShowsSelection(selectedSection?.id, in: proxy)
 +                }
                  .overlay {
-                     if filteredSections.isEmpty {
+                     if visibleGroups.isEmpty {
                          ContentUnavailableView.search(text: query)

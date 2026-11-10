@@ -22,9 +22,12 @@ SPMARGS=""
 RESULT="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/lume-app-tests-$$.xcresult"
 cd "$LUME"
 STATUS=0
+# every file's compile errors in one run, not the first file's only: a Lume release's tests written for a newer Swift
+# than this simulator job's showed one file per run (Lume 3.1)
 # shellcheck disable=SC2086
 xcodebuild test -project Lume.xcodeproj -scheme Lume -configuration Debug -destination "id=$SIM" \
-  CODE_SIGNING_ALLOWED=NO $SPMARGS -resultBundlePath "$RESULT" -only-testing:LumeTests $SKIP $ALONE || STATUS=$?
+  CODE_SIGNING_ALLOWED=NO 'OTHER_SWIFT_FLAGS=$(inherited) -continue-building-after-errors' $SPMARGS \
+  -resultBundlePath "$RESULT" -only-testing:LumeTests $SKIP $ALONE || STATUS=$?
 # a test process that dies leaves its remaining tests "failed (0.000 seconds)"; the crash report says why
 # xcodebuild says which Swift Testing test failed, the result bundle says why
 [ "$STATUS" -eq 0 ] || { python3 "$CI/failure-summary.py" "$RESULT" || true; python3 "$CI/crash-summary.py" 3 || true; }

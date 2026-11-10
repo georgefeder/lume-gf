@@ -29,6 +29,9 @@ DEFINE SCHEMA
         CD_hiddenTabsRaw STRING,
         CD_hiddenTabsRaw_ckAsset ASSET,
         CD_updatedAt TIMESTAMP,
+        CD_combinedTypesRaw STRING,
+        CD_combinedTypesRaw_ckAsset ASSET,
+        CD_combinedPriority INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"

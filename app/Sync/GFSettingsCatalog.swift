@@ -56,7 +56,16 @@ enum GFSettingsCatalog {
         PlayerSettings.VLC.hardwareDecodeKey, PlayerSettings.VLC.httpReconnectKey, PlayerSettings.VLC.liveBufferKey,
         PlayerSettings.VLC.skipFramesKey, PlayerSettings.VLC.vodBufferKey,
         LiveTVToolbarSettings.showsRecordingsKey, LiveTVToolbarSettings.showsMultiViewKey,
-        RecordingServerSetup.showsRecordingsInLiveTVRailKey
+        RecordingServerSetup.showsRecordingsInLiveTVRailKey,
+        // Lume 3.1: AetherEngine's options, like the other engines'
+        PlayerSettings.Aether.analyzeDurationKey, PlayerSettings.Aether.audioBridgeModeKey,
+        PlayerSettings.Aether.audioDelayKey, PlayerSettings.Aether.decodePathKey,
+        PlayerSettings.Aether.deinterlaceFieldRateKey, PlayerSettings.Aether.deinterlaceModeKey,
+        PlayerSettings.Aether.dynamicRangeKey, PlayerSettings.Aether.escalateToSoftwareKey,
+        PlayerSettings.Aether.forwardBufferSegmentsKey, PlayerSettings.Aether.liveJoinProfileKey,
+        PlayerSettings.Aether.matchContentKey, PlayerSettings.Aether.nativeRemoteHLSKey,
+        PlayerSettings.Aether.prepareNativeSubtitlesKey, PlayerSettings.Aether.probeSizeKey,
+        PlayerSettings.Aether.upscaleLowResolutionKey
     ]
 
     /// Left to the device by our sync. The Live TV rail switches are synced by Lume itself since 2.5, account-wide
@@ -69,6 +78,8 @@ enum GFSettingsCatalog {
         GFEnhancePlan.settingKey, // an experiment, switched on one Apple TV at a time
         // Lume 3.0: Lume Cloud's notices, each about this device
         LumeCloudSettings.Key.movedNoticePending, LumeCloudSettings.Key.movedNoticeShown,
-        LumeCloudSettings.Key.recoveryKeyViewed
+        LumeCloudSettings.Key.recoveryKeyViewed,
+        // Lume 3.1: Hue lights follow the picture on this Apple TV, paired with its own bridge and room
+        PlayerSettings.Hue.enabledKey, PlayerSettings.Hue.intensityKey, PlayerSettings.Hue.entertainmentAreaKey
     ]
 }

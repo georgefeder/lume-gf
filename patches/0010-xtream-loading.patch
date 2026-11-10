@@ -1,5 +1,5 @@
 diff --git a/Lume/Services/Diagnostics/PerformanceSignposts.swift b/Lume/Services/Diagnostics/PerformanceSignposts.swift
-index a4ae8b4..df71264 100644
+index 8e25c2d..8d7b3a7 100644
 --- a/Lume/Services/Diagnostics/PerformanceSignposts.swift
 +++ b/Lume/Services/Diagnostics/PerformanceSignposts.swift
 @@ -45,6 +45,8 @@ nonisolated struct PerfSignpost {
@@ -11,6 +11,30 @@ index a4ae8b4..df71264 100644
      static let syncCategories = PerfSignpost("SyncCategories")
      static let syncMovies = PerfSignpost("SyncMovies")
      static let syncSeries = PerfSignpost("SyncSeries")
+diff --git a/Lume/Services/Sync/AutoSyncQueue.swift b/Lume/Services/Sync/AutoSyncQueue.swift
+index 50014f8..c743724 100644
+--- a/Lume/Services/Sync/AutoSyncQueue.swift
++++ b/Lume/Services/Sync/AutoSyncQueue.swift
+@@ -57,7 +57,18 @@ final class AutoSyncQueue {
+             alreadyStarted: attempted.contains(playlist.id)
+         ) {
+             attempted.insert(playlist.id)
+-            pending.append(playlist)
++            // Lume GF: only a playlist's first sync shows the cover (an Xtream one only until its live channels are
++            // in); a playlist synced before refreshes out of sight, films and series once a day (GFCatalogPlan)
++            let plan = GFCatalogPlan.automatic(
++                isXtream: playlist.sourceType == .xtream, everSynced: playlist.lastSyncDate != nil,
++                vodSyncedAt: GFCatalogStamps.vodSyncedAt(playlist.id), now: Date()
++            )
++            if plan.cover != nil {
++                pending.append(playlist)
++            } else if let background = plan.background {
++                GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: background,
++                                                       container: context.container)
++            }
+         }
+         promoteNextIfIdle(scope: scope, context: context)
+     }
 diff --git a/Lume/Services/Sync/ContentSyncManager+Prune.swift b/Lume/Services/Sync/ContentSyncManager+Prune.swift
 index 581c6f2..3f5f09e 100644
 --- a/Lume/Services/Sync/ContentSyncManager+Prune.swift
@@ -186,6 +210,27 @@ index 37d32fe..fb60886 100644
      }
  
      func syncAllCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {
+diff --git a/Lume/Services/Sync/SyncFrequency.swift b/Lume/Services/Sync/SyncFrequency.swift
+index 6e6ecde..147f764 100644
+--- a/Lume/Services/Sync/SyncFrequency.swift
++++ b/Lume/Services/Sync/SyncFrequency.swift
+@@ -245,13 +245,14 @@ extension AutoSync {
+         _ playlist: Playlist,
+         container: ModelContainer,
+         progress: SyncProgress? = nil,
+-        full: Bool = false
++        full: Bool = false,
++        gfScope: GFSyncScope = .all // Lume GF: what an Xtream sync fetches (GFCatalogPlan)
+     ) async throws {
+         let epgSync = EPGSyncService.shared
+         epgSync.contentSyncDidStart()
+         var succeeded = false
+         defer { epgSync.contentSyncDidFinish(succeeded: succeeded) }
+-        let syncManager = ContentSyncManager(modelContainer: container)
++        let syncManager = ContentSyncManager(modelContainer: container, gfScope: gfScope)
+         try await BackgroundActivity.perform("Playlist sync") {
+             try await syncManager.syncPlaylist(playlist, progress: progress, full: full)
+         }
 diff --git a/Lume/Services/Sync/SyncProgress.swift b/Lume/Services/Sync/SyncProgress.swift
 index 1dc9115..0ec52d0 100644
 --- a/Lume/Services/Sync/SyncProgress.swift
@@ -211,32 +256,8 @@ index 1dc9115..0ec52d0 100644
          case .m3u: m3uSteps
          // Stalker maps onto the same catalog kinds as Xtream, but its default
          // sync skips the movie/series content walk (loaded on demand); only a
-diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index 70e8910..35139e1 100644
---- a/Lume/Views/MainTabView.swift
-+++ b/Lume/Views/MainTabView.swift
-@@ -509,7 +509,18 @@ struct MainTabView: View {
- 
-         for playlist in candidates where !playlists.isLocked(playlist) && shouldAutoSync(playlist) {
-             autoSyncAttempted.insert(playlist.id)
--            syncQueue.append(playlist)
-+            // Lume GF: only a playlist's first sync shows the cover (an Xtream one only until its live channels are
-+            // in); a playlist synced before refreshes out of sight, films and series once a day (GFCatalogPlan)
-+            let plan = GFCatalogPlan.automatic(
-+                isXtream: playlist.sourceType == .xtream, everSynced: playlist.lastSyncDate != nil,
-+                vodSyncedAt: GFCatalogStamps.vodSyncedAt(playlist.id), now: Date()
-+            )
-+            if plan.cover != nil {
-+                syncQueue.append(playlist)
-+            } else if let scope = plan.background {
-+                GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: scope,
-+                                                       container: modelContext.container)
-+            }
-         }
-         promoteNextIfIdle()
-     }
 diff --git a/Lume/Views/Sync/SyncProgressView.swift b/Lume/Views/Sync/SyncProgressView.swift
-index ccc10b0..ab6cb2c 100644
+index d3cc3f2..10a35ea 100644
 --- a/Lume/Views/Sync/SyncProgressView.swift
 +++ b/Lume/Views/Sync/SyncProgressView.swift
 @@ -40,7 +40,9 @@ struct SyncProgressView: View {
@@ -250,7 +271,7 @@ index ccc10b0..ab6cb2c 100644
          // Start already in the syncing state for auto-sync so the "Ready" screen
          // (with its Start button) never flashes before `.task` kicks off.
          _phase = State(initialValue: autoStart ? .syncing : .ready)
-@@ -91,9 +93,21 @@ struct SyncProgressView: View {
+@@ -91,17 +93,35 @@ struct SyncProgressView: View {
  
      // MARK: - Drive sync
  
@@ -273,23 +294,17 @@ index ccc10b0..ab6cb2c 100644
          syncError = nil
          phase = .syncing
  
-@@ -107,7 +121,7 @@ struct SyncProgressView: View {
-             var succeeded = false
-             defer { epgSync.contentSyncDidFinish(succeeded: succeeded) }
+         let container = modelContext.container
+         syncTask = Task {
              do {
--                let syncManager = ContentSyncManager(modelContainer: modelContext.container)
-+                let syncManager = ContentSyncManager(modelContainer: modelContext.container, gfScope: gfScope)
-                 try await BackgroundActivity.perform("Playlist sync") {
-                     try await syncManager.syncPlaylist(playlist, progress: progress, full: full)
-                 }
-@@ -119,6 +133,11 @@ struct SyncProgressView: View {
-                     // per-chunk saves don't fight the first browse of the catalog
-                     // the user just synced.
-                     ContentIndexingService.shared.kick(after: .seconds(3))
+-                try await AutoSync.runSync(playlist, container: container, progress: progress, full: full)
++                try await AutoSync.runSync(playlist, container: container, progress: progress, full: full,
++                                           gfScope: gfScope)
+                 await MainActor.run {
 +                    // Lume GF: the live channels are in; films and series follow out of sight
 +                    if gfScope == .live {
 +                        GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: .vod,
-+                                                               container: modelContext.container)
++                                                               container: container)
 +                    }
                      phase = .finished
                      // Auto-sync gets out of the way as soon as it succeeds so the

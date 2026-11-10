@@ -38,6 +38,23 @@ trip
   || no "part of a longer name counted (exit $code, $out)"
 rm "$T/lume/Lume/Views/Home/Sort.swift"
 
+# a file's shorthand (Lume 3.1: `private typealias Keys = PlayerSettings.Aether`) is read as what it stands for
+cat > "$T/lume/Lume/Views/Player/Aether.swift" <<'EOF'
+        private typealias Keys = PlayerSettings.Aether
+        @AppStorage(Keys.probeSizeKey) private var probeSize = 0
+EOF
+printf '%s\n' 'static let perKind: [String] = [HomeLayoutSettings.sectionOrderKey, PlayerSettings.Aether.probeSizeKey]' \
+  'static let deviceOnly: [String] = ["tv.quickSwitch.hintShown.v1"]' > "$CATALOG"
+trip
+[ "$code" -eq 0 ] && ok "a setting named through its file's typealias is placed by its full name" \
+  || no "typealias not resolved (exit $code, $out)"
+printf '%s\n' 'static let perKind: [String] = [HomeLayoutSettings.sectionOrderKey]' \
+  'static let deviceOnly: [String] = ["tv.quickSwitch.hintShown.v1"]' > "$CATALOG"
+trip
+[ "$code" -eq 1 ] && printf '%s' "$out" | grep -q "PlayerSettings.Aether.probeSizeKey" \
+  && ok "and missing, it is named by its full name" || no "typealias key not named in full (exit $code, $out)"
+rm "$T/lume/Lume/Views/Player/Aether.swift"
+
 rm "$CATALOG"; trip
 [ "$code" -ne 0 ] && printf '%s' "$out" | grep -q "GFSettingsCatalog.swift" && ok "a missing catalog fails" \
   || no "missing catalog (exit $code, $out)"

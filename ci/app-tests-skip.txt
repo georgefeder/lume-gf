@@ -17,3 +17,4 @@ LumeCloudBackendEventTests    # keychain, as above
 LumeCloudBackendPairingTests  # keychain, as above
 LumeCloudBackendSyncTests     # keychain, as above
 LumeCloudKeyStoreTests        # keychain, as above
+HueCredentialStoreTests       # Lume 3.1's Hue pairing: keychain, as SimklTokenStoreTests ("savePairing" fails, run 42739281271)

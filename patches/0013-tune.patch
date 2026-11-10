@@ -14,7 +14,7 @@ index e47fa33..59d9c63 100644
                  case .empty:
                      // Reserve the logo's vertical space without flashing the
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index fa90ba8..fd7a16f 100644
+index 050f004..7bb0b87 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
 @@ -40,12 +40,15 @@ import SwiftUI
@@ -40,10 +40,10 @@ index fa90ba8..fd7a16f 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index 17deed0..b6cab33 100644
+index c5026d5..39a7567 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
-@@ -450,6 +450,7 @@ struct AVPlayerEngineView: View {
+@@ -421,6 +421,7 @@ struct AVPlayerEngineView: View {
      }
  
      private func closePlayer() {
@@ -51,8 +51,34 @@ index 17deed0..b6cab33 100644
          #if os(macOS)
              if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
                  window.toggleFullScreen(nil)
+diff --git a/Lume/Views/Player/EngineControlsOverlay.swift b/Lume/Views/Player/EngineControlsOverlay.swift
+index 51b42a5..903fdf1 100644
+--- a/Lume/Views/Player/EngineControlsOverlay.swift
++++ b/Lume/Views/Player/EngineControlsOverlay.swift
+@@ -80,12 +80,15 @@ import SwiftUI
+             ZStack {
+                 scrim
+ 
+-                VStack(spacing: 0) {
+-                    topBar
+-                    Spacer(minLength: 0)
+-                    centerTransport
+-                    Spacer(minLength: 0)
+-                    bottomControls
++                // Lume GF: the controls' glass in one container (drawn in one pass, blending where they meet)
++                GlassGroupCompat {
++                    VStack(spacing: 0) {
++                        topBar
++                        Spacer(minLength: 0)
++                        centerTransport
++                        Spacer(minLength: 0)
++                        bottomControls
++                    }
+                 }
+             }
+             .task(id: media.id) {
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index a4e9e98..d2e4cae 100644
+index 8ee7102..67d15dd 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -65,12 +65,15 @@ import SwiftUI
@@ -77,34 +103,8 @@ index a4e9e98..d2e4cae 100644
                  }
              }
              .task(id: media.id) {
-diff --git a/Lume/Views/Player/LumeEngineControlsOverlay.swift b/Lume/Views/Player/LumeEngineControlsOverlay.swift
-index 0937b5d..0cfdb68 100644
---- a/Lume/Views/Player/LumeEngineControlsOverlay.swift
-+++ b/Lume/Views/Player/LumeEngineControlsOverlay.swift
-@@ -54,12 +54,15 @@ import SwiftUI
-             ZStack {
-                 scrim
- 
--                VStack(spacing: 0) {
--                    topBar
--                    Spacer(minLength: 0)
--                    centerTransport
--                    Spacer(minLength: 0)
--                    bottomControls
-+                // Lume GF: the controls' glass in one container (drawn in one pass, blending where they meet)
-+                GlassGroupCompat {
-+                    VStack(spacing: 0) {
-+                        topBar
-+                        Spacer(minLength: 0)
-+                        centerTransport
-+                        Spacer(minLength: 0)
-+                        bottomControls
-+                    }
-                 }
-             }
-             .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineCoordinator.swift b/Lume/Views/Player/LumeEngineCoordinator.swift
-index 3ee361d..ecdf0aa 100644
+index 524feb7..2ac9433 100644
 --- a/Lume/Views/Player/LumeEngineCoordinator.swift
 +++ b/Lume/Views/Player/LumeEngineCoordinator.swift
 @@ -276,6 +276,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
@@ -122,10 +122,10 @@ index 3ee361d..ecdf0aa 100644
          let session = session
          let playing = isPlaying
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index 709a451..c7f805e 100644
+index 96b23a6..61b6f1e 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
-@@ -513,6 +513,7 @@ struct LumeEngineEngineView: View {
+@@ -485,6 +485,7 @@ struct LumeEngineEngineView: View {
      }
  
      private func closePlayer() {
@@ -134,7 +134,7 @@ index 709a451..c7f805e 100644
              if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
                  window.toggleFullScreen(nil)
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index 167577a..eab69df 100644
+index 6584418..c754ec2 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 @@ -43,12 +43,15 @@ import VLCKit

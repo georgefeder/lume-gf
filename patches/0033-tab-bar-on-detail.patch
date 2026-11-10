@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Movies/MovieDetailView.swift b/Lume/Views/Movies/MovieDetailView.swift
-index 5d1386b..80f9635 100644
+index 498d4a4..65413bf 100644
 --- a/Lume/Views/Movies/MovieDetailView.swift
 +++ b/Lume/Views/Movies/MovieDetailView.swift
 @@ -74,7 +74,8 @@ struct MovieDetailView: View {
@@ -13,7 +13,7 @@ index 5d1386b..80f9635 100644
                  .toolbarBackground(.hidden, for: .navigationBar)
              #endif
 diff --git a/Lume/Views/Series/SeriesDetailView.swift b/Lume/Views/Series/SeriesDetailView.swift
-index 3686f35..39dfa73 100644
+index ff4632e..da51a77 100644
 --- a/Lume/Views/Series/SeriesDetailView.swift
 +++ b/Lume/Views/Series/SeriesDetailView.swift
 @@ -79,7 +79,8 @@ struct SeriesDetailView: View {

@@ -1,8 +1,8 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index b4c6156..32eac29 100644
+index 49b5c8e..0d3ea45 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
-@@ -333,6 +333,7 @@ struct LumeApp: App {
+@@ -334,6 +334,7 @@ struct LumeApp: App {
          WindowGroup {
              // Lume GF: the screenshot build's demo (-D GF_DEMO only); every other build shows ContentView
              GFDemoSwitch { ContentView() }
@@ -11,7 +11,7 @@ index b4c6156..32eac29 100644
                  .environment(PremiumManager.shared)
                  .environment(cloudSync)
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index cbfae1f..673d523 100644
+index 5e9204d..fad355e 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
 @@ -267,6 +267,8 @@ struct FullScreenPlayerView: View {
