@@ -24,6 +24,47 @@ index c743724..f748e48 100644
              )
              if plan.cover != nil {
                  pending.append(playlist)
+diff --git a/Lume/Services/Sync/SyncFrequency.swift b/Lume/Services/Sync/SyncFrequency.swift
+index 147f764..04ce09d 100644
+--- a/Lume/Services/Sync/SyncFrequency.swift
++++ b/Lume/Services/Sync/SyncFrequency.swift
+@@ -263,7 +263,11 @@ extension AutoSync {
+     /// Runs the sync the blocking cover drives, without the cover. A failure
+     /// is recorded on the playlist's own status; the next due pass retries it.
+     static func syncInBackground(_ playlist: Playlist, container: ModelContainer) async {
+-        try? await runSync(playlist, container: container)
++        // Lume GF: live channels only where films and series are left out (GFTVFilms)
++        let scope = GFCatalogPlan.covered(
++            isXtream: playlist.sourceType == .xtream, automatic: false, wantsVOD: GFTVFilms.wanted
++        )
++        try? await runSync(playlist, container: container, gfScope: scope)
+     }
+ }
+ 
+diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
+index 39abe6a..6552b43 100644
+--- a/Lume/Views/Home/HomeView.swift
++++ b/Lume/Views/Home/HomeView.swift
+@@ -283,11 +283,15 @@ struct HomeView: View {
+             case .favorites:
+                 rail("Favorites", favorites)
+             case .recentlyAddedMovies:
+-                MovieCollectionRow(kind: .recentlyAdded, scope: catalogScope,
+-                                   animationNamespace: animationNamespace, title: "Recently Added Movies")
++                if GFTVFilms.wanted { // Lume GF: an Apple TV without films and series has none (GFTVFilms)
++                    MovieCollectionRow(kind: .recentlyAdded, scope: catalogScope,
++                                       animationNamespace: animationNamespace, title: "Recently Added Movies")
++                }
+             case .recentlyAddedSeries:
+-                SeriesCollectionRow(kind: .recentlyAdded, scope: catalogScope,
+-                                    animationNamespace: animationNamespace, title: "Recently Added Series")
++                if GFTVFilms.wanted {
++                    SeriesCollectionRow(kind: .recentlyAdded, scope: catalogScope,
++                                        animationNamespace: animationNamespace, title: "Recently Added Series")
++                }
+             case .forYou:
+                 ForYouRow(
+                     items: recommendations,
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
 index a3b9064..03e0492 100644
 --- a/Lume/Views/MainTabView.swift

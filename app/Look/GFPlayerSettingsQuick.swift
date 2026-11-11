@@ -3,7 +3,8 @@ import SwiftUI
 // Lume GF: the player options changed most, one step away (Georgs, 10 Nov 2026: "the player settings right now ... you
 // need to go through like 3-4 menus"). The same settings as Lume's own pages, so nothing is reset or moved in storage:
 // - the player's gear: a menu of them while watching (GFPlayerSettingsItems; iPhone/iPad GFPlayerSettingsButton, the
-//   Apple TV overlay draws its own circle around the same items)
+//   Apple TV overlay draws its own circle around the same items). A menu only: the player's chrome hides after a few
+//   seconds and would take a sheet opened from it along
 // - Settings › Player: KSPlayer's live buffer and decoding first (GFKSPlayerQuickSection, GFKSPlayerQuickTVRows)
 // - Settings › Live TV: what the player does with live channels (GFLiveTVWatchingSection, GFLiveTVWatchingTVRows)
 
@@ -27,9 +28,6 @@ struct GFPlayerSettingsItems: View {
         @AppStorage(GFEnhancePlan.settingKey) private var enhance = false
         @AppStorage(PlayerSettings.liveSurfModeKey) private var surfMode = LiveSurfMode.default.rawValue
     #endif
-    /// iPhone/iPad: the whole Player page, for what the menu leaves out.
-    var onAllSettings: (() -> Void)?
-
     var body: some View {
         Section("From the Next Channel") {
             Picker(selection: $liveBuffer) {
@@ -62,11 +60,6 @@ struct GFPlayerSettingsItems: View {
                 }
                 .pickerStyle(.menu)
             #endif
-        }
-        if let onAllSettings {
-            Section {
-                Button(action: onAllSettings) { Label("All Player Settings…", systemImage: "gearshape.2") }
-            }
         }
     }
 
@@ -146,11 +139,10 @@ struct GFPlayerSettingsItems: View {
     /// The gear in the player's glass pill (beside Sources, Quality and Record).
     struct GFPlayerSettingsButton: View {
         var onResetHideTimer: () -> Void
-        @State private var showsAll = false
 
         var body: some View {
             Menu {
-                GFPlayerSettingsItems(onAllSettings: { showsAll = true })
+                GFPlayerSettingsItems()
                     .holdsPlayerControls()
             } label: {
                 Image(systemName: "gearshape")
@@ -162,16 +154,6 @@ struct GFPlayerSettingsItems: View {
             .menuIndicator(.hidden)
             .accessibilityLabel("Player Settings")
             .help("Player Settings")
-            .sheet(isPresented: $showsAll, onDismiss: onResetHideTimer) {
-                NavigationStack {
-                    PlayerSettingsView()
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showsAll = false }
-                            }
-                        }
-                }
-            }
         }
     }
 

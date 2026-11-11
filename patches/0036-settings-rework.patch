@@ -35,9 +35,18 @@ index 89534b8..99beace 100644
              .padding(.horizontal, 4)
              .glassEffectCompat(.regularInteractive, in: Capsule())
 diff --git a/Lume/Views/Player/TVPlayerControlsOverlay.swift b/Lume/Views/Player/TVPlayerControlsOverlay.swift
-index 915a03d..9acac45 100644
+index 915a03d..ccd14b3 100644
 --- a/Lume/Views/Player/TVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/TVPlayerControlsOverlay.swift
+@@ -147,7 +147,7 @@
+                 // Moving between controls counts as activity — keep them up.
+                 onResetHideTimer()
+                 // A menu takes focus along; hold the chrome until it comes back.
+-                if new == nil, let old, [TVPlayerFocus.audio, .subtitles, .quality, .hue].contains(old) { PlayerControlsAutoHide.menuOpened() }
++                if new == nil, let old, [TVPlayerFocus.audio, .subtitles, .quality, .hue, .gfSettings].contains(old) { PlayerControlsAutoHide.menuOpened() }
+             }
+         }
+ 
 @@ -385,12 +385,26 @@
                      favoriteButton
                  }

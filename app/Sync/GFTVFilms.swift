@@ -17,9 +17,10 @@ nonisolated enum GFTVFilms {
         #endif
     }
 
-    /// Deletes the stored films and series while they are left out here: episodes and cast first, then the titles,
-    /// then their categories, so no relationship rule is involved. Their sync stamps go too, so switching them back on
-    /// fetches them at once.
+    /// Deletes the stored films and series while they are left out here: episodes and cast first, then the titles, so
+    /// no relationship rule is involved, each kind saved on its own to keep the work small. Their categories stay
+    /// (a few hundred rows): a category gone here would read to the iCloud reconcile as its parental restriction
+    /// lifted, on every device. Their sync stamps go, so switching them back on fetches them at once.
     static func dropIfLeftOut(container: ModelContainer) async {
         guard !wanted else { return }
         await Task.detached(priority: .utility) {
@@ -28,13 +29,14 @@ nonisolated enum GFTVFilms {
             let movies = (try? context.fetchCount(FetchDescriptor<Movie>())) ?? 0
             let series = (try? context.fetchCount(FetchDescriptor<Series>())) ?? 0
             guard movies + series > 0 else { return }
-            let live = CategoryType.live.rawValue
             do {
                 try context.delete(model: Episode.self)
+                try context.save()
                 try context.delete(model: CastMember.self)
+                try context.save()
                 try context.delete(model: Movie.self)
+                try context.save()
                 try context.delete(model: Series.self)
-                try context.delete(model: Category.self, where: #Predicate { $0.typeRaw != live })
                 try context.save()
                 let playlists = (try? context.fetch(FetchDescriptor<Playlist>())) ?? []
                 for playlist in playlists {
@@ -75,6 +77,8 @@ nonisolated enum GFTVFilms {
                         GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: .vod, container: container)
                     }
                 } else {
+                    // a films-and-series sync still running would only bring them back
+                    for playlist in playlists { GFBackgroundCatalogSync.shared.cancel(playlistID: playlist.id) }
                     Task { await GFTVFilms.dropIfLeftOut(container: container) }
                 }
             }
