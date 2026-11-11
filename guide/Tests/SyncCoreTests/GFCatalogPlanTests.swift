@@ -35,6 +35,23 @@ struct GFCatalogPlanTests {
         #expect(GFCatalogPlan.vodIsDue(vodSyncedAt: now.addingTimeInterval(-24 * hour), now: now))
     }
 
+    @Test func `without films and series an Xtream playlist only ever fetches its live channels`() {
+        let first = GFCatalogPlan.automatic(isXtream: true, everSynced: false, vodSyncedAt: nil, now: now, wantsVOD: false)
+        #expect(first == .init(cover: .live, background: nil))
+        let later = GFCatalogPlan.automatic(isXtream: true, everSynced: true, vodSyncedAt: nil, now: now, wantsVOD: false)
+        #expect(later == .init(cover: nil, background: .live))
+        // another source has one pass for everything, so it stays as it was
+        #expect(GFCatalogPlan.automatic(isXtream: false, everSynced: true, vodSyncedAt: nil, now: now, wantsVOD: false)
+            == .init(cover: nil, background: .all))
+    }
+
+    @Test func `the cover fetches live channels first, everything on Sync Now unless films and series are left out`() {
+        #expect(GFCatalogPlan.covered(isXtream: true, automatic: true) == .live)
+        #expect(GFCatalogPlan.covered(isXtream: true, automatic: false) == .all)
+        #expect(GFCatalogPlan.covered(isXtream: true, automatic: false, wantsVOD: false) == .live)
+        #expect(GFCatalogPlan.covered(isXtream: false, automatic: true, wantsVOD: false) == .all)
+    }
+
     @Test func `a scope says what it fetches`() {
         #expect(GFSyncScope.all.includesLive && GFSyncScope.all.includesVOD)
         #expect(GFSyncScope.live.includesLive && !GFSyncScope.live.includesVOD)

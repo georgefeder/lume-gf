@@ -181,6 +181,10 @@
         let firstStream: LiveStream?
 
         init(count: Int = GFDemo.channelCount, now: Date = .now) {
+            #if os(tvOS)
+                // the Apple TV shows films and series only once switched on (GFTVFilms); the pictures show them
+                UserDefaults.standard.set(true, forKey: GFCatalogPlan.tvFilmsAndSeriesKey)
+            #endif
             // every catalog model, as in Lume's own catalog store (LumeApp): a model left out here is never stored, so
             // the films and series would be missing from Home, Movies and Series
             // swiftlint:disable:next force_try

@@ -27,6 +27,8 @@ final class GuideStatus {
     /// Apple TV refresh in the background as the iPhone does? Its diagnostics only email a summary to Lume).
     private(set) var backgroundLine = ""
     nonisolated static let lastBackgroundKey = "gf.guide.lastBackgroundRefresh"
+    /// Apple TV: whether tvOS has cleared Lume's saved channels and guide (GFStoreWipes, Georgs, 8 Nov).
+    private(set) var wipeLine = ""
 
     private init() {}
 
@@ -35,6 +37,7 @@ final class GuideStatus {
         let last = UserDefaults.standard.object(forKey: Self.lastBackgroundKey) as? Date
         backgroundLine = last.map { "Last refreshed while closed: \(Self.when($0))" }
             ?? "Not refreshed while closed yet"
+        wipeLine = GFStoreWipes.line(when: Self.when)
     }
 
     /// A time today, "yesterday" and a time, or the date and a time: a bare "21:48" read as later today when it was
