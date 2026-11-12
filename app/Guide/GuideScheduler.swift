@@ -34,9 +34,16 @@ final class GuideStatus {
 
     func reload() {
         line = GuideStatusSummary.line(for: GuideScheduler.shared.enabledStates(), time: Self.when)
+        let runs = GFBackgroundRuns.load()
         let last = UserDefaults.standard.object(forKey: Self.lastBackgroundKey) as? Date
-        backgroundLine = last.map { "Last refreshed while closed: \(Self.when($0))" }
-            ?? "Not refreshed while closed yet"
+        if runs.isEmpty {
+            // wakes from before the list was kept: the last one only
+            backgroundLine = last.map { "Last refreshed while closed: \(Self.when($0))" }
+                ?? "Not refreshed while closed yet"
+        } else {
+            let clock: (Date) -> String = { $0.formatted(date: .omitted, time: .shortened) }
+            backgroundLine = GFBackgroundRuns.line(runs, now: Date(), time: clock, when: Self.when)
+        }
         wipeLine = GFStoreWipes.line(when: Self.when)
     }
 
@@ -166,7 +173,9 @@ final class GuideScheduler {
             let kind = task is BGProcessingTask ? "overnight import" : "background refresh"
             Logger.database.info("Guide: iOS woke the app for its \(kind, privacy: .public)")
             UserDefaults.standard.set(Date(), forKey: GuideStatus.lastBackgroundKey)
+            GFBackgroundRuns.begin() // the TV Guide settings list today's wakes (Georgs, 12 Nov)
             let finished = await EPGSyncService.shared.refreshIfDueAndWait()
+            GFBackgroundRuns.finish(finished)
             let outcome = finished ? "done" : "not finished"
             Logger.database.info("Guide: \(kind, privacy: .public) \(outcome, privacy: .public)")
             submitBackgroundRefresh()
