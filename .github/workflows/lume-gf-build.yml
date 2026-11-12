@@ -45,6 +45,7 @@ jobs:
           sh gf/ci/test_run_app_tests.sh
           sh gf/ci/test_settings_tripwire.sh
           sh gf/ci/test_engine_ref.sh
+          sh gf/ci/test_upload_testflight.sh
           sh gf/ci/test_apply_patches.sh
           sh gf/ci/test_workflows.sh
           sh gf/ci/test_apply_dep_patches.sh
@@ -339,7 +340,8 @@ jobs:
         run: |
           sed -e "s/__TEAM_ID__/$TEAM_ID/" -e "s#<string>upload</string>#<string>export</string>#" \
             gf/ci/ExportOptions-testflight.plist > "$RUNNER_TEMP/ExportOptions-check.plist"
-          xcodebuild -exportArchive \
+          # tried again when the runner's network drops (ci/upload-testflight.sh; build 104's Apple TV lost it here)
+          sh gf/ci/upload-testflight.sh \
             -archivePath "$RUNNER_TEMP/LumeGF.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions-check.plist" \
             -exportPath "$RUNNER_TEMP/check" \
@@ -356,7 +358,8 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           sed "s/__TEAM_ID__/$TEAM_ID/" gf/ci/ExportOptions-testflight.plist > "$RUNNER_TEMP/ExportOptions.plist"
-          xcodebuild -exportArchive \
+          # tried again when the runner's network drops (builds 104 and 105 lost it during the upload)
+          sh gf/ci/upload-testflight.sh \
             -archivePath "$RUNNER_TEMP/LumeGF.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \

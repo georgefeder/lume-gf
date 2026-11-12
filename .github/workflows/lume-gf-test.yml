@@ -41,6 +41,7 @@ jobs:
           sh ci/test_run_app_tests.sh
           sh ci/test_settings_tripwire.sh
           sh ci/test_engine_ref.sh
+          sh ci/test_upload_testflight.sh
           sh ci/test_patch_scripts.sh
           sh ci/test_check_export.sh
           sh ci/test_apply_patches.sh
