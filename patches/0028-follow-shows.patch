@@ -12,10 +12,10 @@ index 0ef144e..8f1c0af 100644
                  if !LumeApp.isTestOrPreviewHost {
                      GoogleCastProvider.configure()
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index 414714a..39abe6a 100644
+index 63ee3de..512be65 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
-@@ -208,6 +208,7 @@ struct HomeView: View {
+@@ -225,6 +225,7 @@ struct HomeView: View {
                  }
              }
              .profileMenuToolbar()
@@ -23,7 +23,7 @@ index 414714a..39abe6a 100644
              .libraryToolbar(config: LibraryToolbarConfiguration(
                  playlists: playlists,
                  selectedPlaylistID: $selectedPlaylistID,
-@@ -264,7 +265,10 @@ struct HomeView: View {
+@@ -288,7 +289,10 @@ struct HomeView: View {
      /// The horizontal rails, shared by the iOS/macOS scroll layout and the tvOS
      /// immersive home. Rows render in the user's chosen order (Settings › Layout ›
      /// Home); each only appears when it has content.

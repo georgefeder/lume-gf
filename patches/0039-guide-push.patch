@@ -1,0 +1,37 @@
+diff --git a/Lume/LumeAppDelegate.swift b/Lume/LumeAppDelegate.swift
+index 8f1c0af..5f599ef 100644
+--- a/Lume/LumeAppDelegate.swift
++++ b/Lume/LumeAppDelegate.swift
+@@ -18,6 +18,8 @@
+         ) -> Bool {
+             // Lume GF: a followed show's reminder, tapped, can launch the app (GFShowReminders)
+             if !LumeApp.isTestOrPreviewHost { GFShowReminders.installDelegate() }
++            // Lume GF: the guide server's silent push after each hourly build (GFGuidePushClient)
++            if !LumeApp.isTestOrPreviewHost { GFGuidePushClient.start() }
+             #if canImport(GoogleCast)
+                 if !LumeApp.isTestOrPreviewHost {
+                     GoogleCastProvider.configure()
+@@ -41,6 +43,23 @@
+             )
+         }
+ 
++        // Lume GF: the guide server's push (GFGuidePushClient); any other push (iCloud's) is answered "no data"
++        func application(_: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
++            GFGuidePushClient.registered(deviceToken)
++        }
++
++        func application(_: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
++            GFGuidePushClient.failed(error)
++        }
++
++        func application(
++            _: UIApplication,
++            didReceiveRemoteNotification userInfo: [AnyHashable: Any],
++            fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
++        ) {
++            if !GFGuidePushClient.received(userInfo, completion: completionHandler) { completionHandler(.noData) }
++        }
++
+         func application(
+             _: UIApplication,
+             supportedInterfaceOrientationsFor _: UIWindow?

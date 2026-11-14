@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Movies/MovieDetailView.swift b/Lume/Views/Movies/MovieDetailView.swift
-index 498d4a4..65413bf 100644
+index 2b9a922..5fb80e4 100644
 --- a/Lume/Views/Movies/MovieDetailView.swift
 +++ b/Lume/Views/Movies/MovieDetailView.swift
-@@ -74,7 +74,8 @@ struct MovieDetailView: View {
+@@ -85,7 +85,8 @@ struct MovieDetailView: View {
              .background(backgroundColor)
              .paywall(isPresented: $showDownloadPaywall, highlight: .downloads)
              #if os(iOS)
@@ -13,16 +13,59 @@ index 498d4a4..65413bf 100644
                  .toolbarBackground(.hidden, for: .navigationBar)
              #endif
 diff --git a/Lume/Views/Series/SeriesDetailView.swift b/Lume/Views/Series/SeriesDetailView.swift
-index ff4632e..da51a77 100644
+index dd37c61..afbe193 100644
 --- a/Lume/Views/Series/SeriesDetailView.swift
 +++ b/Lume/Views/Series/SeriesDetailView.swift
-@@ -79,7 +79,8 @@ struct SeriesDetailView: View {
-             }
-             .background(backgroundColor)
-             #if os(iOS)
+@@ -83,21 +83,9 @@ struct SeriesDetailView: View {
+         #if os(tvOS)
+             TVSeriesDetailView(series: series)
+         #else
+-            Group {
+-                if isLoadingTMDB {
+-                    loadingView
+-                        .transition(.opacity)
+-                } else {
+-                    detailView
+-                        .transition(.opacity)
+-                }
+-            }
+-            .background(backgroundColor)
+-            #if os(iOS)
 -                .toolbar(.hidden, for: .tabBar)
+-                .navigationBarBackButtonHidden(true)
+-                .toolbarBackground(.hidden, for: .navigationBar)
+-            #endif
++            // Lume GF: the page and its bar in their own property, so the compiler checks the chain in two parts
++            // (Lume 3.2's longer chain timed out with our bar settings in it)
++            gfPage
+                 .toolbar { toolbarContent }
+                 .task(id: series.id) {
+                     resolveSources()
+@@ -133,6 +121,27 @@ struct SeriesDetailView: View {
+         #endif
+     }
+ 
++    #if !os(tvOS)
++        private var gfPage: some View {
++            Group {
++                if isLoadingTMDB {
++                    loadingView
++                        .transition(.opacity)
++                } else {
++                    detailView
++                        .transition(.opacity)
++                }
++            }
++            .background(backgroundColor)
++            #if os(iOS)
 +                // Lume GF: the tab bar stays (Georgs, 6 Nov: back on Home it came a second late or never on the
 +                // iPhone and the iPhone Duo); hidden here, iOS did not always bring it back
-                 .navigationBarBackButtonHidden(true)
-                 .toolbarBackground(.hidden, for: .navigationBar)
-             #endif
++                .navigationBarBackButtonHidden(true)
++                .toolbarBackground(.hidden, for: .navigationBar)
++            #endif
++        }
++    #endif
++
+     // MARK: - Loading
+ 
+     private var loadingView: some View {

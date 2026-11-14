@@ -24,6 +24,8 @@ enum GFSettingsCatalog {
         RecommendationSettings.manualRecalculationKey, SearchSettings.searchAllPlaylistsKey,
         // Lume 2.8.0
         PlayerSettings.Playback.chooseSourceBeforePlayingKey, PlayerSettings.Playback.liveQualitySwitchKey,
+        // Lume 3.2: one card per title across playlists
+        LibrarySettings.groupDuplicateTitlesKey,
         // Lume GF: the shows followed (GFFollowStore)
         GFFollowedShows.storageKey
     ]
