@@ -17,7 +17,8 @@ nonisolated enum GFGuidePush {
 
     /// Ours carry `"gf": "guide"`; other pushes (iCloud's change notices) are left alone.
     static func isGuidePush(_ userInfo: [AnyHashable: Any]) -> Bool {
-        userInfo["gf"] as? String == "guide"
+        guard let mark = userInfo[AnyHashable("gf")] as? String else { return false }
+        return mark == "guide"
     }
 
     static func hex(_ token: Data) -> String {
