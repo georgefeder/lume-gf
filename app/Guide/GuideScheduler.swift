@@ -69,6 +69,8 @@ final class GuideScheduler {
     private var isActive = false
     /// Set once Lume's launch task has run its own first guide check (Lume's launch order stays as it is).
     private var launched = false
+    /// The guide server's push said it just built a guide (GFGuidePush): the next check runs, due or not.
+    private var serverAnnounced = false
 
     private init() {}
 
@@ -97,7 +99,15 @@ final class GuideScheduler {
     }
 
     func isDue(now: Date = Date()) -> Bool {
-        nextCheck() <= now
+        serverAnnounced || nextCheck() <= now
+    }
+
+    /// The enabled guide sources' addresses, for the push token's report (GFGuidePushClient).
+    func enabledSourceURLs() -> [String] {
+        guard let container else { return [] }
+        return ((try? ModelContext(container).fetch(
+            FetchDescriptor<EPGSource>(predicate: #Predicate { $0.isEnabled })
+        )) ?? []).map(\.url)
     }
 
     /// The app finished launching (it is in the foreground).
@@ -133,6 +143,9 @@ final class GuideScheduler {
     /// A refresh ended, however it ended: plan the next one and update the status line.
     func refreshFinished() {
         GuideStatus.shared.reload()
+        #if os(iOS)
+            GFGuidePushClient.reportIfNeeded() // a token that came before the guide sources were loaded
+        #endif
         if isActive { armTimer() }
         submitBackgroundRefresh()
         GFShowReminders.rescheduleSoon() // the followed shows' airings may have moved
@@ -185,6 +198,41 @@ final class GuideScheduler {
             task.setTaskCompleted(success: finished)
         }
 
+        /// The guide server's silent push after its hourly build (GFGuidePush): the guide is checked now, due or not
+        /// (an unchanged guide costs one small answer). iOS gives about 30 seconds, so it hears back after 25 at most;
+        /// a refresh still running then is finished in the longer idle time, as when a background refresh is cut short.
+        func runPush() async -> Bool {
+            let closed = !isActive
+            Logger.database.info("Guide: the guide server's push woke the app")
+            if closed {
+                UserDefaults.standard.set(Date(), forKey: GuideStatus.lastBackgroundKey)
+                GFBackgroundRuns.begin(push: true)
+            }
+            serverAnnounced = true
+            let finished = await Self.within(seconds: 25) { await EPGSyncService.shared.refreshIfDueAndWait() } == true
+            serverAnnounced = false
+            if closed { GFBackgroundRuns.finish(finished) }
+            Logger.database.info("Guide: push refresh \(finished ? "done" : "not finished", privacy: .public)")
+            if !finished { submitImportTask() }
+            submitBackgroundRefresh()
+            return finished
+        }
+
+        /// `work`'s answer, or nil when it takes longer than `seconds` (the work itself goes on).
+        private static func within(seconds: Double, _ work: @escaping @MainActor () async -> Bool) async -> Bool? {
+            let once = GFAnswerOnce()
+            return await withCheckedContinuation { continuation in
+                Task { @MainActor in
+                    let answer = await work()
+                    if once.take() { continuation.resume(returning: answer) }
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(seconds))
+                    if once.take() { continuation.resume(returning: nil) }
+                }
+            }
+        }
+
         private func submitBackgroundRefresh() {
             let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskID)
             request.earliestBeginDate = GuideClock.backgroundBeginDate(next: nextCheck(), now: Date())
@@ -218,4 +266,14 @@ final class GuideScheduler {
         private func submitBackgroundRefresh() {}
         private func submitImportTask(onPower _: Bool = false) {}
     #endif
+}
+
+/// Lets only the first of two racing answers through (GuideScheduler.within).
+private final class GFAnswerOnce {
+    private var taken = false
+
+    func take() -> Bool {
+        defer { taken = true }
+        return !taken
+    }
 }

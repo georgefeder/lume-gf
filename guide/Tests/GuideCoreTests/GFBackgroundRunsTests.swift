@@ -37,6 +37,18 @@ struct GFBackgroundRunsTests {
         #expect(line == "Refreshed while closed today: 03:10, 06:12 (cut short), 09:15")
     }
 
+    @Test func `a wake the server's push asked for is marked, cut short or not`() {
+        let defaults = fresh()
+        GFBackgroundRuns.begin(at: at(day: 12, 7, 16), defaults: defaults)
+        GFBackgroundRuns.finish(true, defaults: defaults)
+        GFBackgroundRuns.begin(at: at(day: 12, 8, 14), push: true, defaults: defaults)
+        GFBackgroundRuns.finish(true, defaults: defaults)
+        GFBackgroundRuns.begin(at: at(day: 12, 9, 14), push: true, defaults: defaults)
+        let line = GFBackgroundRuns.line(GFBackgroundRuns.load(defaults), now: at(day: 12, 10), calendar: calendar,
+                                         time: clock, when: clock)
+        #expect(line == "Refreshed while closed today: 07:16, 08:14 (push), 09:14 (push, cut short)")
+    }
+
     @Test func `no wake today names the last one, none at all says so`() {
         let defaults = fresh()
         let none = GFBackgroundRuns.line([], now: at(day: 12, 11), calendar: calendar, time: clock, when: clock)
