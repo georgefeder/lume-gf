@@ -173,6 +173,69 @@ nonisolated struct GuideListingApplier {
         return result
     }
 
+    /// Applies the server's change file (`GuideDelta`): its programmes are new or changed and go in by id, each
+    /// batch's stored rows fetched in one go; `removed` (ids of programmes gone before they ended) are deleted once the
+    /// file was read to the end. Nothing else of the stored guide is read: that is what made a whole import too slow for a
+    /// background wake. Saved in batches and at the end, so a stop keeps what is done (the same file applied again
+    /// writes nothing twice).
+    func applyChanges(fileURL: URL, claimableChannels: Set<String>, removed: [String],
+                      shouldStop: @escaping () -> Bool = { Task.isCancelled }) -> Result {
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        let run = ChangeRun()
+        let parse = XMLTVParser.parseChecked(fileURL: fileURL, batchSize: 2000, shouldStop: shouldStop) { batch in
+            autoreleasepool {
+                var byID: [String: ParsedProgramme] = [:]
+                for p in batch where claimableChannels.contains(p.channelId) {
+                    let id = GuideDiffPlanner.id(channelId: p.channelId, start: p.start)
+                    if byID[id] == nil { byID[id] = p }
+                }
+                guard !byID.isEmpty else { return }
+                let ids = Array(byID.keys)
+                let rows = (try? context.fetch(FetchDescriptor<EPGListing>(
+                    predicate: #Predicate { ids.contains($0.id) }
+                ))) ?? []
+                for row in rows {
+                    guard let p = byID.removeValue(forKey: row.id) else { continue }
+                    row.title = p.title
+                    row.listingDescription = p.description
+                    row.end = p.end
+                    row.subtitle = p.subtitle
+                    row.category = GuideFingerprint.category(p.categories)
+                    run.result.updated += 1
+                    run.result.claimedChannels.insert(p.channelId)
+                }
+                for (id, p) in byID {
+                    context.insert(EPGListing(
+                        id: id, channelId: p.channelId, title: p.title, listingDescription: p.description,
+                        start: p.start, end: p.end, subtitle: p.subtitle,
+                        category: GuideFingerprint.category(p.categories)
+                    ))
+                    run.result.inserted += 1
+                    run.result.claimedChannels.insert(p.channelId)
+                }
+                run.pending += ids.count
+                if run.pending >= Self.saveThreshold {
+                    try? context.save()
+                    run.pending = 0
+                }
+            }
+        }
+        var result = run.result
+        result.completed = parse.completed
+        if parse.completed {
+            var start = 0
+            while start < removed.count {
+                let chunk = Array(removed[start ..< min(start + Self.deleteChunk, removed.count)])
+                try? context.delete(model: EPGListing.self, where: #Predicate { chunk.contains($0.id) })
+                start += Self.deleteChunk
+            }
+            result.deleted = removed.count
+        }
+        try? context.save()
+        return result
+    }
+
     static func stored(_ p: ParsedProgramme) -> GuideDiffPlanner.Stored {
         GuideDiffPlanner.Stored(channelId: p.channelId, start: p.start, end: p.end, fingerprint: fingerprint(p))
     }
@@ -180,6 +243,12 @@ nonisolated struct GuideListingApplier {
     static func fingerprint(_ p: ParsedProgramme) -> UInt64 {
         GuideFingerprint.of(end: p.end, title: p.title, subtitle: p.subtitle,
                             category: GuideFingerprint.category(p.categories), description: p.description)
+    }
+
+    /// `applyChanges`' counts, shared with the parser's batch callback.
+    private nonisolated final class ChangeRun {
+        var result = Result()
+        var pending = 0
     }
 
     /// Mutable state shared with the parser's batch callback.

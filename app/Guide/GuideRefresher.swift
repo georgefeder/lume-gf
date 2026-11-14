@@ -43,10 +43,15 @@ nonisolated final class GuideRefresher {
         // for the same channels.
         let channelsKey = GuideFingerprint.ofSet(knownChannelIDs)
         let conditional = !force && hasGuide && state.mayAskUnchanged(channelsKey: channelsKey)
+        // the server's change file since the build this device has (GuideDelta), when it still keeps one; else it
+        // answers with the full guide. Asked by date alone: a change file's ETag is not the full guide's, so an ETag
+        // kept from one would make the server send the full guide again instead of "unchanged".
+        let since = conditional ? state.serverBuild.map { Int($0.timeIntervalSince1970) } : nil
         let answer: GuideFetcher.Result
         let asked = Date()
         do {
-            answer = try await fetcher.fetch(urlString: url, etag: conditional ? state.etag : nil,
+            answer = try await fetcher.fetch(urlString: since.map { GuideDelta.url(url, since: $0) } ?? url,
+                                             etag: conditional && since == nil ? state.etag : nil,
                                              lastModified: conditional ? state.lastModified : nil)
         } catch {
             let reason = Self.reason(error)
@@ -63,6 +68,17 @@ nonisolated final class GuideRefresher {
             return Outcome(claimedChannelIDs: state.channelIDs.intersection(knownChannelIDs), summary: "unchanged")
         case let .file(file, etag, lastModified, serverBuild, isTemporary):
             defer { if isTemporary { try? FileManager.default.removeItem(at: file) } }
+            if let delta = GuideDelta.header(ofFileAt: file) {
+                guard let since, delta.since == since else {
+                    // a change file for another build than this device's: the full guide instead
+                    Logger.database.info("Guide: change file for another build, asking for the full guide")
+                    return try await refresh(sourceID: sourceID, url: url, knownChannelIDs: knownChannelIDs,
+                                             force: true)
+                }
+                return try applyChanges(delta, file: file, sourceID: sourceID, state: state,
+                                        knownChannelIDs: knownChannelIDs, channelsKey: channelsKey, etag: etag,
+                                        lastModified: lastModified, serverBuild: serverBuild)
+            }
             // the same file for the same channels: nothing to import (servers without ETag or Last-Modified)
             let fileHash = M3UClient.sha256Hex(ofFileAt: file)
             if hasGuide, state.isSameFile(hash: fileHash, channelsKey: channelsKey) {
@@ -114,6 +130,40 @@ nonisolated final class GuideRefresher {
                            summary: "+\(result.inserted) ~\(result.updated) -\(result.deleted) in \(took) s"
                                + (stale ? " (now first)" : ""))
         }
+    }
+
+    /// The server's change file (GuideDelta): only its programmes are written, the stored guide is not read.
+    private func applyChanges(_ delta: GuideDelta.Header, file: URL, sourceID: UUID, state: GuideSourceState,
+                              knownChannelIDs: Set<String>, channelsKey: UInt64, etag: String?, lastModified: String?,
+                              serverBuild: Date?) throws -> Outcome {
+        let started = Date()
+        let removed = delta.removed.compactMap { gone in
+            XMLTVDate.parse(gone.start).map { GuideDiffPlanner.id(channelId: gone.channel, start: $0) }
+        }
+        let result = GuideListingApplier(container: container)
+            .applyChanges(fileURL: file, claimableChannels: knownChannelIDs, removed: removed)
+        index = nil // read before this run's changes: no longer the stored guide
+        guard result.completed else {
+            let why = Task.isCancelled ? "stopped" : "file not read to the end"
+            let text = "Guide: changes \(why) after \(Self.seconds(since: started)) s, \(result.inserted) in so far"
+            Logger.database.info("\(text, privacy: .public)")
+            if Task.isCancelled { throw CancellationError() }
+            states.update(sourceID) { $0.recordFailure("guide file incomplete", at: now()) }
+            throw Failure.incompleteFile
+        }
+        let claimed = state.channelIDs.intersection(knownChannelIDs).union(result.claimedChannels)
+        states.update(sourceID) {
+            $0.recordImported(etag: etag, lastModified: lastModified, serverBuild: serverBuild, channelIDs: claimed,
+                              at: now(), fileHash: nil, channelsKey: channelsKey)
+        }
+        // a change file never names the programmes that simply ended (a whole import dropped them): those over for
+        // a day go here, so the stored guide does not grow by an hour's programmes every hour. The server's guide
+        // reaches back less than a day, so nothing it still carries goes.
+        let cleared = GuideListingApplier(container: container)
+            .deleteEnded(before: now().addingTimeInterval(-GuideListingApplier.pruneAfter))
+        let took = Self.seconds(since: started)
+        return Outcome(claimedChannelIDs: claimed,
+                       summary: "changes +\(result.inserted) ~\(result.updated) -\(result.deleted + cleared) in \(took) s")
     }
 
     /// The stored guide, read once per run and logged with its size (Lume's diagnostic report shows where the time
