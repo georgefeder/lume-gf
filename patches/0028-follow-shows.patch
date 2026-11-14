@@ -12,7 +12,7 @@ index 0ef144e..8f1c0af 100644
                  if !LumeApp.isTestOrPreviewHost {
                      GoogleCastProvider.configure()
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index bd46283..c0b4a0a 100644
+index 63ee3de..512be65 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
 @@ -225,6 +225,7 @@ struct HomeView: View {
