@@ -1,5 +1,5 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 584426f..fbdf19d 100644
+index c12912f..e8c4b6f 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -49,6 +49,8 @@ struct LumeApp: App {
@@ -42,25 +42,29 @@ index 147f764..04ce09d 100644
  }
  
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index 39abe6a..6552b43 100644
+index c0b4a0a..c16d1c8 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
-@@ -283,11 +283,15 @@ struct HomeView: View {
+@@ -307,13 +307,17 @@ struct HomeView: View {
              case .favorites:
                  rail("Favorites", favorites)
              case .recentlyAddedMovies:
--                MovieCollectionRow(kind: .recentlyAdded, scope: catalogScope,
+-                MovieCollectionRow(kind: .recentlyAdded, scope: catalogScope, grouped: groupDuplicateTitles,
 -                                   animationNamespace: animationNamespace, title: "Recently Added Movies")
+-                    .id("recentlyAddedMovie-\(groupDuplicateTitles)")
 +                if GFTVFilms.wanted { // Lume GF: an Apple TV without films and series has none (GFTVFilms)
-+                    MovieCollectionRow(kind: .recentlyAdded, scope: catalogScope,
++                    MovieCollectionRow(kind: .recentlyAdded, scope: catalogScope, grouped: groupDuplicateTitles,
 +                                       animationNamespace: animationNamespace, title: "Recently Added Movies")
++                        .id("recentlyAddedMovie-\(groupDuplicateTitles)")
 +                }
              case .recentlyAddedSeries:
--                SeriesCollectionRow(kind: .recentlyAdded, scope: catalogScope,
+-                SeriesCollectionRow(kind: .recentlyAdded, scope: catalogScope, grouped: groupDuplicateTitles,
 -                                    animationNamespace: animationNamespace, title: "Recently Added Series")
+-                    .id("recentlyAddedSeries-\(groupDuplicateTitles)")
 +                if GFTVFilms.wanted {
-+                    SeriesCollectionRow(kind: .recentlyAdded, scope: catalogScope,
++                    SeriesCollectionRow(kind: .recentlyAdded, scope: catalogScope, grouped: groupDuplicateTitles,
 +                                        animationNamespace: animationNamespace, title: "Recently Added Series")
++                        .id("recentlyAddedSeries-\(groupDuplicateTitles)")
 +                }
              case .forYou:
                  ForYouRow(
@@ -91,10 +95,10 @@ index a3b9064..03e0492 100644
          visibleTabs(in: catalogScope).showsTab(tab)
      }
 diff --git a/Lume/Views/Settings/SettingsView+Library.swift b/Lume/Views/Settings/SettingsView+Library.swift
-index 7056fac..1a05e87 100644
+index aa9cdb5..27815a1 100644
 --- a/Lume/Views/Settings/SettingsView+Library.swift
 +++ b/Lume/Views/Settings/SettingsView+Library.swift
-@@ -198,6 +198,8 @@ private func libraryTabsFooter(_ scope: CatalogScope, activePlaylist: Playlist?)
+@@ -211,6 +211,8 @@ private func libraryTabsFooter(_ scope: CatalogScope, activePlaylist: Playlist?)
              // priority-1 member.
              let activePlaylist = playlists.primaryMember(of: scope)
              return VStack(alignment: .leading, spacing: 36) {

@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Movies/MovieDetailView.swift b/Lume/Views/Movies/MovieDetailView.swift
-index 498d4a4..65413bf 100644
+index 2b9a922..5fb80e4 100644
 --- a/Lume/Views/Movies/MovieDetailView.swift
 +++ b/Lume/Views/Movies/MovieDetailView.swift
-@@ -74,7 +74,8 @@ struct MovieDetailView: View {
+@@ -85,7 +85,8 @@ struct MovieDetailView: View {
              .background(backgroundColor)
              .paywall(isPresented: $showDownloadPaywall, highlight: .downloads)
              #if os(iOS)
@@ -13,10 +13,10 @@ index 498d4a4..65413bf 100644
                  .toolbarBackground(.hidden, for: .navigationBar)
              #endif
 diff --git a/Lume/Views/Series/SeriesDetailView.swift b/Lume/Views/Series/SeriesDetailView.swift
-index ff4632e..da51a77 100644
+index dd37c61..a47714c 100644
 --- a/Lume/Views/Series/SeriesDetailView.swift
 +++ b/Lume/Views/Series/SeriesDetailView.swift
-@@ -79,7 +79,8 @@ struct SeriesDetailView: View {
+@@ -94,7 +94,8 @@ struct SeriesDetailView: View {
              }
              .background(backgroundColor)
              #if os(iOS)

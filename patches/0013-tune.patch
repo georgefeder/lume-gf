@@ -104,10 +104,10 @@ index 8ee7102..67d15dd 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineCoordinator.swift b/Lume/Views/Player/LumeEngineCoordinator.swift
-index 524feb7..2ac9433 100644
+index 7e860ad..5003e3b 100644
 --- a/Lume/Views/Player/LumeEngineCoordinator.swift
 +++ b/Lume/Views/Player/LumeEngineCoordinator.swift
-@@ -276,6 +276,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
+@@ -272,6 +272,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
  
      // MARK: Transport
  

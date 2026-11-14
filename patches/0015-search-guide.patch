@@ -1,17 +1,17 @@
 diff --git a/Lume/Views/SearchView.swift b/Lume/Views/SearchView.swift
-index 7352b36..3f9da7c 100644
+index d0129b2..79173f2 100644
 --- a/Lume/Views/SearchView.swift
 +++ b/Lume/Views/SearchView.swift
-@@ -33,6 +33,8 @@ struct SearchView: View {
-     @State private var selectedFilter: ContentFilter = .all
-     @State private var results: [SearchResult] = []
+@@ -37,6 +37,8 @@ struct SearchView: View {
+     /// Aggregated user state of the grouped results, loaded once per result set.
+     @State private var groupStates = TitleGroupStates.empty
      @State private var playingMedia: PlayableMedia?
 +    /// Lume GF: guide programmes that match ("On TV")
 +    @State private var gfGuide = GFGuideSearchModel()
  
      /// Max matches fetched per content type. Keeps the result set bounded so the
      /// list stays responsive even when a playlist holds tens of thousands of items.
-@@ -88,11 +90,11 @@ struct SearchView: View {
+@@ -92,11 +94,11 @@ struct SearchView: View {
                  } else {
                      // Results — only show "No Results" once a query has actually
                      // been run, so it doesn't flash while the input is debouncing.
@@ -25,7 +25,7 @@ index 7352b36..3f9da7c 100644
                          Section {
                              ForEach(results) { result in
                                  switch result {
-@@ -132,9 +134,15 @@ struct SearchView: View {
+@@ -136,9 +138,15 @@ struct SearchView: View {
                              Text("\(results.count) Results")
                          }
                      }

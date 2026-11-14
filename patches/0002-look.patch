@@ -1,5 +1,5 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 0eeb085..544412a 100644
+index de93535..7e8a0a1 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -332,7 +332,8 @@ struct LumeApp: App {
@@ -94,7 +94,7 @@ index cd2641d..3560802 100644
              posterURL: URL(string: stream.streamIcon ?? ""),
              kind: .vod,
 diff --git a/Lume/Views/Components/Cards/LiveStreamCardView.swift b/Lume/Views/Components/Cards/LiveStreamCardView.swift
-index 2a52576..7762061 100644
+index 41c295a..bf8e8ce 100644
 --- a/Lume/Views/Components/Cards/LiveStreamCardView.swift
 +++ b/Lume/Views/Components/Cards/LiveStreamCardView.swift
 @@ -52,9 +52,10 @@ struct LiveStreamCardView: View {
@@ -141,10 +141,10 @@ index dd50f51..92cb0c8 100644
      }
  }
 diff --git a/Lume/Views/Components/Library/CategoryContentGrid.swift b/Lume/Views/Components/Library/CategoryContentGrid.swift
-index 5c7d521..1b9321c 100644
+index 7214453..0377f73 100644
 --- a/Lume/Views/Components/Library/CategoryContentGrid.swift
 +++ b/Lume/Views/Components/Library/CategoryContentGrid.swift
-@@ -250,12 +250,17 @@ struct CategoryPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable,
+@@ -270,12 +270,17 @@ struct CategoryPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable,
                      .padding(.horizontal)
              } else {
                  ScrollView(.horizontal, showsIndicators: false) {
@@ -162,12 +162,12 @@ index 5c7d521..1b9321c 100644
 +                            #endif
                              .posterCardButtonStyle()
                              .mediaFavoriteMenu(
-                                 isFavorite: { item.isFavorite },
+                                 isFavorite: { favoriteMenu?.isFavorite(item) ?? item.isFavorite },
 diff --git a/Lume/Views/Components/Library/LibraryCollectionRows.swift b/Lume/Views/Components/Library/LibraryCollectionRows.swift
-index 98903ff..3559794 100644
+index 0f8adb2..919e653 100644
 --- a/Lume/Views/Components/Library/LibraryCollectionRows.swift
 +++ b/Lume/Views/Components/Library/LibraryCollectionRows.swift
-@@ -111,12 +111,17 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
+@@ -113,12 +113,17 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
              .padding(.horizontal)
  
              ScrollView(.horizontal, showsIndicators: false) {
@@ -185,27 +185,32 @@ index 98903ff..3559794 100644
 +                        #endif
                          .posterCardButtonStyle()
                          .mediaFavoriteMenu(
-                             isFavorite: { item.isFavorite },
-@@ -144,13 +149,17 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
- struct MovieCollectionRow: View {
-     let kind: LibraryCollection.Kind
+                             isFavorite: { favoriteMenu?.isFavorite(item) ?? item.isFavorite },
+@@ -167,6 +172,8 @@ struct MovieCollectionRow: View {
+     private let scope: CatalogScope
+     private let grouped: Bool
      var animationNamespace: Namespace.ID?
 +    /// Lume GF: Home names its row "Recently Added Movies" (beside "Recently Added Series")
 +    var title: LocalizedStringKey?
      @Environment(\.modelContext) private var modelContext
      @Environment(\.contentRestriction) private var restriction
      @Query private var movies: [Movie]
+@@ -174,11 +181,13 @@ struct MovieCollectionRow: View {
  
--    init(kind: LibraryCollection.Kind, scope: CatalogScope, animationNamespace: Namespace.ID? = nil) {
-+    init(kind: LibraryCollection.Kind, scope: CatalogScope, animationNamespace: Namespace.ID? = nil,
+     /// - Parameter grouped: one card per title; callers re-identify the view
+     ///   when it changes, since it shapes the fetch.
+-    init(kind: LibraryCollection.Kind, scope: CatalogScope, grouped: Bool, animationNamespace: Namespace.ID? = nil) {
++    init(kind: LibraryCollection.Kind, scope: CatalogScope, grouped: Bool, animationNamespace: Namespace.ID? = nil,
 +         title: LocalizedStringKey? = nil) {
          self.kind = kind
+         self.scope = scope
+         self.grouped = grouped
          self.animationNamespace = animationNamespace
 +        self.title = title
-         _movies = Query(MovieCollectionQuery.rowDescriptor(for: kind, scope: scope))
+         _movies = Query(MovieCollectionQuery.rowDescriptor(for: kind, scope: scope, grouped: grouped))
      }
  
-@@ -163,7 +172,7 @@ struct MovieCollectionRow: View {
+@@ -191,7 +200,7 @@ struct MovieCollectionRow: View {
          let items = Array(matches.prefix(collectionPreviewLimit))
          if !items.isEmpty {
              CollectionPreviewRow(
@@ -214,26 +219,30 @@ index 98903ff..3559794 100644
                  collection: LibraryCollection(kind: kind, type: .vod),
                  items: items,
                  hasMore: matches.count > items.count,
-@@ -284,13 +293,17 @@ enum MovieCollectionQuery {
- struct SeriesCollectionRow: View {
-     let kind: LibraryCollection.Kind
+@@ -345,17 +354,21 @@ struct SeriesCollectionRow: View {
+     private let scope: CatalogScope
+     private let grouped: Bool
      var animationNamespace: Namespace.ID?
 +    /// Lume GF: see `MovieCollectionRow.title`
 +    var title: LocalizedStringKey?
      @Environment(\.modelContext) private var modelContext
      @Environment(\.contentRestriction) private var restriction
      @Query private var series: [Series]
+     @State private var groupStates: [String: TitleGroupState] = [:]
  
--    init(kind: LibraryCollection.Kind, scope: CatalogScope, animationNamespace: Namespace.ID? = nil) {
-+    init(kind: LibraryCollection.Kind, scope: CatalogScope, animationNamespace: Namespace.ID? = nil,
+     /// - Parameter grouped: see `MovieCollectionRow`.
+-    init(kind: LibraryCollection.Kind, scope: CatalogScope, grouped: Bool, animationNamespace: Namespace.ID? = nil) {
++    init(kind: LibraryCollection.Kind, scope: CatalogScope, grouped: Bool, animationNamespace: Namespace.ID? = nil,
 +         title: LocalizedStringKey? = nil) {
          self.kind = kind
+         self.scope = scope
+         self.grouped = grouped
          self.animationNamespace = animationNamespace
 +        self.title = title
-         _series = Query(SeriesCollectionQuery.rowDescriptor(for: kind, scope: scope))
+         _series = Query(SeriesCollectionQuery.rowDescriptor(for: kind, scope: scope, grouped: grouped))
      }
  
-@@ -303,7 +316,7 @@ struct SeriesCollectionRow: View {
+@@ -368,7 +381,7 @@ struct SeriesCollectionRow: View {
          let items = Array(matches.prefix(collectionPreviewLimit))
          if !items.isEmpty {
              CollectionPreviewRow(
@@ -243,10 +252,10 @@ index 98903ff..3559794 100644
                  items: items,
                  hasMore: matches.count > items.count,
 diff --git a/Lume/Views/Components/Status/StatusBadges.swift b/Lume/Views/Components/Status/StatusBadges.swift
-index 0aa62f7..edf18d0 100644
+index 5425fc5..c19d858 100644
 --- a/Lume/Views/Components/Status/StatusBadges.swift
 +++ b/Lume/Views/Components/Status/StatusBadges.swift
-@@ -79,7 +79,8 @@ extension View {
+@@ -66,7 +66,8 @@ struct PlaylistBadge: View {
  
  /// The capsule every badge here shares: tinted text over a faint wash of the same
  /// tint, with the glyph, padding and kerning all scaled from `fontSize`.
@@ -271,7 +280,7 @@ index 98ede44..9a5e17a 100644
      }
  
 diff --git a/Lume/Views/Home/HomeRows.swift b/Lume/Views/Home/HomeRows.swift
-index b1736c1..d32d087 100644
+index 8da010f..b2f6131 100644
 --- a/Lume/Views/Home/HomeRows.swift
 +++ b/Lume/Views/Home/HomeRows.swift
 @@ -36,7 +36,9 @@ struct HomeRow: View {
@@ -296,12 +305,12 @@ index b1736c1..d32d087 100644
                  }
                  .padding(.horizontal)
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index 29aad76..414714a 100644
+index c5a7701..bd46283 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
-@@ -37,6 +37,9 @@ struct HomeView: View {
-     @Query private var favoriteMovies: [Movie]
-     @Query private var favoriteSeries: [Series]
+@@ -39,6 +39,9 @@ struct HomeView: View {
+     @Query var favoriteMovies: [Movie]
+     @Query var favoriteSeries: [Series]
      @Query private var favoriteStreams: [LiveStream]
 +    /// Lume GF: one film and one series (any playlist), for `isEmpty` now that Home shows the recently added rows
 +    @Query private var anyMovie: [Movie]
@@ -309,7 +318,7 @@ index 29aad76..414714a 100644
  
      @State var trendingMovies: [HomeMediaItem] = []
      @State var trendingSeries: [HomeMediaItem] = []
-@@ -146,6 +149,13 @@ struct HomeView: View {
+@@ -163,6 +166,13 @@ struct HomeView: View {
          )
          favStreams.fetchLimit = 30
          _favoriteStreams = Query(favStreams)
@@ -323,7 +332,7 @@ index 29aad76..414714a 100644
      }
  
      var body: some View {
-@@ -219,6 +229,16 @@ struct HomeView: View {
+@@ -236,6 +246,16 @@ struct HomeView: View {
                  #endif
              }
              .homeDownloadsDestination()
@@ -338,22 +347,24 @@ index 29aad76..414714a 100644
 +                }
 +            }
              .homeHeroDestination(heroSelection, animationNamespace: animationNamespace)
-             .task(id: trendingKey) {
-                 await loadTrending(cacheKey: trendingKey)
-@@ -258,6 +278,12 @@ struct HomeView: View {
+             .environment(\.titleGroupStates, groupStates)
+             .task(id: groupStateKey) {
+@@ -282,6 +302,14 @@ struct HomeView: View {
                  rail("Recently Watched", recentlyWatched, onRemove: removeFromRecentlyWatched)
              case .favorites:
                  rail("Favorites", favorites)
 +            case .recentlyAddedMovies:
-+                MovieCollectionRow(kind: .recentlyAdded, scope: catalogScope,
++                MovieCollectionRow(kind: .recentlyAdded, scope: catalogScope, grouped: groupDuplicateTitles,
 +                                   animationNamespace: animationNamespace, title: "Recently Added Movies")
++                    .id("recentlyAddedMovie-\(groupDuplicateTitles)")
 +            case .recentlyAddedSeries:
-+                SeriesCollectionRow(kind: .recentlyAdded, scope: catalogScope,
++                SeriesCollectionRow(kind: .recentlyAdded, scope: catalogScope, grouped: groupDuplicateTitles,
 +                                    animationNamespace: animationNamespace, title: "Recently Added Series")
++                    .id("recentlyAddedSeries-\(groupDuplicateTitles)")
              case .forYou:
                  ForYouRow(
                      items: recommendations,
-@@ -381,11 +407,18 @@ struct HomeView: View {
+@@ -414,11 +442,18 @@ struct HomeView: View {
          )
      }
  
@@ -454,7 +465,7 @@ index 9b23b68..65483a8 100644
              Spacer(minLength: 0)
          }
 diff --git a/Lume/Views/LiveTV/LiveTVTVComponents.swift b/Lume/Views/LiveTV/LiveTVTVComponents.swift
-index 7072361..02fadb1 100644
+index 40c2d03..df851af 100644
 --- a/Lume/Views/LiveTV/LiveTVTVComponents.swift
 +++ b/Lume/Views/LiveTV/LiveTVTVComponents.swift
 @@ -184,10 +184,11 @@
@@ -499,7 +510,7 @@ index a9129d5..c5026d5 100644
          .onAppear {
              coordinator.onTime = { current in
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index f946305..5e9204d 100644
+index 5b80165..77b2000 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
 @@ -264,7 +264,8 @@ struct FullScreenPlayerView: View {

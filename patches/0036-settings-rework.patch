@@ -136,10 +136,10 @@ index 1140566..d348bd4 100644
                      // macOS always shows both buttons; its toolbar has room.
                      Section {
 diff --git a/Lume/Views/Settings/PlayerEngineSettingsViews.swift b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
-index f75ce2c..9c1047a 100644
+index bee8f2f..c4b262a 100644
 --- a/Lume/Views/Settings/PlayerEngineSettingsViews.swift
 +++ b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
-@@ -336,8 +336,6 @@ import SwiftUI
+@@ -341,8 +341,6 @@ import SwiftUI
          @AppStorage(PlayerSettings.KSPlayer.liveBufferKey) private var liveBuffer = PlayerSettings.KSPlayer.liveBufferDefault
          @AppStorage(PlayerSettings.KSPlayer.vodBufferKey) private var vodBuffer = PlayerSettings.KSPlayer.vodBufferDefault
          @AppStorage(PlayerSettings.KSPlayer.maxBufferKey) private var maxBuffer = PlayerSettings.KSPlayer.maxBufferDefault
@@ -148,7 +148,7 @@ index f75ce2c..9c1047a 100644
  
          @State private var showResetConfirmation = false
  
-@@ -354,7 +352,6 @@ import SwiftUI
+@@ -359,7 +357,6 @@ import SwiftUI
                      TVOptionToggleRow(title: "Codec Low Delay", isOn: $codecLowDelay)
                      TVOptionToggleRow(title: "Auto Deinterlace", isOn: $autoDeinterlace)
                      TVOptionToggleRow(title: "Auto Rotate", isOn: $autoRotate)
@@ -157,7 +157,7 @@ index f75ce2c..9c1047a 100644
  
                  VStack(alignment: .leading, spacing: 8) {
 diff --git a/Lume/Views/Settings/PlayerSettingsView.swift b/Lume/Views/Settings/PlayerSettingsView.swift
-index b4025a4..f751577 100644
+index 2aa62ae..5515867 100644
 --- a/Lume/Views/Settings/PlayerSettingsView.swift
 +++ b/Lume/Views/Settings/PlayerSettingsView.swift
 @@ -21,8 +21,6 @@
@@ -169,7 +169,7 @@ index b4025a4..f751577 100644
          @AppStorage(PlayerSettings.StreamInfo.enabledKey)
          private var streamInfoEnabled = PlayerSettings.StreamInfo.enabledDefault
          @AppStorage(PlayerSettings.StreamInfo.detailLevelKey)
-@@ -51,6 +49,8 @@
+@@ -61,6 +59,8 @@
  
          var body: some View {
              List {
@@ -178,7 +178,7 @@ index b4025a4..f751577 100644
                  Section {
                      if showsRotateToLandscape {
                          Toggle("Rotate to Landscape", isOn: $rotateToLandscape)
-@@ -108,13 +108,7 @@
+@@ -121,13 +121,7 @@
                      }
                  }
  
@@ -250,7 +250,7 @@ index 7f62b57..898fcb7 100644
          case .system: "System"
          }
 diff --git a/Lume/Views/Settings/SettingsView+TVPlayer.swift b/Lume/Views/Settings/SettingsView+TVPlayer.swift
-index 7abb583..0d3e05d 100644
+index eaa8d62..9e13c3d 100644
 --- a/Lume/Views/Settings/SettingsView+TVPlayer.swift
 +++ b/Lume/Views/Settings/SettingsView+TVPlayer.swift
 @@ -56,6 +56,14 @@ import SwiftUI
@@ -301,10 +301,10 @@ index 7abb583..0d3e05d 100644
                  // Its own section rather than a row under Live TV: it governs
                  // every direction the player reads, VOD scrubbing included,
 diff --git a/Lume/Views/Settings/SettingsView.swift b/Lume/Views/Settings/SettingsView.swift
-index 19b0948..721d384 100644
+index 8b1ac8d..021f0fa 100644
 --- a/Lume/Views/Settings/SettingsView.swift
 +++ b/Lume/Views/Settings/SettingsView.swift
-@@ -81,7 +81,15 @@ struct SettingsView: View {
+@@ -83,7 +83,15 @@ struct SettingsView: View {
          /// The category whose content is shown in the right pane. Changes only
          /// when a rail row is activated (Live TV's model): moving focus through
          /// the rail just highlights.
@@ -321,7 +321,7 @@ index 19b0948..721d384 100644
          /// Bumped to hand focus to the rail's selected category — Menu from a
          /// pane's top level, or the tab-bar entry catcher.
          @State private var railFocusRequest = 0
-@@ -345,6 +353,7 @@ struct SettingsView: View {
+@@ -347,6 +355,7 @@ struct SettingsView: View {
          /// out of any sub-page — and moves focus into its pane.
          private func activate(_ category: SettingsCategory) {
              selectedCategory = category

@@ -14,7 +14,7 @@ index 72d2f5b..341d166 100644
              autoPip: defaults.bool(PlayerSettings.KSPlayer.autoPipKey, default: PlayerSettings.KSPlayer.autoPipDefault),
              autoSelectSubtitle: defaults.bool(PlayerSettings.KSPlayer.autoSelectSubtitleKey, default: PlayerSettings.KSPlayer.autoSelectSubtitleDefault),
 diff --git a/Lume/Views/Settings/PlayerEngineSettingsViews.swift b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
-index 3598ed6..f75ce2c 100644
+index a4864c6..bee8f2f 100644
 --- a/Lume/Views/Settings/PlayerEngineSettingsViews.swift
 +++ b/Lume/Views/Settings/PlayerEngineSettingsViews.swift
 @@ -142,7 +142,7 @@ import SwiftUI
@@ -26,7 +26,7 @@ index 3598ed6..f75ce2c 100644
                  Toggle("Use System HTTP Proxy", isOn: $systemProxy)
                  Toggle("Automatic Picture in Picture", isOn: $autoPip)
  
-@@ -370,7 +370,7 @@ import SwiftUI
+@@ -375,7 +375,7 @@ import SwiftUI
  
                  VStack(alignment: .leading, spacing: 8) {
                      TVSettingsSectionLabel("KSPlayer — Buffering")

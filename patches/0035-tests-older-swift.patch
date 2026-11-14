@@ -79,7 +79,7 @@ index c255148..c8cf19b 100644
              (id: second, tabs: [.liveTV, .movies]),
              (id: moviesOnly, tabs: [.movies])
 diff --git a/LumeTests/Services/ScopedBrowseQueryTests.swift b/LumeTests/Services/ScopedBrowseQueryTests.swift
-index e98b327..7120def 100644
+index 45458d3..0dc4de0 100644
 --- a/LumeTests/Services/ScopedBrowseQueryTests.swift
 +++ b/LumeTests/Services/ScopedBrowseQueryTests.swift
 @@ -24,7 +24,7 @@ struct ScopedBrowseQueryTests {
