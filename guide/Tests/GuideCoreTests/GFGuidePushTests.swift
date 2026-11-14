@@ -22,7 +22,7 @@ struct GFGuidePushTests {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let last = GFGuidePush.Reported(token: token, build: "61", at: now.addingTimeInterval(-3600))
         #expect(GFGuidePush.shouldReport(token: token, build: "61", last: nil, now: now))
-        #expect(!GFGuidePush.shouldReport(token: token, build: "61", last: last, now: now))
+        #expect(GFGuidePush.shouldReport(token: token, build: "61", last: last, now: now) == false)
         #expect(GFGuidePush.shouldReport(token: "11", build: "61", last: last, now: now))
         #expect(GFGuidePush.shouldReport(token: token, build: "62", last: last, now: now))
         #expect(GFGuidePush.shouldReport(token: token, build: "61", last: last, now: now.addingTimeInterval(86400)))
@@ -30,7 +30,9 @@ struct GFGuidePushTests {
 
     @Test func `only pushes marked as the guide's are ours`() {
         #expect(GFGuidePush.isGuidePush(["aps": ["content-available": 1], "gf": "guide"]))
-        #expect(!GFGuidePush.isGuidePush(["aps": ["content-available": 1], "ck": ["cid": "x"]]))
+        // compared with false: swift-testing's #expect(!call(...)) did not evaluate the call (CI run 43540722084)
+        let iCloud: [AnyHashable: Any] = ["aps": ["content-available": 1], "ck": ["cid": "x"]]
+        #expect(GFGuidePush.isGuidePush(iCloud) == false)
     }
 
     @Test func `a token prints as lowercase hex`() {
