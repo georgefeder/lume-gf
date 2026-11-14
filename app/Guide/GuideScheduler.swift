@@ -202,6 +202,7 @@ final class GuideScheduler {
         /// (an unchanged guide costs one small answer). iOS gives about 30 seconds, so it hears back after 25 at most;
         /// a refresh still running then is finished in the longer idle time, as when a background refresh is cut short.
         func runPush() async -> Bool {
+            guard GuideSettings.followServer else { return false } // the server's hours switched off: Lume's own
             let closed = !isActive
             Logger.database.info("Guide: the guide server's push woke the app")
             if closed {
