@@ -70,8 +70,13 @@ nonisolated final class GuideRefresher {
             defer { if isTemporary { try? FileManager.default.removeItem(at: file) } }
             if let delta = GuideDelta.header(ofFileAt: file) {
                 guard let since, delta.since == since else {
-                    // a change file for another build than this device's: the full guide instead
+                    // a change file for another build than this device's: the full guide instead, asked once (a
+                    // change file to a plain request too is the server's fault, not something to ask again)
                     Logger.database.info("Guide: change file for another build, asking for the full guide")
+                    guard since != nil else {
+                        states.update(sourceID) { $0.recordFailure("change file instead of the guide", at: now()) }
+                        throw Failure.incompleteFile
+                    }
                     return try await refresh(sourceID: sourceID, url: url, knownChannelIDs: knownChannelIDs,
                                              force: true)
                 }
@@ -158,7 +163,9 @@ nonisolated final class GuideRefresher {
         }
         // a change file never names the programmes that simply ended (a whole import dropped them): those over for
         // a day go here, so the stored guide does not grow by an hour's programmes every hour. The server's guide
-        // reaches back less than a day, so nothing it still carries goes.
+        // reaches back about 17 hours (14 Nov 2026: the 18:27 build starts at 01:00), and a whole import itself
+        // drops what ended 12 hours ago and is no longer in the file, so a day keeps at least as much as a whole
+        // import would.
         let cleared = GuideListingApplier(container: container)
             .deleteEnded(before: now().addingTimeInterval(-GuideListingApplier.pruneAfter))
         let took = Self.seconds(since: started)
