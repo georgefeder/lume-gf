@@ -305,7 +305,7 @@ index 8da010f..b2f6131 100644
                  }
                  .padding(.horizontal)
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index c5a7701..bd46283 100644
+index c5a7701..63ee3de 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
 @@ -39,6 +39,9 @@ struct HomeView: View {
@@ -339,10 +339,10 @@ index c5a7701..bd46283 100644
 +            // Lume GF: "Show All" from the recently added rows
 +            .navigationDestination(for: LibraryCollection.self) { collection in
 +                if collection.type == .series {
-+                    SeriesCollectionView(kind: collection.kind, scope: catalogScope,
++                    SeriesCollectionView(kind: collection.kind, scope: catalogScope, grouped: groupDuplicateTitles,
 +                                         animationNamespace: animationNamespace)
 +                } else {
-+                    MovieCollectionView(kind: collection.kind, scope: catalogScope,
++                    MovieCollectionView(kind: collection.kind, scope: catalogScope, grouped: groupDuplicateTitles,
 +                                        animationNamespace: animationNamespace)
 +                }
 +            }

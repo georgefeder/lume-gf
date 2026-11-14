@@ -42,7 +42,7 @@ index 147f764..04ce09d 100644
  }
  
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index c0b4a0a..c16d1c8 100644
+index 512be65..a5869b0 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
 @@ -307,13 +307,17 @@ struct HomeView: View {
