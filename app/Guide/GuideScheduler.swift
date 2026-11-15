@@ -187,7 +187,10 @@ final class GuideScheduler {
             Logger.database.info("Guide: iOS woke the app for its \(kind, privacy: .public)")
             UserDefaults.standard.set(Date(), forKey: GuideStatus.lastBackgroundKey)
             GFBackgroundRuns.begin() // the TV Guide settings list today's wakes (Georgs, 12 Nov)
+            // a background refresh is short: the hour's changes only; the overnight import may take the whole guide
+            GuideRefresher.wholeImportAllowed = task is BGProcessingTask
             let finished = await EPGSyncService.shared.refreshIfDueAndWait()
+            GuideRefresher.wholeImportAllowed = true
             GFBackgroundRuns.finish(finished)
             let outcome = finished ? "done" : "not finished"
             Logger.database.info("Guide: \(kind, privacy: .public) \(outcome, privacy: .public)")
@@ -210,8 +213,10 @@ final class GuideScheduler {
                 GFBackgroundRuns.begin(push: true)
             }
             serverAnnounced = true
+            GuideRefresher.wholeImportAllowed = !closed // a wake is short: the hour's changes only
             let finished = await Self.within(seconds: 25) { await EPGSyncService.shared.refreshIfDueAndWait() } == true
             serverAnnounced = false
+            GuideRefresher.wholeImportAllowed = true
             if closed { GFBackgroundRuns.finish(finished) }
             Logger.database.info("Guide: push refresh \(finished ? "done" : "not finished", privacy: .public)")
             if !finished { submitImportTask() }
