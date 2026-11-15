@@ -1,5 +1,8 @@
 import SwiftData
 import SwiftUI
+#if canImport(UIKit)
+    import UIKit
+#endif
 
 /// The continue banner's state (spec section 5): on coming to the front with nothing playing, it reads the note and
 /// offers it when `GFContinueOffer` says so and this device's catalogue has the item.
@@ -350,6 +353,9 @@ final class GFContinueBannerPresence {
         self.shownAt = shownAt
         self.onPlay = onPlay
         self.onDismiss = onDismiss
+        #if os(tvOS)
+            GFPlayPauseCatcher.shared.set(enabled: note != nil) { [weak self] in self?.play() }
+        #endif
     }
 
     func play() {
@@ -480,3 +486,37 @@ extension View {
         modifier(GFContinueBannerHost())
     }
 }
+
+#if os(tvOS)
+    /// The Apple TV's Play/Pause for the continue banner, caught on the window while the banner shows (Georgs, 15 Nov:
+    /// pressing it did nothing again). SwiftUI hands the press to the handler nearest the focus, and which screen the
+    /// Apple TV opens on decides what that is; a recogniser on the window sees the press wherever the focus is.
+    @MainActor
+    final class GFPlayPauseCatcher: NSObject {
+        static let shared = GFPlayPauseCatcher()
+        private var recognizer: UITapGestureRecognizer?
+        private var action: () -> Void = {}
+
+        func set(enabled: Bool, action: @escaping () -> Void) {
+            self.action = action
+            if enabled, recognizer?.view == nil, let window = Self.keyWindow {
+                let tap = UITapGestureRecognizer(target: self, action: #selector(fire))
+                tap.allowedPressTypes = [NSNumber(value: UIPress.PressType.playPause.rawValue)]
+                window.addGestureRecognizer(tap)
+                recognizer = tap
+            }
+            recognizer?.isEnabled = enabled
+        }
+
+        @objc private func fire() {
+            // off first: the banner's own handler may hear the same press, and the player it opens needs Play/Pause
+            recognizer?.isEnabled = false
+            action()
+        }
+
+        private static var keyWindow: UIWindow? {
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows).first { $0.isKeyWindow }
+        }
+    }
+#endif
