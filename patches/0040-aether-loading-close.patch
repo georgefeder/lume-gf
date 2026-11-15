@@ -1,0 +1,20 @@
+diff --git a/Lume/Views/Player/AetherEngineEngineView.swift b/Lume/Views/Player/AetherEngineEngineView.swift
+index c2f2a61..3cf529f 100644
+--- a/Lume/Views/Player/AetherEngineEngineView.swift
++++ b/Lume/Views/Player/AetherEngineEngineView.swift
+@@ -127,6 +127,15 @@ import SwiftUI
+                         .transition(.opacity)
+                 }
+ 
++                // Lume GF: a channel that has not started can still be closed, as with the other engines (Georgs,
++                // 15 Nov: a broken channel on the iPhone Duo left only the spinner, nothing to tap)
++                #if os(iOS)
++                    if !coordinator.hasStartedPlayback, !loadFailed {
++                        GFLoadingCloseButton(onClose: { closePlayer() })
++                            .transition(.opacity)
++                    }
++                #endif
++
+                 if loadFailed {
+                     PlayerErrorIndicator(
+                         title: media.title,
