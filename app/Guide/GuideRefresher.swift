@@ -26,9 +26,12 @@ nonisolated final class GuideRefresher {
     /// False during a short background wake (the server's push, a background refresh: about 25 s), which a whole import
     /// never fits (15 Nov 2026: after the playlist's channels changed, every wake for hours downloaded the whole guide
     /// and was cut short). Such a wake then takes the server's hourly changes even when the channels changed; the
-    /// whole import their new channels need waits for the app being open or the overnight import. Set by
-    /// GuideScheduler around those wakes.
-    nonisolated(unsafe) static var wholeImportAllowed = true
+    /// whole import their new channels need waits for the app being open or the overnight import. GuideScheduler
+    /// counts the short wakes running (overlapping ones too: a push and a background refresh came together).
+    nonisolated(unsafe) static var shortWakes = 0
+    static var wholeImportAllowed: Bool {
+        shortWakes == 0
+    }
 
     init(container: ModelContainer, fetcher: GuideFetcher = GuideFetcher(), states: GuideSourceStateStore = .shared,
          now: @escaping () -> Date = { Date() }) {
@@ -49,7 +52,8 @@ nonisolated final class GuideRefresher {
         // for the same channels.
         let channelsKey = GuideFingerprint.ofSet(knownChannelIDs)
         let sameChannels = state.mayAskUnchanged(channelsKey: channelsKey)
-        let conditional = !force && hasGuide && (sameChannels || !Self.wholeImportAllowed)
+        let whole = Self.wholeImportAllowed // decided once: a wake's end must not change it halfway
+        let conditional = !force && hasGuide && (sameChannels || !whole)
         // the server's change file since the build this device has (GuideDelta), when it still keeps one; else it
         // answers with the full guide. Asked by date alone: a change file's ETag is not the full guide's, so an ETag
         // kept from one would make the server send the full guide again instead of "unchanged".
@@ -63,7 +67,10 @@ nonisolated final class GuideRefresher {
         } catch {
             // iOS ending a background wake mid-download is no failure of the guide (it showed as "last check failed
             // (NSURLErrorDomain -999)")
-            if Task.isCancelled { throw CancellationError() }
+            if Task.isCancelled {
+                states.update(sourceID) { $0.lastAttempt = now() } // the usual 15 minutes before the next try
+                throw CancellationError()
+            }
             let reason = Self.reason(error)
             states.update(sourceID) { $0.recordFailure(reason, at: now()) }
             let text = "Guide: download stopped after \(Self.seconds(since: asked)) s (\(reason))"
@@ -87,6 +94,9 @@ nonisolated final class GuideRefresher {
                         states.update(sourceID) { $0.recordFailure("change file instead of the guide", at: now()) }
                         throw Failure.incompleteFile
                     }
+                    guard whole else {
+                        return wholeImportLater(sourceID: sourceID, state: state, known: knownChannelIDs)
+                    }
                     return try await refresh(sourceID: sourceID, url: url, knownChannelIDs: knownChannelIDs,
                                              force: true)
                 }
@@ -95,7 +105,12 @@ nonisolated final class GuideRefresher {
                 return try applyChanges(delta, file: file, sourceID: sourceID, state: state,
                                         knownChannelIDs: knownChannelIDs,
                                         channelsKey: sameChannels ? channelsKey : state.channelsKey, etag: etag,
-                                        lastModified: lastModified, serverBuild: serverBuild)
+                                        lastModified: lastModified, serverBuild: serverBuild,
+                                        wholeImportOwed: !sameChannels)
+            }
+            // the whole guide (the server keeps no change file for this device's build) never fits a short wake
+            if !whole, hasGuide {
+                return wholeImportLater(sourceID: sourceID, state: state, known: knownChannelIDs)
             }
             // the same file for the same channels: nothing to import (servers without ETag or Last-Modified)
             let fileHash = M3UClient.sha256Hex(ofFileAt: file)
@@ -153,7 +168,7 @@ nonisolated final class GuideRefresher {
     /// The server's change file (GuideDelta): only its programmes are written, the stored guide is not read.
     private func applyChanges(_ delta: GuideDelta.Header, file: URL, sourceID: UUID, state: GuideSourceState,
                               knownChannelIDs: Set<String>, channelsKey: UInt64?, etag: String?, lastModified: String?,
-                              serverBuild: Date?) throws -> Outcome {
+                              serverBuild: Date?, wholeImportOwed: Bool) throws -> Outcome {
         let started = Date()
         let removed = delta.removed.compactMap { gone in
             XMLTVDate.parse(gone.start).map { GuideDiffPlanner.id(channelId: gone.channel, start: $0) }
@@ -173,6 +188,7 @@ nonisolated final class GuideRefresher {
         states.update(sourceID) {
             $0.recordImported(etag: etag, lastModified: lastModified, serverBuild: serverBuild, channelIDs: claimed,
                               at: now(), fileHash: nil, channelsKey: channelsKey)
+            if wholeImportOwed { $0.wholeImportOwed = true }
         }
         // a change file never names the programmes that simply ended (a whole import dropped them): those over for
         // a day go here, so the stored guide does not grow by an hour's programmes every hour. The server's guide
@@ -184,6 +200,16 @@ nonisolated final class GuideRefresher {
         let took = Self.seconds(since: started)
         return Outcome(claimedChannelIDs: claimed,
                        summary: "changes +\(result.inserted) ~\(result.updated) -\(result.deleted + cleared) in \(took) s")
+    }
+
+    /// A short wake got the whole guide: left for the app being open or the overnight import (`wholeImportDue`).
+    private func wholeImportLater(sourceID: UUID, state: GuideSourceState, known: Set<String>) -> Outcome {
+        Logger.database.info("Guide: the whole guide waits for the app being open or the overnight import")
+        states.update(sourceID) {
+            $0.wholeImportOwed = true
+            $0.lastAttempt = now()
+        }
+        return Outcome(claimedChannelIDs: state.channelIDs.intersection(known), summary: "whole guide later")
     }
 
     /// The stored guide, read once per run and logged with its size (Lume's diagnostic report shows where the time

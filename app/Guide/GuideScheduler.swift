@@ -99,7 +99,17 @@ final class GuideScheduler {
     }
 
     func isDue(now: Date = Date()) -> Bool {
-        serverAnnounced || nextCheck() <= now
+        serverAnnounced || nextCheck() <= now || (GuideRefresher.wholeImportAllowed && wholeImportDue(now: now))
+    }
+
+    /// A whole import a short wake left (GuideRefresher.wholeImportLater, changed channels): due with the app open or
+    /// in the overnight import, not again within 15 minutes of the last try.
+    private func wholeImportDue(now: Date) -> Bool {
+        guard let container else { return false }
+        let sources = (try? ModelContext(container).fetch(
+            FetchDescriptor<EPGSource>(predicate: #Predicate { $0.isEnabled })
+        )) ?? []
+        return sources.contains { GuideSourceStateStore.shared.state(for: $0.id).wholeImportDue(now: now) }
     }
 
     /// The enabled guide sources' addresses, for the push token's report (GFGuidePushClient).
@@ -188,9 +198,10 @@ final class GuideScheduler {
             UserDefaults.standard.set(Date(), forKey: GuideStatus.lastBackgroundKey)
             GFBackgroundRuns.begin() // the TV Guide settings list today's wakes (Georgs, 12 Nov)
             // a background refresh is short: the hour's changes only; the overnight import may take the whole guide
-            GuideRefresher.wholeImportAllowed = task is BGProcessingTask
+            let short = !(task is BGProcessingTask)
+            if short { GuideRefresher.shortWakes += 1 }
             let finished = await EPGSyncService.shared.refreshIfDueAndWait()
-            GuideRefresher.wholeImportAllowed = true
+            if short { GuideRefresher.shortWakes -= 1 }
             GFBackgroundRuns.finish(finished)
             let outcome = finished ? "done" : "not finished"
             Logger.database.info("Guide: \(kind, privacy: .public) \(outcome, privacy: .public)")
@@ -213,10 +224,10 @@ final class GuideScheduler {
                 GFBackgroundRuns.begin(push: true)
             }
             serverAnnounced = true
-            GuideRefresher.wholeImportAllowed = !closed // a wake is short: the hour's changes only
+            if closed { GuideRefresher.shortWakes += 1 } // a wake is short: the hour's changes only
             let finished = await Self.within(seconds: 25) { await EPGSyncService.shared.refreshIfDueAndWait() } == true
             serverAnnounced = false
-            GuideRefresher.wholeImportAllowed = true
+            if closed { GuideRefresher.shortWakes -= 1 }
             if closed { GFBackgroundRuns.finish(finished) }
             Logger.database.info("Guide: push refresh \(finished ? "done" : "not finished", privacy: .public)")
             if !finished { submitImportTask() }

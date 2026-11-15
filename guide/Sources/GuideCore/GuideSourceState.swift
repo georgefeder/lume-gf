@@ -23,6 +23,14 @@ nonisolated struct GuideSourceState: Codable, Equatable {
     /// the whole guide every time), and changed channels download the guide in full instead of asking "changed?".
     var fileHash: String?
     var channelsKey: UInt64?
+    /// A whole import is owed: the channels changed (or the server sent the whole guide) during a short background
+    /// wake, which took only the server's changes. It runs once the app is open or the overnight import comes.
+    var wholeImportOwed: Bool?
+
+    /// Whether the owed whole import may run now: not again within `GuideClock.floor` of the last try.
+    func wholeImportDue(now: Date) -> Bool {
+        wholeImportOwed == true && (lastAttempt.map { now.timeIntervalSince($0) >= GuideClock.floor } ?? true)
+    }
 
     /// Whether the server may be asked "changed since?": only for the channels the stored guide was imported for.
     func mayAskUnchanged(channelsKey key: UInt64) -> Bool {
@@ -42,6 +50,7 @@ nonisolated struct GuideSourceState: Codable, Equatable {
 
     mutating func recordImported(etag: String?, lastModified: String?, serverBuild: Date?, channelIDs: Set<String>,
                                  at now: Date, fileHash: String? = nil, channelsKey: UInt64? = nil) {
+        wholeImportOwed = nil
         self.fileHash = fileHash
         self.channelsKey = channelsKey
         self.etag = etag

@@ -85,4 +85,15 @@ struct GuideSourceStateTests {
         #expect(s.fileHash == nil && s.channelsKey == nil && s.etag == nil && s.lastModified == nil)
         #expect(s.channelIDs == ["1"])
     }
+
+    @Test func `an owed whole import is due after the floor, and a whole import clears it`() {
+        var s = GuideSourceState()
+        #expect(s.wholeImportDue(now: t0) == false)
+        s.wholeImportOwed = true
+        s.lastAttempt = t0
+        #expect(s.wholeImportDue(now: t0.addingTimeInterval(60)) == false)
+        #expect(s.wholeImportDue(now: t0.addingTimeInterval(GuideClock.floor)))
+        s.recordImported(etag: nil, lastModified: nil, serverBuild: nil, channelIDs: [], at: t0)
+        #expect(s.wholeImportOwed == nil)
+    }
 }
