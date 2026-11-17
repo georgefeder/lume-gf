@@ -124,12 +124,15 @@ final class GuideScheduler {
     func appLaunched() {
         launched = true
         GFGuideReporter.noteDevice()
+        GFLiveLog.shared.useGuideHost(enabledSourceURLs())
         #if canImport(UIKit)
             isActive = UIApplication.shared.applicationState != .background
         #else
             isActive = true
         #endif
         GuideStatus.shared.reload()
+        GFLiveLog.shared.appActive(isActive)
+        GFLiveLog.note("app launched\(isActive ? "" : " in the background")")
         if isActive { armTimer() }
     }
 
@@ -137,11 +140,16 @@ final class GuideScheduler {
         switch phase {
         case .active:
             isActive = true
+            GFLiveLog.shared.appActive(true)
+            GFLiveLog.note("app on screen")
             guard launched else { return } // the launch task runs the first check
             EPGSyncService.shared.syncIfDue()
             armTimer()
         case .background:
             isActive = false
+            GFLiveLog.note("app left the screen")
+            GFLiveLog.shared.appActive(false)
+            sendLogInBackground()
             timer?.cancel()
             timer = nil
             submitBackgroundRefresh()
@@ -151,9 +159,23 @@ final class GuideScheduler {
         }
     }
 
+    /// The app left the screen: what the live log holds goes now, in the few seconds iOS gives for it.
+    private func sendLogInBackground() {
+        #if canImport(UIKit)
+            let task = UIApplication.shared.beginBackgroundTask(withName: "gf.live-log")
+            Task {
+                await GFLiveLog.shared.flushAndWait()
+                if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+            }
+        #else
+            GFLiveLog.shared.flush()
+        #endif
+    }
+
     /// A refresh ended, however it ended: plan the next one and update the status line.
     func refreshFinished() {
         GuideStatus.shared.reload()
+        GFLiveLog.shared.useGuideHost(enabledSourceURLs()) // sources loaded after launch
         #if os(iOS)
             GFGuidePushClient.reportIfNeeded() // a token that came before the guide sources were loaded
         #endif
@@ -182,6 +204,7 @@ final class GuideScheduler {
                     // Set at once: Apple may end the time before the main actor gets to the refresh.
                     task.expirationHandler = {
                         Logger.database.info("Guide: iOS ended the background time")
+                        GFLiveLog.note("iOS ended the background time")
                         Task { @MainActor in
                             EPGSyncService.shared.cancelBackgroundRefresh()
                             GuideScheduler.shared.submitImportTask()
@@ -198,6 +221,7 @@ final class GuideScheduler {
             Logger.database.info("Guide: iOS woke the app for its \(kind, privacy: .public)")
             UserDefaults.standard.set(Date(), forKey: GuideStatus.lastBackgroundKey)
             GFBackgroundRuns.begin() // the TV Guide settings list today's wakes (Georgs, 12 Nov)
+            GFLiveLog.note("woken for the \(kind)")
             // a background refresh is short: the hour's changes only; the overnight import may take the whole guide
             let short = !(task is BGProcessingTask)
             if short { GuideRefresher.shortWakes += 1 }
@@ -210,6 +234,9 @@ final class GuideScheduler {
             if finished, task is BGProcessingTask { submitImportTask(onPower: true) }
             // the followed shows' reminders from the new guide, before iOS takes the time back
             if finished { await GFShowReminders.reschedule() }
+            GFLiveLog.note("\(kind) \(outcome)")
+            // the radio is on now: the wake's lines go with it, before iOS takes the time back (a few seconds at most)
+            _ = await Self.within(seconds: 4) { await GFLiveLog.shared.flushAndWait(); return true }
             task.setTaskCompleted(success: finished)
         }
 
@@ -220,6 +247,7 @@ final class GuideScheduler {
             guard GuideSettings.followServer else { return false } // the server's hours switched off: Lume's own
             let closed = !isActive
             Logger.database.info("Guide: the guide server's push woke the app")
+            GFLiveLog.note("push arrived, app \(closed ? "closed" : "open")")
             if closed {
                 UserDefaults.standard.set(Date(), forKey: GuideStatus.lastBackgroundKey)
                 GFBackgroundRuns.begin(push: true)
@@ -231,6 +259,8 @@ final class GuideScheduler {
             if closed { GuideRefresher.shortWakes -= 1 }
             if closed { GFBackgroundRuns.finish(finished) }
             Logger.database.info("Guide: push refresh \(finished ? "done" : "not finished", privacy: .public)")
+            GFLiveLog.note("push refresh \(finished ? "done" : "not finished in 25 s")")
+            if closed { _ = await Self.within(seconds: 3) { await GFLiveLog.shared.flushAndWait(); return true } }
             if !finished { submitImportTask() }
             submitBackgroundRefresh()
             return finished
