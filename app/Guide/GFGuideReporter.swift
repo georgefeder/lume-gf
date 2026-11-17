@@ -28,6 +28,7 @@ nonisolated enum GFGuideReporter {
         report.port = guide.port
         report.path = "/gf-guide"
         report.percentEncodedQuery = timing.query(device: device, build: build)
+        GFLiveLog.note("guide " + timing.query(device: device, build: build))
         guard let url = report.url else { return }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         request.httpShouldHandleCookies = false

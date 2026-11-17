@@ -1,0 +1,72 @@
+diff --git a/Lume/Services/Diagnostics/PlaybackQoE.swift b/Lume/Services/Diagnostics/PlaybackQoE.swift
+index 5d7d4d0..afe76a1 100644
+--- a/Lume/Services/Diagnostics/PlaybackQoE.swift
++++ b/Lume/Services/Diagnostics/PlaybackQoE.swift
+@@ -157,6 +157,7 @@ final class PlaybackQoE {
+         startupBegan = Date()
+         firstFrameAt = nil
+         stallBegan = nil
++        GFLiveLog.note("player: \(engine.rawValue) opens a \(isLive ? "channel" : "film or episode")") // Lume GF
+         interval = Perf.begin(.playerStartup)
+         mutate(engine) { $0.sessions += 1 }
+     }
+@@ -180,6 +181,7 @@ final class PlaybackQoE {
+         }
+         let name = engine.rawValue
+         let live = isLive
++        GFLiveLog.note("player: picture after \(String(format: "%.2f", joinTime)) s (\(name))") // Lume GF
+         Logger.performance.log(
+             "join time \(joinTime, format: .fixed(precision: 2), privacy: .public)s engine=\(name, privacy: .public) live=\(live, privacy: .public)"
+         )
+@@ -191,6 +193,7 @@ final class PlaybackQoE {
+     func noteStallBegan() {
+         guard !isSuspended, firstFrameAt != nil, stallBegan == nil else { return }
+         stallBegan = Date()
++        GFLiveLog.note("player: stalled") // Lume GF
+         Perf.event(.playerRebuffer)
+     }
+ 
+@@ -199,6 +202,7 @@ final class PlaybackQoE {
+         guard !isSuspended, let stallBegan, let engine else { return }
+         let seconds = Date().timeIntervalSince(stallBegan)
+         self.stallBegan = nil
++        GFLiveLog.note("player: playing again after \(String(format: "%.1f", seconds)) s") // Lume GF
+         mutate(engine) {
+             $0.rebuffers += 1
+             $0.rebufferSeconds += seconds
+@@ -210,6 +214,7 @@ final class PlaybackQoE {
+     func noteStartupFailure() {
+         guard !isSuspended, let engine else { return }
+         Perf.event(.playerStartupFailure)
++        GFLiveLog.note("player: \(engine.rawValue) could not start the stream") // Lume GF
+         mutate(engine) { $0.startupFailures += 1 }
+         persist()
+     }
+@@ -221,6 +226,7 @@ final class PlaybackQoE {
+         summary.engineFallbacks += 1
+         let previous = engine?.rawValue ?? "none"
+         let replacement = next.rawValue
++        GFLiveLog.note("player: engine \(previous) -> \(replacement)") // Lume GF
+         Logger.performance.log(
+             "engine fallback \(previous, privacy: .public) -> \(replacement, privacy: .public)"
+         )
+@@ -232,6 +238,7 @@ final class PlaybackQoE {
+     /// video start.
+     func endSession() {
+         guard !isSuspended else { return }
++        if startupBegan != nil { GFLiveLog.note("player: closed\(firstFrameAt == nil ? " before a picture" : "")") }
+         closeSession(countingExit: true)
+     }
+ 
+diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
+index 707c844..6a8c5ef 100644
+--- a/Lume/Services/Sync/EPGSyncService.swift
++++ b/Lume/Services/Sync/EPGSyncService.swift
+@@ -127,6 +127,7 @@ final class EPGSyncService {
+     /// `playbackDidEnd`.
+     func playbackDidStart() {
+         if let task, isBackgroundRefresh {
++            GFLiveLog.note("guide refresh stopped: a video started (owed until it ends)")
+             task.cancel()
+             gate.owe()
+         }
