@@ -1,0 +1,18 @@
+diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
+index 9767d13..707c844 100644
+--- a/Lume/Services/Sync/EPGSyncService.swift
++++ b/Lume/Services/Sync/EPGSyncService.swift
+@@ -196,10 +196,9 @@ final class EPGSyncService {
+     /// playlist), and the gate alone only keeps it from starting second.
+     func contentSyncDidStart() {
+         gate.contentSyncStarted()
+-        if let task, isBackgroundRefresh {
+-            task.cancel()
+-            gate.owe()
+-        }
++        // Lume GF: a refresh already running goes on. Its guide comes from Lume GF's own server, not the provider whose
++        // connections the two would share, and cut short it started over each time: every return to the app re-checks
++        // the playlists, so an iPhone's whole guide import never finished (Georgs, 16 Nov). New refreshes still wait.
+     }
+ 
+     /// The content sync reported by `contentSyncDidStart` ended, however it
