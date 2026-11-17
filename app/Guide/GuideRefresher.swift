@@ -23,6 +23,8 @@ nonisolated final class GuideRefresher {
     /// A stale guide's programmes on now are in, ahead of the rest of its file (EPGSyncManager tells the guide screens).
     var onNowReady: @Sendable () -> Void = {}
     private var index: GuideStoredIndex?
+    /// This refresh's timings, sent to the server when it ends however it ends (GFGuideReporter).
+    private var timing: GFGuideTiming?
     /// False during a short background wake (the server's push, a background refresh: about 25 s), which a whole import
     /// never fits (15 Nov 2026: after the playlist's channels changed, every wake for hours downloaded the whole guide
     /// and was cut short). Such a wake then takes the server's hourly changes even when the channels changed; the
@@ -42,6 +44,15 @@ nonisolated final class GuideRefresher {
     }
 
     func refresh(sourceID: UUID, url: String, knownChannelIDs: Set<String>, force: Bool) async throws -> Outcome {
+        // one report per refresh, from the outermost call (the full-guide fallback calls this again)
+        let reports = timing == nil
+        if reports { timing = GFGuideTiming(kind: Self.wholeImportAllowed ? "app" : "wake") }
+        defer {
+            if reports, let timing {
+                GFGuideReporter.send(timing, guideURL: url)
+                self.timing = nil
+            }
+        }
         let state = states.state(for: sourceID)
         // A cleared store (storage cleanup, reinstall) must not trust "unchanged" for a guide that is gone.
         var probe = FetchDescriptor<EPGListing>()
@@ -67,10 +78,13 @@ nonisolated final class GuideRefresher {
         } catch {
             // iOS ending a background wake mid-download is no failure of the guide (it showed as "last check failed
             // (NSURLErrorDomain -999)")
+            timing?.download = GFGuideTiming.ms(since: asked)
             if Task.isCancelled {
+                timing?.why = "stopped"
                 states.update(sourceID) { $0.lastAttempt = now() } // the usual 15 minutes before the next try
                 throw CancellationError()
             }
+            timing?.why = "error"
             let reason = Self.reason(error)
             states.update(sourceID) { $0.recordFailure(reason, at: now()) }
             let text = "Guide: download stopped after \(Self.seconds(since: asked)) s (\(reason))"
@@ -78,9 +92,12 @@ nonisolated final class GuideRefresher {
             throw error
         }
         let fetched = Self.seconds(since: asked)
+        timing?.download = GFGuideTiming.ms(since: asked)
         Logger.database.info("Guide: \(Self.describe(answer), privacy: .public) in \(fetched, privacy: .public) s")
         switch answer {
         case .unchanged:
+            timing?.path = "unchanged"
+            timing?.finished = true
             states.update(sourceID) { $0.recordUnchanged(at: now()) }
             return Outcome(claimedChannelIDs: state.channelIDs.intersection(knownChannelIDs), summary: "unchanged")
         case let .file(file, etag, lastModified, serverBuild, isTemporary):
@@ -115,11 +132,14 @@ nonisolated final class GuideRefresher {
             // the same file for the same channels: nothing to import (servers without ETag or Last-Modified)
             let fileHash = M3UClient.sha256Hex(ofFileAt: file)
             if hasGuide, state.isSameFile(hash: fileHash, channelsKey: channelsKey) {
+                timing?.path = "same"
+                timing?.finished = true
                 states.update(sourceID) {
                     $0.recordSameFile(etag: etag, lastModified: lastModified, serverBuild: serverBuild, at: now())
                 }
                 return Outcome(claimedChannelIDs: state.channelIDs.intersection(knownChannelIDs), summary: "same file")
             }
+            timing?.path = "whole"
             let started = Date()
             let applier = GuideListingApplier(container: container)
             let at = now()
@@ -128,9 +148,15 @@ nonisolated final class GuideRefresher {
                 index = read
             } else {
                 index = readStored(applier, file: file, state: state, now: at)
-                if Task.isCancelled { throw CancellationError() } // a partly read store is no index
+                timing?.readStored = GFGuideTiming.ms(since: started)
+                timing?.storedRows = index.rows.count
+                if Task.isCancelled { // a partly read store is no index
+                    timing?.why = "stopped"
+                    throw CancellationError()
+                }
                 self.index = index
             }
+            let applying = Date()
             // a stale stored guide (a phone not opened for a day, a first import): what is on now goes in first
             let mine = state.channelIDs.intersection(knownChannelIDs)
             let stale = GuideDiffPlanner.wantsNowFirst(stored: index.rows,
@@ -144,6 +170,12 @@ nonisolated final class GuideRefresher {
             }
             let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: at,
                                        allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: logged)
+            timing?.apply = GFGuideTiming.ms(since: applying)
+            timing?.inserted = result.inserted
+            timing?.updated = result.updated
+            timing?.deleted = result.deleted
+            timing?.finished = result.completed
+            if !result.completed { timing?.why = Task.isCancelled ? "stopped" : "incomplete" }
             // a complete import counts even when a stop came at its very end: the next run must not do it again
             guard result.completed else {
                 let why = Task.isCancelled ? "stopped" : "file not read to the end"
@@ -173,8 +205,15 @@ nonisolated final class GuideRefresher {
         let removed = delta.removed.compactMap { gone in
             XMLTVDate.parse(gone.start).map { GuideDiffPlanner.id(channelId: gone.channel, start: $0) }
         }
+        timing?.path = "delta"
         let result = GuideListingApplier(container: container)
             .applyChanges(fileURL: file, claimableChannels: knownChannelIDs, removed: removed)
+        timing?.apply = GFGuideTiming.ms(since: started)
+        timing?.inserted = result.inserted
+        timing?.updated = result.updated
+        timing?.deleted = result.deleted
+        timing?.finished = result.completed
+        if !result.completed { timing?.why = Task.isCancelled ? "stopped" : "incomplete" }
         index = nil // read before this run's changes: no longer the stored guide
         guard result.completed else {
             let why = Task.isCancelled ? "stopped" : "file not read to the end"
@@ -205,6 +244,8 @@ nonisolated final class GuideRefresher {
     /// A short wake got the whole guide: left for the app being open or the overnight import (`wholeImportDue`).
     private func wholeImportLater(sourceID: UUID, state: GuideSourceState, known: Set<String>) -> Outcome {
         Logger.database.info("Guide: the whole guide waits for the app being open or the overnight import")
+        timing?.path = "later"
+        timing?.finished = true
         states.update(sourceID) {
             $0.wholeImportOwed = true
             $0.lastAttempt = now()

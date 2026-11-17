@@ -123,6 +123,7 @@ final class GuideScheduler {
     /// The app finished launching (it is in the foreground).
     func appLaunched() {
         launched = true
+        GFGuideReporter.noteDevice()
         #if canImport(UIKit)
             isActive = UIApplication.shared.applicationState != .background
         #else
