@@ -1,0 +1,13 @@
+diff --git a/Lume/Views/Player/AetherEngineEngineView.swift b/Lume/Views/Player/AetherEngineEngineView.swift
+index 3cf529f..ed179e6 100644
+--- a/Lume/Views/Player/AetherEngineEngineView.swift
++++ b/Lume/Views/Player/AetherEngineEngineView.swift
+@@ -148,7 +148,7 @@ import SwiftUI
+             .subtitleSearch(isPresented: $isSearchingSubtitles, media: media) { subtitle in
+                 coordinator.loadExternalSubtitle(subtitle)
+             }
+-            .preferredColorScheme(.dark)
++            .gfPlayerContentDark() // Lume GF: dark without switching the app (see GFPlayerAppearance)
+             .nowPlayingTransport(coordinator, advance: onRemoteAdvance)
+             .hueFrameSource(coordinator, isPictureInPicture: coordinator.isPipActive)
+             .onAppear {

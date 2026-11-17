@@ -1,0 +1,57 @@
+diff --git a/Lume/Services/Player/PlayerSettings.swift b/Lume/Services/Player/PlayerSettings.swift
+index 00339e6..65c5300 100644
+--- a/Lume/Services/Player/PlayerSettings.swift
++++ b/Lume/Services/Player/PlayerSettings.swift
+@@ -111,8 +111,11 @@ nonisolated enum StreamInfoDetailLevel: String, CaseIterable, Identifiable {
+ enum PlayerEnginePriority {
+     /// The order a fresh install tries engines in, restricted to the engines
+     /// available on this platform.
++    /// Lume GF: KSPlayer first, as up to Lume 3.1 (Lume 3.2 leads with AetherEngine): Lume GF's player work (the
++    /// iPhone Duo's layouts, channel-change timing, the live probe, the enhancer) is KSPlayer's, and with 3.2 every
++    /// device that never ordered its engines quietly lost it (Georgs, 16-17 Nov). A stored order is kept as it is.
+     nonisolated static var defaultOrder: [PlayerEngineKind] {
+-        [.aetherEngine, .lumeEngine, .ksPlayer, .vlcKit, .avPlayer].filter(\.isAvailable)
++        [.ksPlayer, .vlcKit, .avPlayer, .lumeEngine, .aetherEngine].filter(\.isAvailable)
+     }
+ 
+     /// Decode the stored priority into a complete, de-duplicated engine list.
+diff --git a/LumeTests/Services/PlayerSettingsTests.swift b/LumeTests/Services/PlayerSettingsTests.swift
+index fc4f86a..b70070f 100644
+--- a/LumeTests/Services/PlayerSettingsTests.swift
++++ b/LumeTests/Services/PlayerSettingsTests.swift
+@@ -158,19 +158,18 @@ struct PlayerEnginePriorityTests {
+         #expect(resolved.count == PlayerEngineKind.allCases.count)
+     }
+ 
+-    @Test func `default priority is Aether, Lume, KSPlayer, VLCKit, AVPlayer`() {
++    @Test func `default priority is KSPlayer, VLCKit, AVPlayer, Lume, Aether (Lume GF)`() {
+         // A fresh install has neither key stored; callers pass the default
+         // engine as the legacy value.
+         let resolved = PlayerEnginePriority.resolve(
+             priorityRaw: "",
+             legacyEngineRaw: PlayerEngineKind.defaultValue.rawValue
+         )
++        #expect(PlayerEngineKind.defaultValue == .ksPlayer)
+         #if os(visionOS)
+-            #expect(PlayerEngineKind.defaultValue == .lumeEngine)
+-            #expect(resolved == [.lumeEngine, .ksPlayer, .vlcKit, .avPlayer])
++            #expect(resolved == [.ksPlayer, .vlcKit, .avPlayer, .lumeEngine])
+         #else
+-            #expect(PlayerEngineKind.defaultValue == .aetherEngine)
+-            #expect(resolved == [.aetherEngine, .lumeEngine, .ksPlayer, .vlcKit, .avPlayer])
++            #expect(resolved == [.ksPlayer, .vlcKit, .avPlayer, .lumeEngine, .aetherEngine])
+         #endif
+         #expect(resolved == PlayerEnginePriority.defaultOrder)
+     }
+@@ -181,9 +180,9 @@ struct PlayerEnginePriorityTests {
+             legacyEngineRaw: PlayerEngineKind.vlcKit.rawValue
+         )
+         #if os(visionOS)
+-            #expect(resolved == [.vlcKit, .lumeEngine, .ksPlayer, .avPlayer])
++            #expect(resolved == [.vlcKit, .ksPlayer, .avPlayer, .lumeEngine])
+         #else
+-            #expect(resolved == [.vlcKit, .aetherEngine, .lumeEngine, .ksPlayer, .avPlayer])
++            #expect(resolved == [.vlcKit, .ksPlayer, .avPlayer, .lumeEngine, .aetherEngine])
+         #endif
+     }
+ 
