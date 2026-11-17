@@ -25,9 +25,14 @@ struct GFLiveLogLinesTests {
 
     @Test func `sent only with the app on screen, after a minute or with many lines`() {
         #expect(GFLiveLogLines.shouldSend(waiting: 3, sinceLast: 61, appActive: true))
-        #expect(GFLiveLogLines.shouldSend(waiting: 40, sinceLast: 5, appActive: true))
+        #expect(GFLiveLogLines.shouldSend(waiting: 40, sinceLast: 11, appActive: true))
+        #expect(GFLiveLogLines.shouldSend(waiting: 300, sinceLast: 5, appActive: true) == false)
         #expect(GFLiveLogLines.shouldSend(waiting: 3, sinceLast: 5, appActive: true) == false)
         #expect(GFLiveLogLines.shouldSend(waiting: 100, sinceLast: 600, appActive: false) == false)
         #expect(GFLiveLogLines.shouldSend(waiting: 0, sinceLast: 600, appActive: true) == false)
+    }
+
+    @Test func `query values keep a plus and newlines apart from spaces`() {
+        #expect(GFLiveLogLines.queryValue("a+b c\nd") == "a%2Bb%20c%0Ad")
     }
 }

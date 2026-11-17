@@ -148,7 +148,8 @@ final class GuideScheduler {
         case .background:
             isActive = false
             GFLiveLog.note("app left the screen")
-            GFLiveLog.shared.appActive(false) // sends what is waiting
+            GFLiveLog.shared.appActive(false)
+            sendLogInBackground()
             timer?.cancel()
             timer = nil
             submitBackgroundRefresh()
@@ -156,6 +157,19 @@ final class GuideScheduler {
         default:
             break
         }
+    }
+
+    /// The app left the screen: what the live log holds goes now, in the few seconds iOS gives for it.
+    private func sendLogInBackground() {
+        #if canImport(UIKit)
+            let task = UIApplication.shared.beginBackgroundTask(withName: "gf.live-log")
+            Task {
+                await GFLiveLog.shared.flushAndWait()
+                if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+            }
+        #else
+            GFLiveLog.shared.flush()
+        #endif
     }
 
     /// A refresh ended, however it ended: plan the next one and update the status line.
@@ -221,7 +235,8 @@ final class GuideScheduler {
             // the followed shows' reminders from the new guide, before iOS takes the time back
             if finished { await GFShowReminders.reschedule() }
             GFLiveLog.note("\(kind) \(outcome)")
-            GFLiveLog.shared.flush() // the radio is on now: the wake's lines go with it
+            // the radio is on now: the wake's lines go with it, before iOS takes the time back (a few seconds at most)
+            _ = await Self.within(seconds: 4) { await GFLiveLog.shared.flushAndWait(); return true }
             task.setTaskCompleted(success: finished)
         }
 
@@ -245,7 +260,7 @@ final class GuideScheduler {
             if closed { GFBackgroundRuns.finish(finished) }
             Logger.database.info("Guide: push refresh \(finished ? "done" : "not finished", privacy: .public)")
             GFLiveLog.note("push refresh \(finished ? "done" : "not finished in 25 s")")
-            if closed { GFLiveLog.shared.flush() }
+            if closed { _ = await Self.within(seconds: 3) { await GFLiveLog.shared.flushAndWait(); return true } }
             if !finished { submitImportTask() }
             submitBackgroundRefresh()
             return finished

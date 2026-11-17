@@ -58,14 +58,21 @@ nonisolated final class GFLiveLog: @unchecked Sendable {
         lock.withLock { endpoint = log.url }
     }
 
-    /// The app came on screen or left it. Leaving sends what is waiting, once.
+    /// The app came on screen or left it (leaving, GuideScheduler sends what is waiting in iOS's background time).
     func appActive(_ active: Bool) {
         lock.withLock { appActive = active }
-        if !active { flush() }
     }
 
-    /// Sends what is waiting now (the end of a background wake, the app leaving the screen).
-    func flush() {
+    /// Sends what is waiting and returns once the requests are done (ten seconds at most): the end of a background
+    /// wake waits for it, or iOS suspends the app with the requests still out.
+    func flushAndWait() async {
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            flush { done.resume() }
+        }
+    }
+
+    /// Sends what is waiting now (the app leaving the screen, enough lines). `finished` runs once it is done.
+    func flush(finished: (@Sendable () -> Void)? = nil) {
         let (batches, url, first) = lock.withLock { () -> ([[String]], URL?, Int) in
             guard !sending, let endpoint, !lines.isEmpty else { return ([], nil, 0) }
             sending = true
@@ -76,14 +83,17 @@ nonisolated final class GFLiveLog: @unchecked Sendable {
             sequence += GFLiveLogLines.batches(taken).count
             return (GFLiveLogLines.batches(taken), endpoint, first)
         }
-        guard let url, !batches.isEmpty else { return }
+        guard let url, !batches.isEmpty else {
+            finished?()
+            return
+        }
         let group = DispatchGroup()
         let unsent = Unsent()
         for (offset, batch) in batches.enumerated() {
             guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { continue }
-            parts.queryItems = [.init(name: "d", value: GFGuideReporter.device), .init(name: "b", value: build),
-                                .init(name: "s", value: String(first + offset)),
-                                .init(name: "l", value: batch.joined(separator: "\n"))]
+            parts.percentEncodedQuery = [("d", GFGuideReporter.device), ("b", build), ("s", String(first + offset)),
+                                         ("l", batch.joined(separator: "\n"))]
+                .map { "\($0.0)=\(GFLiveLogLines.queryValue($0.1))" }.joined(separator: "&")
             guard let request = parts.url.map({ URLRequest(url: $0, cachePolicy: .reloadIgnoringLocalCacheData,
                                                            timeoutInterval: 10) }) else { continue }
             group.enter()
@@ -98,6 +108,7 @@ nonisolated final class GFLiveLog: @unchecked Sendable {
                 // a failed send keeps its lines (ahead of the newer ones), within the limit
                 lines = Array((unsent.lines + lines).suffix(GFLiveLogLines.maxKept))
             }
+            finished?()
         }
     }
 

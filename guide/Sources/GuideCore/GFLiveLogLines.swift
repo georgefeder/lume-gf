@@ -39,9 +39,16 @@ nonisolated enum GFLiveLogLines {
         return out
     }
 
-    /// Whether to send now: the app on screen and a minute gone, or many lines waiting.
+    /// Whether to send now: the app on screen and a minute gone, or many lines waiting and ten seconds gone (never a
+    /// send per line, not even offline, when failed sends keep their lines waiting).
     static func shouldSend(waiting: Int, sinceLast: TimeInterval, appActive: Bool) -> Bool {
         guard waiting > 0, appActive else { return false }
-        return sinceLast >= 60 || waiting >= 40
+        return sinceLast >= 60 || (waiting >= 40 && sinceLast >= 10)
+    }
+
+    /// A query value with everything but letters, digits and `-._~` percent-encoded (a `+` would read as a space).
+    static func queryValue(_ text: String) -> String {
+        text.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn:
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")) ?? ""
     }
 }
