@@ -1,0 +1,28 @@
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Options.swift b/Lume/Views/Player/KSPlayerEngineView+Options.swift
+index 9158fdd..2464d56 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Options.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Options.swift
+@@ -149,6 +149,8 @@ enum KSPlayerOptionsFactory {
+         // so setting it here takes effect for this playback.
+         KSOptions.useSystemHTTPProxy = settings.systemProxy
+         KSOptions.firstPlayerType = settings.primaryEngine == .ffmpeg ? KSMEPlayer.self : KSAVPlayer.self
++        // Lume GF: a catch-up archive is an MPEG-TS file AVPlayer can't open: straight to FFmpeg
++        if media.gfCatchup != nil { KSOptions.firstPlayerType = KSMEPlayer.self }
+         // Lume GF: each step of a channel change, at the time it happened, in the diagnostic report ("Zap: ...";
+         // deps/KSPlayer/0003), and the full-screen player's live changes timed for our server (GFZapReporter)
+         KSOptions.gfZapReport = { line in
+@@ -205,6 +207,14 @@ enum KSPlayerOptionsFactory {
+         if media.recordingTimeline != nil {
+             options.formatContextOptions["live_start_index"] = 0
+         }
++        // Lume GF: a catch-up archive (GFCatchupSeek) is read straight from its start: seeks ask the archive again, so
++        // FFmpeg need not read its end for a length (the provider answers byte ranges wrongly: ~8 requests and 3-4 s
++        // per open), and picture and sound start together at its first keyframe, which can come seconds in
++        // (deps/KSPlayer 0006; Oracle Admin, 18 Nov)
++        if media.gfCatchup != nil {
++            options.formatContextOptions["seekable"] = 0
++            options.gfStartAtKeyframe = true
++        }
+         #if os(macOS)
+             options.automaticWindowResize = false
+         #endif

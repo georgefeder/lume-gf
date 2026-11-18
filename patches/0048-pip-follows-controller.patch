@@ -1,0 +1,29 @@
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Playback.swift b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+index 7661fbf..84fa150 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Playback.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+@@ -463,7 +463,23 @@ extension KSPlayerEngineView {
+         /// gesture) never sets it, and closing the window with its ✕ never
+         /// clears it.
+         func followSystemPip(_ playerLayer: KSPlayerLayer) async {
+-            guard let pip = playerLayer.player.pipController else { return }
++            // Lume GF: KSPlayer makes a new controller when the video's format changes (deps/KSPlayer 0005): follow
++            // each one, not only the first (checked twice a second, which costs nothing)
++            while !Task.isCancelled, let pip = playerLayer.player.pipController {
++                await withTaskGroup(of: Void.self) { group in
++                    group.addTask { await followPip(pip) }
++                    group.addTask { @MainActor in
++                        while !Task.isCancelled, playerLayer.player.pipController === pip {
++                            try? await Task.sleep(for: .milliseconds(500))
++                        }
++                    }
++                    await group.next()
++                    group.cancelAll()
++                }
++            }
++        }
++
++        private func followPip(_ pip: KSPictureInPictureController) async {
+             let changes = pip.publisher(for: \.isPictureInPictureActive, options: [.new]).values
+             for await active in changes {
+                 guard !Task.isCancelled else { return }

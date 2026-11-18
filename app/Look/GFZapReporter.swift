@@ -44,6 +44,7 @@ nonisolated final class GFZapReporter: @unchecked Sendable {
     func expect(url: URL, isLive: Bool, lowLatency: Bool? = nil, liveBuffer: Int? = nil) {
         let now = CACurrentMediaTime()
         let kind = Self.deviceKind
+        GFPlayBeacon.shared.expect(url: url, isLive: isLive, lowLatency: lowLatency, liveBuffer: liveBuffer, device: kind)
         lock.withLock {
             let stream = url.lastPathComponent
             guard stream != lastStream else { return }

@@ -1,0 +1,23 @@
+Lume GF: when the video's format changes (another channel, a new resolution), KSMEPlayer replaces its display layer
+and makes a new PiP controller, which lost automatic PiP on the Home gesture (only readyToPlay set it): it keeps it
+now (Georgs, 18 Nov: PiP on Home only sometimes). The app follows the new controller itself (patches/0048).
+Made against KSPlayer bdfa2da (deps/KSPlayer/REVISION) with 0001 to 0004 applied.
+
+diff --git a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+index b497251..e246a2f 100644
+--- a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
++++ b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+@@ -582,7 +582,12 @@ extension KSMEPlayer: DisplayLayerDelegate {
+     public func change(displayLayer: AVSampleBufferDisplayLayer) {
+         if #available(iOS 15.0, tvOS 15.0, macOS 12.0, *) {
+             let contentSource = AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer: displayLayer, playbackDelegate: self)
+-            _pipController = KSPictureInPictureController(contentSource: contentSource)
++            let pip = KSPictureInPictureController(contentSource: contentSource)
++            #if os(iOS)
++            // Lume GF: the new controller starts PiP on the Home gesture as the old one did (only readyToPlay set it)
++            pip.canStartPictureInPictureAutomaticallyFromInline = options.canStartPictureInPictureAutomaticallyFromInline
++            #endif
++            _pipController = pip
+             // 更改contentSource会直接crash
+ //            pipController?.contentSource = contentSource
+         }
