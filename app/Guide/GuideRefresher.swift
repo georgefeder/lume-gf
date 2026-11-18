@@ -28,7 +28,8 @@ nonisolated final class GuideRefresher {
     /// False during a short background wake (the server's push, a background refresh: about 25 s), which a whole import
     /// never fits (15 Nov 2026: after the playlist's channels changed, every wake for hours downloaded the whole guide
     /// and was cut short). Such a wake then takes the server's hourly changes even when the channels changed; the
-    /// whole import their new channels need waits for the app being open or the overnight import. GuideScheduler
+    /// whole import their new channels need waits for the app being open or the overnight import. A device too far
+    /// behind for a change file takes the whole guide in such a wake anyway, as far as it gets (18 Nov). GuideScheduler
     /// counts the short wakes running (overlapping ones too: a push and a background refresh came together).
     nonisolated(unsafe) static var shortWakes = 0
     static var wholeImportAllowed: Bool {
@@ -125,10 +126,11 @@ nonisolated final class GuideRefresher {
                                         lastModified: lastModified, serverBuild: serverBuild,
                                         wholeImportOwed: !sameChannels)
             }
-            // the whole guide (the server keeps no change file for this device's build) never fits a short wake
-            if !whole, hasGuide {
-                return wholeImportLater(sourceID: sourceID, state: state, known: knownChannelIDs)
-            }
+            // the whole guide (the server keeps no change file for a device more than 6 hours behind) goes in even in a
+            // short wake, as far as the wake lasts: put off, it never came (18 Nov 2026: the iPhone 12 hours behind
+            // after a night of wakes). What is on now goes in first (a stale guide), and the rest is saved every
+            // batch (GuideListingApplier.saveThreshold), so the next wake goes on from there: what is stored and the
+            // same is not written again.
             // the same file for the same channels: nothing to import (servers without ETag or Last-Modified)
             let fileHash = M3UClient.sha256Hex(ofFileAt: file)
             if hasGuide, state.isSameFile(hash: fileHash, channelsKey: channelsKey) {

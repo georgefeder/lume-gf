@@ -21,8 +21,11 @@ nonisolated struct GuideListingApplier {
         var claimedChannels: Set<String> = []
     }
 
-    /// Like Lume's own import: every save re-runs each active `@Query`, so saves are coalesced.
-    static let saveThreshold = 10000
+    /// Like Lume's own import: every save re-runs each active `@Query`, so saves are coalesced. In a short background
+    /// wake every batch is saved: nothing is on screen, and iOS may end the wake at any batch.
+    static var saveThreshold: Int {
+        GuideRefresher.wholeImportAllowed ? 10000 : 2000
+    }
     static let deleteChunk = 500
 
     let container: ModelContainer
