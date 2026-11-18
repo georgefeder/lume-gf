@@ -22,10 +22,9 @@ nonisolated struct GuideListingApplier {
     }
 
     /// Like Lume's own import: every save re-runs each active `@Query`, so saves are coalesced. In a short background
-    /// wake every batch is saved: nothing is on screen, and iOS may end the wake at any batch.
-    static var saveThreshold: Int {
-        GuideRefresher.wholeImportAllowed ? 10000 : 2000
-    }
+    /// wake every batch is saved (`wakeSaveThreshold`): nothing is on screen, and iOS may end the wake at any batch.
+    static let saveThreshold = 10000
+    static let wakeSaveThreshold = 2000
     static let deleteChunk = 500
 
     let container: ModelContainer
@@ -129,6 +128,7 @@ nonisolated struct GuideListingApplier {
     /// saved first, then `onNowReady` runs (the guide screens show them), then the whole file.
     func apply(fileURL: URL, claimableChannels: Set<String>, index: GuideStoredIndex, now: Date,
                allChannels: Set<String>? = nil, nowFirst: DateInterval? = nil, onNowReady: () -> Void = {},
+               saveEvery: Int = saveThreshold,
                shouldStop: @escaping () -> Bool = GFGuidePause.stopOrWait) -> Result {
         // the planner takes the rows over while the file is read (a shared dictionary is copied whole on its first
         // change); they come back, with this file's changes, at the end
@@ -137,7 +137,8 @@ nonisolated struct GuideListingApplier {
         let run = Run(
             planner: GuideDiffPlanner(stored: rows, claimableChannels: claimableChannels, now: now,
                                       allChannels: allChannels),
-            context: ModelContext(container)
+            context: ModelContext(container),
+            saveEvery: saveEvery
         )
         var parse = (count: 0, completed: true)
         if let nowFirst {
@@ -186,6 +187,7 @@ nonisolated struct GuideListingApplier {
     /// background wake. Saved in batches and at the end, so a stop keeps what is done (the same file applied again
     /// writes nothing twice).
     func applyChanges(fileURL: URL, claimableChannels: Set<String>, removed: [String],
+                      saveEvery: Int = saveThreshold,
                       shouldStop: @escaping () -> Bool = GFGuidePause.stopOrWait) -> Result {
         let context = ModelContext(container)
         context.autosaveEnabled = false
@@ -222,7 +224,7 @@ nonisolated struct GuideListingApplier {
                     run.result.claimedChannels.insert(p.channelId)
                 }
                 run.pending += ids.count
-                if run.pending >= Self.saveThreshold {
+                if run.pending >= saveEvery {
                     GFGuidePause.shared.waitWhileHeld() // no write while video plays
                     try? context.save()
                     run.pending = 0
@@ -269,10 +271,12 @@ nonisolated struct GuideListingApplier {
         var changed: [String: GuideDiffPlanner.Stored] = [:]
         var result = Result()
         var pending = 0
+        let saveEvery: Int
 
-        init(planner: GuideDiffPlanner, context: ModelContext) {
+        init(planner: GuideDiffPlanner, context: ModelContext, saveEvery: Int) {
             self.planner = planner
             self.context = context
+            self.saveEvery = saveEvery
             context.autosaveEnabled = false
         }
 
@@ -314,7 +318,7 @@ nonisolated struct GuideListingApplier {
             result.inserted += plan.inserts.count
             result.updated += plan.updates.count
             pending += plan.inserts.count + plan.updates.count
-            if pending >= GuideListingApplier.saveThreshold {
+            if pending >= saveEvery {
                 GFGuidePause.shared.waitWhileHeld() // no write while video plays
                 try? context.save()
                 pending = 0
