@@ -135,14 +135,14 @@ index 7107799..7661fbf 100644
          // Reset session gates so stale callbacks from the previous session don't
          // prematurely clear the spinner or reset the reconnect budget.
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index e26ebf3..5764ee6 100644
+index e26ebf3..5a46f64 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -332,6 +332,7 @@ struct KSPlayerEngineView: View {
                  cancelStartupWatchdog()
                  cancelStallWatchdog()
                  PlaybackQoE.shared.endSession()
-+                GFPlayBeacon.send(.close) // Lume GF
++                GFPlayBeacon.shared.close(stream: media.url.lastPathComponent) // Lume GF
                  NowPlayingService.shared.detachTransport(owner: coordinator)
                  coordinator.resetPlayer()
              }
@@ -150,7 +150,7 @@ index e26ebf3..5764ee6 100644
                  cancelStartupWatchdog()
                  cancelStallWatchdog()
                  PlaybackQoE.shared.endSession()
-+                GFPlayBeacon.send(.close) // Lume GF
++                GFPlayBeacon.shared.close(stream: media.url.lastPathComponent) // Lume GF
                  NowPlayingService.shared.detachTransport(owner: coordinator)
                  coordinator.resetPlayer()
              }

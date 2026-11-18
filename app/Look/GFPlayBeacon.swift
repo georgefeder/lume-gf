@@ -15,8 +15,12 @@ nonisolated final class GFPlayBeacon: @unchecked Sendable {
     private var lowLatency: Bool?
     private var liveBuffer: Int?
     private var device = "iphone"
-    /// The stream was closed, and no reason to open it again came first: the next open is a new play.
-    private var closed = false
+    /// The stream before this one and its session, for its close arriving after the next stream was set up.
+    private var previous: (stream: String, session: String)?
+    /// When the stream was last closed and last given a reason to open again: an open after a close with no reason
+    /// shortly around it is a new play (a reopen's close comes as the old player view goes, just after the reason).
+    private var closedAt: Date?
+    private var reopenedAt: Date?
     private let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
 
     private let urlSession: URLSession = {
@@ -49,9 +53,11 @@ nonisolated final class GFPlayBeacon: @unchecked Sendable {
                 return
             }
             endpoint = URL(string: "\(scheme)://\(host)/gf-play")
+            if let stream { previous = (stream, session) }
             stream = name
             session = Self.newSession()
-            closed = false
+            closedAt = nil
+            reopenedAt = nil
             self.lowLatency = lowLatency
             self.liveBuffer = liveBuffer
             self.device = device
@@ -62,14 +68,17 @@ nonisolated final class GFPlayBeacon: @unchecked Sendable {
         let at = Int64(Date().timeIntervalSince1970 * 1000)
         lock.withLock {
             guard let endpoint, let stream,
-                  var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+                  let components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
             else { return }
+            let now = Date()
             switch kind {
-            case .close: closed = true
-            case .reopen: closed = false
-            case .open where closed:
-                session = Self.newSession()
-                closed = false
+            case .reopen: reopenedAt = now
+            case .open:
+                if let closedAt, reopenedAt.map({ abs($0.timeIntervalSince(closedAt)) > 5 }) ?? true {
+                    session = Self.newSession()
+                    reopenedAt = nil
+                }
+                closedAt = nil
             default: break
             }
             var event = GFPlayEvent(kind: kind, stream: stream, at: at, session: session)
@@ -77,12 +86,36 @@ nonisolated final class GFPlayBeacon: @unchecked Sendable {
                 event.lowLatency = lowLatency
                 event.liveBuffer = liveBuffer
             }
-            components.percentEncodedQuery = event.query(device: device, build: build)
-            guard let url = components.url else { return }
-            var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5)
-            request.httpShouldHandleCookies = false
-            urlSession.dataTask(with: request).resume()
+            post(event, to: components)
         }
+    }
+
+    /// The player view for `stream` went away. A close for the stream before (the next channel's set-up came first)
+    /// goes with that stream and its session.
+    func close(stream name: String) {
+        let at = Int64(Date().timeIntervalSince1970 * 1000)
+        lock.withLock {
+            guard let endpoint, let current = stream,
+                  let components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+            else { return }
+            let base = { (name: String) in name.split(separator: ".").first.map(String.init) ?? name }
+            if base(name) == base(current) {
+                closedAt = Date()
+                post(GFPlayEvent(kind: .close, stream: current, at: at, session: session), to: components)
+            } else if let previous, base(name) == base(previous.stream) {
+                post(GFPlayEvent(kind: .close, stream: previous.stream, at: at, session: previous.session), to: components)
+            }
+        }
+    }
+
+    /// Called with the lock held; the request runs on the session's own queue.
+    private func post(_ event: GFPlayEvent, to endpoint: URLComponents) {
+        var components = endpoint
+        components.percentEncodedQuery = event.query(device: device, build: build)
+        guard let url = components.url else { return }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5)
+        request.httpShouldHandleCookies = false
+        urlSession.dataTask(with: request).resume()
     }
 
     private static func newSession() -> String {
