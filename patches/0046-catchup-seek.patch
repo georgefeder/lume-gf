@@ -1,0 +1,294 @@
+diff --git a/Lume/Services/Player/PlayableMedia.swift b/Lume/Services/Player/PlayableMedia.swift
+index 3560802..18329c1 100644
+--- a/Lume/Services/Player/PlayableMedia.swift
++++ b/Lume/Services/Player/PlayableMedia.swift
+@@ -18,7 +18,7 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
+         case recording(String)
+     }
+ 
+-    let id: String
++    private(set) var id: String // Lume GF: a catch-up jump is a new item (gfCatchupShifted)
+     private(set) var url: URL
+     let title: String
+     let subtitle: String?
+@@ -53,6 +53,9 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
+     /// because the variant can sit in another category (a provider's "4K" one)
+     /// and a quality change is not a channel change. `nil` everywhere else.
+     private(set) var qualityAnchorID: String?
++    /// Lume GF: for an Xtream catch-up programme, the programme and the minute its address starts at
++    /// (GFCatchupSeek). `nil` for everything else.
++    private(set) var gfCatchup: GFCatchupSeek.Window?
+ 
+     nonisolated init(
+         id: String,
+@@ -88,6 +91,27 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
+         kind == .live
+     }
+ 
++    /// Lume GF: `media` as the catch-up programme from `start` to `end`, when its address is an Xtream timeshift one
++    /// (GFCatchupSeek).
++    nonisolated static func gfWithCatchup(_ media: PlayableMedia, start: Date, end: Date) -> PlayableMedia {
++        var copy = media
++        copy.gfCatchup = GFCatchupSeek.window(url: media.url, id: media.id, start: start, end: end)
++        return copy
++    }
++
++    /// Lume GF: the same catch-up programme from `offset` seconds in, as a new item (GFCatchupSeek).
++    nonisolated func gfCatchupShifted(to offset: TimeInterval) -> PlayableMedia? {
++        guard let window = gfCatchup, let url = GFCatchupSeek.url(window, offset: offset) else { return nil }
++        var copy = self
++        copy.id = GFCatchupSeek.id(window, offset: offset)
++        copy.url = url
++        copy.gfCatchup = GFCatchupSeek.Window(
++            baseURL: window.baseURL, baseID: window.baseID, length: window.length, offset: offset,
++            jumps: (window.jumps ?? 0) + 1
++        )
++        return copy
++    }
++
+     /// A copy of this stream that resumes at `position` seconds. Same identity,
+     /// so it's the same title for progress/NextUp — used when handing the stream
+     /// to a different engine mid-playback (e.g. switching to AVPlayer to route
+@@ -417,7 +441,7 @@ nonisolated extension PlayableMedia {
+             ) else { return nil }
+             url = built
+         }
+-        return PlayableMedia(
++        let media = PlayableMedia(
+             id: "catchup-\(stream.id)-\(Int(start.timeIntervalSince1970))",
+             url: url,
+             title: GFChannelNames.title(for: stream.name),
+@@ -427,5 +451,6 @@ nonisolated extension PlayableMedia {
+             startTime: 0,
+             contentRef: .live(stream.id)
+         )
++        return gfWithCatchup(media, start: start, end: end) // Lume GF: seeks ask the archive again (GFCatchupSeek)
+     }
+ }
+diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
+index 99beace..2802650 100644
+--- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
+@@ -48,6 +48,9 @@ import SwiftUI
+         /// swapper so two presses can't stack a second decoder teardown on the
+         /// first.
+         var onStepItem: ((PlayerMediaSwapper.Step) -> Void)?
++        /// Lume GF: a seek in a catch-up programme, asked of the archive again (GFCatchupSeek); `false` when it is not
++        /// one, and the seek goes to the player.
++        var onCatchupJump: (GFCatchupSeek.Jump) -> Bool = { _ in false }
+ 
+         @Environment(\.modelContext) private var modelContext
+         /// Mirrors the backing model's favorite flag; refreshed when the media
+@@ -168,7 +171,7 @@ import SwiftUI
+ 
+                 if !media.isLive {
+                     Button {
+-                        coordinator.skip(interval: -15)
++                        if !onCatchupJump(.by(-15)) { coordinator.skip(interval: -15) } // Lume GF
+                         onResetHideTimer()
+                     } label: {
+                         circleGlyph("gobackward.15", size: 22, diameter: 60)
+@@ -189,7 +192,7 @@ import SwiftUI
+ 
+                 if !media.isLive {
+                     Button {
+-                        coordinator.skip(interval: 15)
++                        if !onCatchupJump(.by(15)) { coordinator.skip(interval: 15) } // Lume GF
+                         onResetHideTimer()
+                     } label: {
+                         circleGlyph("goforward.15", size: 22, diameter: 60)
+@@ -421,7 +424,7 @@ import SwiftUI
+                 hideTask?.cancel()
+                 coordinator.playerLayer?.pause()
+             } else {
+-                coordinator.seek(time: seekPosition)
++                if !onCatchupJump(.to(seekPosition)) { coordinator.seek(time: seekPosition) } // Lume GF
+                 clock.current = seekPosition
+                 if isPlaying {
+                     coordinator.playerLayer?.play()
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
+index c5c2f46..54d6317 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
+@@ -19,11 +19,12 @@ extension KSPlayerEngineView {
+     /// KSPlayer's own remote-command registration is disabled (see
+     /// `makeOptions`), so this is the only handler set.
+     func attachNowPlayingTransport() {
++        gfPlaying.media = media // Lume GF
+         NowPlayingService.shared.attachTransport(.init(
+             isPlaying: { [weak coordinator] in coordinator?.playerLayer?.state.isPlaying ?? false },
+             play: { [weak coordinator] in coordinator?.playerLayer?.play() },
+             pause: { [weak coordinator] in coordinator?.playerLayer?.pause() },
+-            seek: { [weak coordinator] in coordinator?.seek(time: $0) },
++            seek: { [weak coordinator] in if !gfCatchupJump(.to($0)) { coordinator?.seek(time: $0) } }, // Lume GF
+             advance: onRemoteAdvance
+         ), owner: coordinator)
+     }
+@@ -94,4 +95,27 @@ extension KSPlayerEngineView {
+             dismiss.dismissPlayer()
+         #endif
+     }
++
++    /// Lume GF: the playing time for the position bar. A catch-up programme shows its own time (the minutes its
++    /// address skipped plus the time played) and its own length (GFCatchupSeek).
++    func gfTick(current: TimeInterval, total: TimeInterval) {
++        let window = gfPlaying.media?.gfCatchup
++        if current.isFinite { clock.current = current + (window?.offset ?? 0) }
++        if let window {
++            clock.duration = window.length
++        } else if total.isFinite, total > 0 {
++            clock.duration = total
++        }
++    }
++
++    /// Lume GF: a seek in a catch-up programme asks the archive again from that minute, as a new item, instead of
++    /// seeking inside a file the provider can't seek in (GFCatchupSeek). `false` for anything else.
++    func gfCatchupJump(_ jump: GFCatchupSeek.Jump) -> Bool {
++        guard let playing = gfPlaying.media, let window = playing.gfCatchup else { return false }
++        if let offset = GFCatchupSeek.offset(for: jump, current: clock.current, in: window),
++           let next = playing.gfCatchupShifted(to: offset) {
++            mediaSwapper.swap { selectMedia(next) }
++        }
++        return true
++    }
+ }
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Controls.swift b/Lume/Views/Player/KSPlayerEngineView+Controls.swift
+index 75d6c95..3e40ee4 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Controls.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Controls.swift
+@@ -32,7 +32,8 @@ import SwiftUI
+                 onSearchSubtitles: subtitleSearchAction,
+                 videoInfo: videoInfo,
+                 itemNeighbours: itemNeighbours,
+-                onStepItem: { stepItem($0) }
++                onStepItem: { stepItem($0) },
++                onCatchupJump: { gfCatchupJump($0) } // Lume GF
+             )
+         }
+ 
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Playback.swift b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+index 5d8fd62..7107799 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Playback.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+@@ -333,7 +333,7 @@ extension KSPlayerEngineView {
+         startStartupWatchdog()
+ 
+         guard let layer = coordinator.playerLayer else { return }
+-        if !media.isLive, clock.current > 1 {
++        if !media.isLive, media.gfCatchup == nil, clock.current > 1 { // Lume GF: not inside a catch-up file
+             layer.options.startPlayTime = clock.current
+         }
+         Logger.player.log("retry: rebuilding KSPlayer stream from failure overlay")
+@@ -375,7 +375,7 @@ extension KSPlayerEngineView {
+         // prematurely clear the spinner or reset the reconnect budget.
+         hasSeenReadyToPlay = false
+         tick.lastPlayhead = -1
+-        if !media.isLive, clock.current > 1 {
++        if !media.isLive, media.gfCatchup == nil, clock.current > 1 { // Lume GF: not inside a catch-up file
+             layer.options.startPlayTime = clock.current
+         }
+         Logger.player.log("reconnect: reloading KSPlayer stream")
+diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
+index ae16bd5..e26ebf3 100644
+--- a/Lume/Views/Player/KSPlayerEngineView.swift
++++ b/Lume/Views/Player/KSPlayerEngineView.swift
+@@ -126,6 +126,7 @@ struct KSPlayerEngineView: View {
+     @State var isSearchingSubtitles = false
+     @State var isSeeking = false
+     @State var seekPosition: TimeInterval = 0
++    @State var gfPlaying = GFCatchupSeek.Playing() // Lume GF: the item on screen, for closures handed out once
+     /// PiP state and its observer task are `internal` (not `private`) so the
+     /// PiP observation in `KSPlayerEngineView+Playback.swift` can drive them.
+     @State var isPipActive = false
+@@ -243,14 +244,7 @@ struct KSPlayerEngineView: View {
+                     // which triggers "onChange updated multiple times per
+                     // frame" warnings.
+                     DispatchQueue.main.async {
+-                        if !isSeeking {
+-                            if current.isFinite {
+-                                clock.current = current
+-                            }
+-                            if total.isFinite, total > 0 {
+-                                clock.duration = total
+-                            }
+-                        }
++                        if !isSeeking { gfTick(current: current, total: total) } // Lume GF: catch-up time
+                         notePlaybackProgress(current)
+                         noteClockDrift()
+                         // syncState (onStateChanged) already refreshes this
+@@ -325,6 +319,7 @@ struct KSPlayerEngineView: View {
+             .hueFrameSource(coordinator, isPictureInPicture: isPipActive)
+             .onAppear {
+                 engine.attach(coordinator: coordinator)
++                engine.gfCatchupJump = { gfCatchupJump($0) } // Lume GF
+                 attachNowPlayingTransport()
+                 scheduleHide()
+                 startStartupWatchdog()
+@@ -352,6 +347,7 @@ struct KSPlayerEngineView: View {
+                 }
+             }
+             .onChange(of: media) { _, _ in
++                gfPlaying.media = media // Lume GF
+                 // The host swapped the stream (KSPlayer reloads its URL
+                 // automatically). Reset local scrubbing / panel state.
+                 gfDrawn = false // Lume GF
+@@ -464,14 +460,7 @@ struct KSPlayerEngineView: View {
+                     }
+                 } onPlay: { current, total in
+                     DispatchQueue.main.async {
+-                        if !isSeeking {
+-                            if current.isFinite {
+-                                clock.current = current
+-                            }
+-                            if total.isFinite, total > 0 {
+-                                clock.duration = total
+-                            }
+-                        }
++                        if !isSeeking { gfTick(current: current, total: total) } // Lume GF: catch-up time
+                         notePlaybackProgress(current)
+                         noteClockDrift()
+                         chaseVideoInfo()
+@@ -570,6 +559,7 @@ struct KSPlayerEngineView: View {
+             #endif
+             .onChange(of: media.id) { _, _ in
+                 gfDrawn = false // Lume GF
++                gfPlaying.media = media // Lume GF
+                 resetVideoInfo()
+                 // An in-player swap reuses the KSPlayerLayer but re-prepares it;
+                 // re-arm the observation so the task can never be left awaiting a
+@@ -587,7 +577,7 @@ struct KSPlayerEngineView: View {
+                 .playerVolume(coordinator)
+             #endif
+                 .playerKeyboardShortcuts(PlayerKeyActions(
+-                    togglePlay: togglePlay, skip: { coordinator.skip(interval: Int($0)) }, close: closePlayer,
++                    togglePlay: togglePlay, skip: { if !gfCatchupJump(.by($0)) { coordinator.skip(interval: Int($0)) } }, close: closePlayer,
+                     resetHideTimer: resetHideTimer, showControls: showControls,
+                     neighbours: itemNeighbours, swapper: mediaSwapper, selectMedia: { selectMedia($0) }
+                 ))
+diff --git a/Lume/Views/Player/KSTVPlaybackEngine.swift b/Lume/Views/Player/KSTVPlaybackEngine.swift
+index 5ad4a27..07e0723 100644
+--- a/Lume/Views/Player/KSTVPlaybackEngine.swift
++++ b/Lume/Views/Player/KSTVPlaybackEngine.swift
+@@ -26,6 +26,9 @@
+         /// `@StateObject` without an initializer-ordering dance.
+         private weak var coordinator: KSVideoPlayer.Coordinator?
+ 
++        /// Lume GF: a seek in a catch-up programme, asked of the archive again (GFCatchupSeek); set by the host view.
++        var gfCatchupJump: (GFCatchupSeek.Jump) -> Bool = { _ in false }
++
+         init() {}
+ 
+         func attach(coordinator: KSVideoPlayer.Coordinator) {
+@@ -72,10 +75,12 @@
+         }
+ 
+         func skip(by seconds: Double) {
++            if gfCatchupJump(.by(seconds)) { return } // Lume GF
+             coordinator?.skip(interval: Int(seconds))
+         }
+ 
+         func seek(to seconds: TimeInterval) {
++            if gfCatchupJump(.to(seconds)) { return } // Lume GF
+             coordinator?.seek(time: seconds)
+         }
+ 
