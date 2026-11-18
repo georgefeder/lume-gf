@@ -28,7 +28,8 @@ nonisolated final class GuideRefresher {
     /// False during a short background wake (the server's push, a background refresh: about 25 s), which a whole import
     /// never fits (15 Nov 2026: after the playlist's channels changed, every wake for hours downloaded the whole guide
     /// and was cut short). Such a wake then takes the server's hourly changes even when the channels changed; the
-    /// whole import their new channels need waits for the app being open or the overnight import. GuideScheduler
+    /// whole import their new channels need waits for the app being open or the overnight import. A device too far
+    /// behind for a change file takes the whole guide in such a wake anyway, as far as it gets (18 Nov). GuideScheduler
     /// counts the short wakes running (overlapping ones too: a push and a background refresh came together).
     nonisolated(unsafe) static var shortWakes = 0
     static var wholeImportAllowed: Bool {
@@ -111,9 +112,6 @@ nonisolated final class GuideRefresher {
                         states.update(sourceID) { $0.recordFailure("change file instead of the guide", at: now()) }
                         throw Failure.incompleteFile
                     }
-                    guard whole else {
-                        return wholeImportLater(sourceID: sourceID, state: state, known: knownChannelIDs)
-                    }
                     return try await refresh(sourceID: sourceID, url: url, knownChannelIDs: knownChannelIDs,
                                              force: true)
                 }
@@ -123,12 +121,13 @@ nonisolated final class GuideRefresher {
                                         knownChannelIDs: knownChannelIDs,
                                         channelsKey: sameChannels ? channelsKey : state.channelsKey, etag: etag,
                                         lastModified: lastModified, serverBuild: serverBuild,
-                                        wholeImportOwed: !sameChannels)
+                                        wholeImportOwed: !sameChannels, whole: whole)
             }
-            // the whole guide (the server keeps no change file for this device's build) never fits a short wake
-            if !whole, hasGuide {
-                return wholeImportLater(sourceID: sourceID, state: state, known: knownChannelIDs)
-            }
+            // the whole guide (the server keeps no change file for a device more than 6 hours behind) goes in even in a
+            // short wake, as far as the wake lasts: put off, it never came (18 Nov 2026: the iPhone 12 hours behind
+            // after a night of wakes). What is on now goes in first (a stale guide), and the rest is saved every
+            // batch (GuideListingApplier.wakeSaveThreshold), so the next wake goes on from there: what is stored and
+            // the same is not written again.
             // the same file for the same channels: nothing to import (servers without ETag or Last-Modified)
             let fileHash = M3UClient.sha256Hex(ofFileAt: file)
             if hasGuide, state.isSameFile(hash: fileHash, channelsKey: channelsKey) {
@@ -169,7 +168,9 @@ nonisolated final class GuideRefresher {
                 nowReady()
             }
             let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: at,
-                                       allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: logged)
+                                       allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: logged,
+                                       saveEvery: whole ? GuideListingApplier.saveThreshold
+                                           : GuideListingApplier.wakeSaveThreshold)
             timing?.apply = GFGuideTiming.ms(since: applying)
             timing?.inserted = result.inserted
             timing?.updated = result.updated
@@ -200,14 +201,15 @@ nonisolated final class GuideRefresher {
     /// The server's change file (GuideDelta): only its programmes are written, the stored guide is not read.
     private func applyChanges(_ delta: GuideDelta.Header, file: URL, sourceID: UUID, state: GuideSourceState,
                               knownChannelIDs: Set<String>, channelsKey: UInt64?, etag: String?, lastModified: String?,
-                              serverBuild: Date?, wholeImportOwed: Bool) throws -> Outcome {
+                              serverBuild: Date?, wholeImportOwed: Bool, whole: Bool) throws -> Outcome {
         let started = Date()
         let removed = delta.removed.compactMap { gone in
             XMLTVDate.parse(gone.start).map { GuideDiffPlanner.id(channelId: gone.channel, start: $0) }
         }
         timing?.path = "delta"
         let result = GuideListingApplier(container: container)
-            .applyChanges(fileURL: file, claimableChannels: knownChannelIDs, removed: removed)
+            .applyChanges(fileURL: file, claimableChannels: knownChannelIDs, removed: removed,
+                          saveEvery: whole ? GuideListingApplier.saveThreshold : GuideListingApplier.wakeSaveThreshold)
         timing?.apply = GFGuideTiming.ms(since: started)
         timing?.inserted = result.inserted
         timing?.updated = result.updated
@@ -242,16 +244,6 @@ nonisolated final class GuideRefresher {
     }
 
     /// A short wake got the whole guide: left for the app being open or the overnight import (`wholeImportDue`).
-    private func wholeImportLater(sourceID: UUID, state: GuideSourceState, known: Set<String>) -> Outcome {
-        Logger.database.info("Guide: the whole guide waits for the app being open or the overnight import")
-        timing?.path = "later"
-        timing?.finished = true
-        states.update(sourceID) {
-            $0.wholeImportOwed = true
-            $0.lastAttempt = now()
-        }
-        return Outcome(claimedChannelIDs: state.channelIDs.intersection(known), summary: "whole guide later")
-    }
 
     /// The stored guide, read once per run and logged with its size (Lume's diagnostic report shows where the time
     /// goes). A source with no complete import for a day first clears the programmes long over: they ended before a
