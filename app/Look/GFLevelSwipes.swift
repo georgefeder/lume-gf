@@ -38,7 +38,7 @@ extension View {
         /// A swipe in progress sets the volume: its own changes are not news for the pill.
         @ObservationIgnored var isDraggingVolume = false
         @ObservationIgnored private var volumeObservation: NSKeyValueObservation?
-        @ObservationIgnored private let edgeTap = UIImpactFeedbackGenerator(style: .soft)
+        @ObservationIgnored private let haptics = GFLevelHaptics()
         /// The notch the last tick was for (GFPlayerSwipe.notch), nil between swipes.
         @ObservationIgnored private var tickedNotch: Int?
 
@@ -50,15 +50,15 @@ extension View {
         }
 
         func set(_ kind: GFPlayerSwipe.Kind, to next: Double) {
-            // a faint soft tick every 5 % on the way (Georgs, 18 Nov: "blurry"), a full soft tap on reaching none or
-            // all, as a slider's end stop
+            // a soft, blurred bump every 5 % on the way, a fuller one on reaching none or all, as a slider's end
+            // stop (GFLevelHaptics)
             let notch = GFPlayerSwipe.notch(next)
             if (next == 0 || next == 1), next != level || shown != kind {
-                edgeTap.impactOccurred()
+                haptics.end()
             } else if let tickedNotch, notch != tickedNotch {
-                edgeTap.impactOccurred(intensity: 0.4)
+                haptics.notch(at: next)
             }
-            if tickedNotch == nil { edgeTap.prepare() }
+            if tickedNotch == nil { haptics.prepare() }
             tickedNotch = notch
             switch kind {
             case .brightness:
