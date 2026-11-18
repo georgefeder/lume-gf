@@ -1,0 +1,156 @@
+diff --git a/Lume/Services/Diagnostics/PlaybackQoE.swift b/Lume/Services/Diagnostics/PlaybackQoE.swift
+index afe76a1..18c3242 100644
+--- a/Lume/Services/Diagnostics/PlaybackQoE.swift
++++ b/Lume/Services/Diagnostics/PlaybackQoE.swift
+@@ -158,6 +158,7 @@ final class PlaybackQoE {
+         firstFrameAt = nil
+         stallBegan = nil
+         GFLiveLog.note("player: \(engine.rawValue) opens a \(isLive ? "channel" : "film or episode")") // Lume GF
++        GFPlayBeacon.send(.open) // Lume GF
+         interval = Perf.begin(.playerStartup)
+         mutate(engine) { $0.sessions += 1 }
+     }
+@@ -182,6 +183,7 @@ final class PlaybackQoE {
+         let name = engine.rawValue
+         let live = isLive
+         GFLiveLog.note("player: picture after \(String(format: "%.2f", joinTime)) s (\(name))") // Lume GF
++        GFPlayBeacon.send(.picture(ms: Int(joinTime * 1000))) // Lume GF
+         Logger.performance.log(
+             "join time \(joinTime, format: .fixed(precision: 2), privacy: .public)s engine=\(name, privacy: .public) live=\(live, privacy: .public)"
+         )
+@@ -203,6 +205,7 @@ final class PlaybackQoE {
+         let seconds = Date().timeIntervalSince(stallBegan)
+         self.stallBegan = nil
+         GFLiveLog.note("player: playing again after \(String(format: "%.1f", seconds)) s") // Lume GF
++        GFPlayBeacon.send(.stall(ms: Int(seconds * 1000))) // Lume GF
+         mutate(engine) {
+             $0.rebuffers += 1
+             $0.rebufferSeconds += seconds
+@@ -215,6 +218,7 @@ final class PlaybackQoE {
+         guard !isSuspended, let engine else { return }
+         Perf.event(.playerStartupFailure)
+         GFLiveLog.note("player: \(engine.rawValue) could not start the stream") // Lume GF
++        GFPlayBeacon.send(.failed) // Lume GF
+         mutate(engine) { $0.startupFailures += 1 }
+         persist()
+     }
+@@ -227,6 +231,7 @@ final class PlaybackQoE {
+         let previous = engine?.rawValue ?? "none"
+         let replacement = next.rawValue
+         GFLiveLog.note("player: engine \(previous) -> \(replacement)") // Lume GF
++        GFPlayBeacon.send(.reopen(.engine)) // Lume GF
+         Logger.performance.log(
+             "engine fallback \(previous, privacy: .public) -> \(replacement, privacy: .public)"
+         )
+diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
+index dc58764..73ff7d6 100644
+--- a/Lume/Views/Player/FullScreenPlayerView.swift
++++ b/Lume/Views/Player/FullScreenPlayerView.swift
+@@ -444,6 +444,7 @@ struct FullScreenPlayerView: View {
+               PlaylistStreamFormat.gfOtherContainer(of: media.url) != nil
+         else { return false }
+         gfTSRetry = (media.id, engineAttempt)
++        GFPlayBeacon.send(.reopen(.tsRetry))
+         Logger.player.log("engine \(engine.rawValue, privacy: .public) could not start the stream as HLS; trying it as TS")
+         return true
+     }
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Playback.swift b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+index 7107799..7661fbf 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Playback.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+@@ -99,6 +99,19 @@ extension KSPlayerEngineView {
+         hasStartedPlayback = true
+         PlaybackQoE.shared.noteFirstFrame()
+         cancelStartupWatchdog()
++        gfReportBuffer()
++    }
++
++    /// Lume GF: how much video is buffered ahead 10 s after the first picture, for the server (GFPlayBeacon).
++    private func gfReportBuffer() {
++        guard media.isLive else { return }
++        let id = media.id
++        Task { @MainActor [weak coordinator] in
++            try? await Task.sleep(for: .seconds(10))
++            guard gfPlaying.media?.id == id, let player = coordinator?.playerLayer?.player else { return }
++            let ahead = player.playableTime - player.currentPlaybackTime
++            if ahead.isFinite, ahead >= 0 { GFPlayBeacon.send(.buffer(seconds: ahead)) }
++        }
+     }
+ 
+     // MARK: - Reconnect
+@@ -142,7 +155,7 @@ extension KSPlayerEngineView {
+             // this state rather than .error. Treat it as a recoverable drop and
+             // reconnect with bounded backoff.
+             if media.isLive {
+-                reconnector.scheduleRetry { reconnect() }
++                reconnector.scheduleRetry { reconnect(why: .ended) }
+                 if reconnector.hasGivenUp { failPlayback() }
+             }
+         default:
+@@ -160,7 +173,7 @@ extension KSPlayerEngineView {
+             failPlayback()
+             return
+         }
+-        reconnector.scheduleRetry { reconnect() }
++        reconnector.scheduleRetry { reconnect(why: .error) }
+         if reconnector.hasGivenUp { failPlayback() }
+     }
+ 
+@@ -197,7 +210,7 @@ extension KSPlayerEngineView {
+             guard !Task.isCancelled else { return }
+             stallWatchdog = nil
+             Logger.player.error("stall watchdog: live stream stuck buffering for \(stallTimeout, format: .fixed(precision: 0), privacy: .public)s, rebuilding stream")
+-            retryPlayback()
++            retryPlayback(why: .stallWatchdog)
+         }
+     }
+ 
+@@ -255,7 +268,7 @@ extension KSPlayerEngineView {
+         guard now - tick.lastDriftRecovery >= Self.driftRecoveryCooldown else { return }
+         tick.lastDriftRecovery = now
+         Logger.player.error("clock-drift watchdog: A/V sync diff \(diff, format: .fixed(precision: 1), privacy: .public)s persisted, rebuilding live stream")
+-        retryPlayback()
++        retryPlayback(why: .clockDrift)
+     }
+ 
+     // MARK: - Dead-stream handling
+@@ -318,7 +331,8 @@ extension KSPlayerEngineView {
+     /// — this drives a full rebuild directly, so it also reloads a stream that
+     /// merely *hung* in `.buffering`/`.preparing` (the startup-watchdog case),
+     /// where `play()` would be a no-op because the layer never reached `.error`.
+-    func retryPlayback() {
++    func retryPlayback(why: GFPlayEvent.Reopen = .retryButton) {
++        GFPlayBeacon.send(.reopen(why)) // Lume GF: the server sees why the channel opens again
+         withAnimation(.easeInOut(duration: 0.25)) {
+             loadFailed = false
+             isBuffering = true
+@@ -369,7 +383,8 @@ extension KSPlayerEngineView {
+     /// Always rebuilding a live stream from a fresh input (see `rebuildStream`)
+     /// re-creates the HLS session from scratch so we correctly rejoin the live
+     /// edge in both the `.error` and `.playedToTheEnd` cases.
+-    func reconnect() {
++    func reconnect(why: GFPlayEvent.Reopen) {
++        GFPlayBeacon.send(.reopen(why)) // Lume GF
+         guard let layer = coordinator.playerLayer else { return }
+         // Reset session gates so stale callbacks from the previous session don't
+         // prematurely clear the spinner or reset the reconnect budget.
+diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
+index e26ebf3..5764ee6 100644
+--- a/Lume/Views/Player/KSPlayerEngineView.swift
++++ b/Lume/Views/Player/KSPlayerEngineView.swift
+@@ -332,6 +332,7 @@ struct KSPlayerEngineView: View {
+                 cancelStartupWatchdog()
+                 cancelStallWatchdog()
+                 PlaybackQoE.shared.endSession()
++                GFPlayBeacon.send(.close) // Lume GF
+                 NowPlayingService.shared.detachTransport(owner: coordinator)
+                 coordinator.resetPlayer()
+             }
+@@ -549,6 +550,7 @@ struct KSPlayerEngineView: View {
+                 cancelStartupWatchdog()
+                 cancelStallWatchdog()
+                 PlaybackQoE.shared.endSession()
++                GFPlayBeacon.send(.close) // Lume GF
+                 NowPlayingService.shared.detachTransport(owner: coordinator)
+                 coordinator.resetPlayer()
+             }
