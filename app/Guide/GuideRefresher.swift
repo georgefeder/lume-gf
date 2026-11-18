@@ -168,9 +168,9 @@ nonisolated final class GuideRefresher {
                 nowReady()
             }
             let result = applier.apply(fileURL: file, claimableChannels: knownChannelIDs, index: index, now: at,
+                                       allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: logged,
                                        saveEvery: whole ? GuideListingApplier.saveThreshold
-                                           : GuideListingApplier.wakeSaveThreshold,
-                                       allChannels: allChannelIDs, nowFirst: nowFirst, onNowReady: logged)
+                                           : GuideListingApplier.wakeSaveThreshold)
             timing?.apply = GFGuideTiming.ms(since: applying)
             timing?.inserted = result.inserted
             timing?.updated = result.updated
