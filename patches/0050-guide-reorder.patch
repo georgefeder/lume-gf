@@ -1,0 +1,31 @@
+diff --git a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
+index 706f8c4..78011ad 100644
+--- a/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
++++ b/Lume/Views/LiveTV/EPG/EPGFrozenPanes.swift
+@@ -79,9 +79,9 @@ struct EPGColumnCells: View, Equatable {
+     var onStartMultiView: (EPGChannelRow) -> Void = { _ in }
+ 
+     static func == (lhs: Self, rhs: Self) -> Bool {
++        // Lume GF: every row's channel, not only the ends: a reorder in the middle (Recently Watched) must redraw too
+         lhs.rows.count == rhs.rows.count
+-            && lhs.rows.first?.id == rhs.rows.first?.id
+-            && lhs.rows.last?.id == rhs.rows.last?.id
++            && lhs.rows.elementsEqual(rhs.rows) { $0.id == $1.id }
+             && lhs.virtualFocus == rhs.virtualFocus
+     }
+ 
+diff --git a/Lume/Views/LiveTV/EPG/EPGGuideView.swift b/Lume/Views/LiveTV/EPG/EPGGuideView.swift
+index 396a00a..e24bf28 100644
+--- a/Lume/Views/LiveTV/EPG/EPGGuideView.swift
++++ b/Lume/Views/LiveTV/EPG/EPGGuideView.swift
+@@ -131,6 +131,10 @@ struct EPGGuideView: View {
+         .task(id: "\(channels.count)-\(epgSync.isSyncing)-\(epgSync.gfNowReady)") { // Lume GF: and once on now
+             await loadListings(for: channels)
+         }
++        // Lume GF: the same channels in a new order (Recently Watched after a watch) redraw the programme rows too; they
++        // are gated on `dataVersion` and the row count, so they kept the old order beside the reordered names (Georgs,
++        // 18 Nov: "the EPG lines don't correspond with the channels")
++        .onChange(of: channels.map(\.id)) { _, _ in dataVersion += 1 }
+     }
+ 
+     /// Zips each scoped stream with its pre-tiled cells.
