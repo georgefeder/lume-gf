@@ -1,0 +1,31 @@
+diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
+index 6a8c5ef..794d493 100644
+--- a/Lume/Services/Sync/EPGSyncService.swift
++++ b/Lume/Services/Sync/EPGSyncService.swift
+@@ -123,18 +123,18 @@ final class EPGSyncService {
+         kick(background: true, force: schemaBump)
+     }
+ 
+-    /// Lume GF: the player opened. A background refresh in flight stops and is owed; nothing new starts until
+-    /// `playbackDidEnd`.
++    /// Lume GF: the player opened. A refresh in flight waits at its next batch (GFGuidePause) and goes on from there
++    /// once the video ends: stopped, a whole import started over each time and never finished on an iPhone that is
++    /// often playing (Georgs, 18 Nov 2026). Nothing new starts until `playbackDidEnd`.
+     func playbackDidStart() {
+-        if let task, isBackgroundRefresh {
+-            GFLiveLog.note("guide refresh stopped: a video started (owed until it ends)")
+-            task.cancel()
+-            gate.owe()
+-        }
++        GFGuidePause.shared.hold(true)
++        if task != nil { GFLiveLog.note("guide refresh paused: a video started") }
+     }
+ 
+-    /// Lume GF: the player closed: a refresh held back while it played runs now.
++    /// Lume GF: the player closed: a paused refresh goes on, one held back while it played runs now.
+     func playbackDidEnd() {
++        GFGuidePause.shared.hold(false)
++        if task != nil { GFLiveLog.note("guide refresh goes on: the video ended") }
+         runOwedRefresh()
+     }
+ 

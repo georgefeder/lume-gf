@@ -46,7 +46,7 @@ nonisolated struct GuideListingApplier {
         guard var dayEnd = (try? context.fetch(oldest))?.first?.end, dayEnd < cutoff else { return 0 }
         var removed = 0
         let step = max(24 * 60 * 60, cutoff.timeIntervalSince(dayEnd) / 30) // about 30 saves however old it is
-        while dayEnd < cutoff, !Task.isCancelled {
+        while dayEnd < cutoff, !GFGuidePause.stopOrWait() { // no saves while video plays
             dayEnd = min(dayEnd.addingTimeInterval(step), cutoff)
             let limit = dayEnd
             let gone = #Predicate<EPGListing> { $0.end < limit }
@@ -95,7 +95,7 @@ nonisolated struct GuideListingApplier {
         var offset = 0
         var fetched = pageSize
         while fetched == pageSize {
-            if Task.isCancelled { break }
+            if GFGuidePause.stopOrWait() { break } // video playing: waits (reading 100,000 rows is no light work)
             fetched = autoreleasepool {
                 let context = ModelContext(container)
                 var descriptor = FetchDescriptor<EPGListing>(sortBy: [SortDescriptor(\.id)])
@@ -119,13 +119,14 @@ nonisolated struct GuideListingApplier {
     }
 
     /// Reads `fileURL` and applies it: inserts and updates batch by batch; deletions (and dropping old programmes)
-    /// only when the file was read completely. `shouldStop` is asked after each batch (a background task's time).
+    /// only when the file was read completely. `shouldStop` is asked after each batch (a background task's time;
+    /// by default it also waits there while video plays, GFGuidePause).
     /// `allChannels`: every channel of every playlist; old programmes of channels outside it are dropped too.
     /// `nowFirst` (a stale stored guide, `GuideDiffPlanner.wantsNowFirst`): the programmes it overlaps are read and
     /// saved first, then `onNowReady` runs (the guide screens show them), then the whole file.
     func apply(fileURL: URL, claimableChannels: Set<String>, index: GuideStoredIndex, now: Date,
                allChannels: Set<String>? = nil, nowFirst: DateInterval? = nil, onNowReady: () -> Void = {},
-               shouldStop: @escaping () -> Bool = { Task.isCancelled }) -> Result {
+               shouldStop: @escaping () -> Bool = GFGuidePause.stopOrWait) -> Result {
         // the planner takes the rows over while the file is read (a shared dictionary is copied whole on its first
         // change); they come back, with this file's changes, at the end
         let rows = index.rows
@@ -179,7 +180,7 @@ nonisolated struct GuideListingApplier {
     /// background wake. Saved in batches and at the end, so a stop keeps what is done (the same file applied again
     /// writes nothing twice).
     func applyChanges(fileURL: URL, claimableChannels: Set<String>, removed: [String],
-                      shouldStop: @escaping () -> Bool = { Task.isCancelled }) -> Result {
+                      shouldStop: @escaping () -> Bool = GFGuidePause.stopOrWait) -> Result {
         let context = ModelContext(container)
         context.autosaveEnabled = false
         let run = ChangeRun()
