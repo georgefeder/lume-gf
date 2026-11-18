@@ -1,0 +1,33 @@
+Lume GF: when the video's format changes (another channel, a new resolution), KSMEPlayer replaces its display layer
+and makes a new PiP controller, which lost automatic PiP on the Home gesture (only readyToPlay set it): it keeps it
+now, and a notice tells the app to follow the new controller (Georgs, 18 Nov: PiP on Home only sometimes).
+Made against KSPlayer bdfa2da (deps/KSPlayer/REVISION) with 0001 to 0004 applied.
+
+diff --git a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+index b497251..3cb4584 100644
+--- a/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
++++ b/Sources/KSPlayer/MEPlayer/KSMEPlayer.swift
+@@ -582,7 +582,13 @@ extension KSMEPlayer: DisplayLayerDelegate {
+     public func change(displayLayer: AVSampleBufferDisplayLayer) {
+         if #available(iOS 15.0, tvOS 15.0, macOS 12.0, *) {
+             let contentSource = AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer: displayLayer, playbackDelegate: self)
+-            _pipController = KSPictureInPictureController(contentSource: contentSource)
++            let pip = KSPictureInPictureController(contentSource: contentSource)
++            #if os(iOS)
++            // Lume GF: the new controller starts PiP on the Home gesture as the old one did (only readyToPlay set it)
++            pip.canStartPictureInPictureAutomaticallyFromInline = options.canStartPictureInPictureAutomaticallyFromInline
++            #endif
++            _pipController = pip
++            NotificationCenter.default.post(name: .gfPipControllerChanged, object: self) // Lume GF
+             // 更改contentSource会直接crash
+ //            pipController?.contentSource = contentSource
+         }
+@@ -598,3 +604,8 @@ public extension KSMEPlayer {
+         playerItem.stopRecord()
+     }
+ }
++
++public extension Notification.Name {
++    /// Lume GF: a KSMEPlayer made a new PiP controller (its display layer was replaced: the video's format changed).
++    static let gfPipControllerChanged = Notification.Name("gfPipControllerChanged")
++}
