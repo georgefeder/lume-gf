@@ -33,6 +33,10 @@ struct GFPlayerSwipeTests {
     @Test func `the pill's percentage and icon follow the level`() {
         #expect(GFPlayerSwipe.percent(0.625) == 63)
         #expect(GFPlayerSwipe.percent(1.2) == 100)
+        #expect(GFPlayerSwipe.notch(0.049) == 0)
+        #expect(GFPlayerSwipe.notch(0.05) == 1)
+        #expect(GFPlayerSwipe.notch(0.62) == 12)
+        #expect(GFPlayerSwipe.notch(1.3) == 20)
         #expect(GFPlayerSwipe.symbol(.brightness, level: 0.2) == "sun.min.fill")
         #expect(GFPlayerSwipe.symbol(.brightness, level: 0.8) == "sun.max.fill")
         #expect(GFPlayerSwipe.symbol(.volume, level: 0) == "speaker.slash.fill")

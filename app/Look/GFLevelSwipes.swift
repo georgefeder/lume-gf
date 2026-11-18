@@ -38,7 +38,9 @@ extension View {
         /// A swipe in progress sets the volume: its own changes are not news for the pill.
         @ObservationIgnored var isDraggingVolume = false
         @ObservationIgnored private var volumeObservation: NSKeyValueObservation?
-        @ObservationIgnored private let edgeTap = UIImpactFeedbackGenerator(style: .soft)
+        @ObservationIgnored private let haptics = GFLevelHaptics()
+        /// The notch the last tick was for (GFPlayerSwipe.notch), nil between swipes.
+        @ObservationIgnored private var tickedNotch: Int?
 
         func current(_ kind: GFPlayerSwipe.Kind) -> Double {
             switch kind {
@@ -48,8 +50,16 @@ extension View {
         }
 
         func set(_ kind: GFPlayerSwipe.Kind, to next: Double) {
-            // a soft tap on reaching none or all, as a slider's end stop
-            if (next == 0 || next == 1), next != level || shown != kind { edgeTap.impactOccurred() }
+            // a soft, blurred bump every 5 % on the way, a fuller one on reaching none or all, as a slider's end
+            // stop (GFLevelHaptics)
+            let notch = GFPlayerSwipe.notch(next)
+            if (next == 0 || next == 1), next != level || shown != kind {
+                haptics.end()
+            } else if let tickedNotch, notch != tickedNotch {
+                haptics.notch(at: next)
+            }
+            if tickedNotch == nil { haptics.prepare() }
+            tickedNotch = notch
             switch kind {
             case .brightness:
                 // a swipe after the first stays on the first one's screen, whose brightness goes back on leaving
@@ -109,6 +119,7 @@ extension View {
         /// The finger lifted, or the swipe was cut short (a call, Control Centre).
         func dragEnded() {
             isDraggingVolume = false
+            tickedNotch = nil
             hideSoon()
         }
 
