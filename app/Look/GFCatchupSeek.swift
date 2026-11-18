@@ -8,7 +8,7 @@ import Foundation
 /// the programme's time, the minutes skipped plus the time played.
 nonisolated enum GFCatchupSeek {
     /// The programme a catch-up item plays and where in it the archive address starts.
-    struct Window: Hashable, Codable {
+    nonisolated struct Window: Hashable, Codable {
         /// The programme's own address (from its start, for its whole length) and its media id.
         let baseURL: URL
         let baseID: String
@@ -16,10 +16,12 @@ nonisolated enum GFCatchupSeek {
         let length: TimeInterval
         /// How far into the programme the playing address starts, whole minutes in seconds.
         let offset: TimeInterval
+        /// How many jumps led here: each jump is a new item even when it restarts the minute playing.
+        var jumps: Int? = nil
     }
 
     /// What the viewer asked for: a place on the position bar, or a step from the current time.
-    enum Jump: Equatable {
+    nonisolated enum Jump: Equatable {
         case to(TimeInterval)
         case by(TimeInterval)
     }
@@ -69,10 +71,10 @@ nonisolated enum GFCatchupSeek {
         return parts.url
     }
 
-    /// The media id for the item starting `offset` into the programme: the programme's own at the start, its own with
-    /// the minute after it otherwise (a new id is what makes the player take it as a new item).
+    /// The media id for the next jump, to `offset` into the programme: the programme's own with the minute and the
+    /// jump's number (a new id is what makes the player take it as a new item, a restart of the same minute too).
     static func id(_ window: Window, offset: TimeInterval) -> String {
-        offset <= 0 ? window.baseID : "\(window.baseID)+\(Int(offset / 60))m"
+        "\(window.baseID)+\(Int(offset / 60))m.\((window.jumps ?? 0) + 1)"
     }
 
     /// Where `timeshift` sits in the path, when it is followed by user, password, minutes, start and stream.

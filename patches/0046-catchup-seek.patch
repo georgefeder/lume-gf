@@ -1,5 +1,5 @@
 diff --git a/Lume/Services/Player/PlayableMedia.swift b/Lume/Services/Player/PlayableMedia.swift
-index 3560802..00f32c7 100644
+index 3560802..18329c1 100644
 --- a/Lume/Services/Player/PlayableMedia.swift
 +++ b/Lume/Services/Player/PlayableMedia.swift
 @@ -18,7 +18,7 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
@@ -21,7 +21,7 @@ index 3560802..00f32c7 100644
  
      nonisolated init(
          id: String,
-@@ -88,6 +91,26 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
+@@ -88,6 +91,27 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
          kind == .live
      }
  
@@ -40,7 +40,8 @@ index 3560802..00f32c7 100644
 +        copy.id = GFCatchupSeek.id(window, offset: offset)
 +        copy.url = url
 +        copy.gfCatchup = GFCatchupSeek.Window(
-+            baseURL: window.baseURL, baseID: window.baseID, length: window.length, offset: offset
++            baseURL: window.baseURL, baseID: window.baseID, length: window.length, offset: offset,
++            jumps: (window.jumps ?? 0) + 1
 +        )
 +        return copy
 +    }
@@ -48,7 +49,7 @@ index 3560802..00f32c7 100644
      /// A copy of this stream that resumes at `position` seconds. Same identity,
      /// so it's the same title for progress/NextUp — used when handing the stream
      /// to a different engine mid-playback (e.g. switching to AVPlayer to route
-@@ -417,7 +440,7 @@ nonisolated extension PlayableMedia {
+@@ -417,7 +441,7 @@ nonisolated extension PlayableMedia {
              ) else { return nil }
              url = built
          }
@@ -57,7 +58,7 @@ index 3560802..00f32c7 100644
              id: "catchup-\(stream.id)-\(Int(start.timeIntervalSince1970))",
              url: url,
              title: GFChannelNames.title(for: stream.name),
-@@ -427,5 +450,6 @@ nonisolated extension PlayableMedia {
+@@ -427,5 +451,6 @@ nonisolated extension PlayableMedia {
              startTime: 0,
              contentRef: .live(stream.id)
          )

@@ -60,13 +60,16 @@ struct GFCatchupSeekTests {
         #expect(media.gfCatchupShifted(to: 600) == nil) // not a catch-up item
         media = PlayableMedia.gfWithCatchup(media, start: start, end: start.addingTimeInterval(3600))
         let next = media.gfCatchupShifted(to: 600)
-        #expect(next?.id == "catchup-a-1+10m")
+        #expect(next?.id == "catchup-a-1+10m.1")
         #expect(next?.url.absoluteString == "http://example.com:8080/timeshift/user/pass/50/2026-11-18:14-10/60412.ts")
         #expect(next?.gfCatchup?.offset == 600)
         #expect(next?.title == "BBC News")
-        // back to the start: the programme's own item again
+        // back to the start: the programme's own address, as a new item
         let back = next?.gfCatchupShifted(to: 0)
-        #expect(back?.id == "catchup-a-1")
+        #expect(back?.id == "catchup-a-1+0m.2")
         #expect(back?.url == base)
+        // a restart of the minute playing is a new item too
+        let again = back?.gfCatchupShifted(to: 0)
+        #expect(again?.id != back?.id)
     }
 }
