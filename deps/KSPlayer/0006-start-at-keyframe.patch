@@ -1,0 +1,47 @@
+Lume GF: an option to drop video and audio until the first video keyframe, for catch-up archives that begin
+mid-GOP: the sound played seconds before the picture, and the frames before the keyframe showed without their
+aspect ratio (Oracle Admin, 18 Nov: BBC News' archive, first keyframe 5.76 s in, SAR 64:45).
+Made against KSPlayer bdfa2da (deps/KSPlayer/REVISION) with 0001 to 0005 applied.
+
+diff --git a/Sources/KSPlayer/AVPlayer/KSOptions.swift b/Sources/KSPlayer/AVPlayer/KSOptions.swift
+index b3df891..5ccbb65 100644
+--- a/Sources/KSPlayer/AVPlayer/KSOptions.swift
++++ b/Sources/KSPlayer/AVPlayer/KSOptions.swift
+@@ -82,6 +82,10 @@ open class KSOptions {
+     /// stream's first frame (`readNextFrame`); every frame of a stream must come back at one size, since a new size
+     /// rebuilds the display layer.
+     public var gfProcessFrame: ((CVPixelBuffer) -> CVPixelBuffer?)?
++    /// Lume GF: drop the stream's video and audio until its first video keyframe, so picture and sound start together
++    /// on a file that begins mid-GOP (a catch-up archive: its first keyframe can come seconds in, while the sound
++    /// plays and the picture waits, and the frames decoded before it lack the aspect ratio).
++    public var gfStartAtKeyframe = false
+     public var autoRotate = true
+     public var destinationDynamicRange: DynamicRange?
+     public var videoAdaptable = true
+diff --git a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
+index 10a0c6b..a8d39eb 100644
+--- a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
++++ b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
+@@ -541,6 +541,9 @@ extension MEPlayerItem {
+         }
+     }
+ 
++    /// Lume GF: the first video keyframe was read (`KSOptions.gfStartAtKeyframe`).
++    private var gfKeyframeSeen = false
++
+     private func reading() -> Int32 {
+         let packet = Packet()
+         guard let corePacket = packet.corePacket else {
+@@ -574,6 +577,12 @@ extension MEPlayerItem {
+             let first = assetTracks.first { $0.trackID == corePacket.pointee.stream_index }
+             if let first, first.isEnabled {
+                 packet.assetTrack = first
++                // Lume GF: nothing before the first video keyframe (gfStartAtKeyframe)
++                if options.gfStartAtKeyframe, !gfKeyframeSeen, videoTrack != nil,
++                   first.mediaType == .video || first.mediaType == .audio {
++                    guard first.mediaType == .video, packet.isKeyFrame else { return readResult }
++                    gfKeyframeSeen = true
++                }
+                 if first.mediaType == .video {
+                     if options.readVideoTime == 0 {
+                         options.readVideoTime = CACurrentMediaTime()
