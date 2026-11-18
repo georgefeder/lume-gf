@@ -1,0 +1,47 @@
+diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
+index 73ff7d6..ac83f3d 100644
+--- a/Lume/Views/Player/FullScreenPlayerView.swift
++++ b/Lume/Views/Player/FullScreenPlayerView.swift
+@@ -514,7 +514,10 @@ struct FullScreenPlayerView: View {
+                 onSelectMedia: switchMedia,
+                 onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler, coordinator: adoptedKSCoordinator ?? .init(), isAdoptedSession: adoptedKSCoordinator != nil
+             )
+-            .id(engineAttempt)
++            // Lume GF: each jump in a catch-up programme opens in a fresh player, the way the programme's first open
++            // does, rather than swapping the address inside the running one: that swap's open was dropped within
++            // 0.15 s and never came back (Georgs, 18 Nov: a frozen frame, then Play only spun; GFCatchupSeek)
++            .id("\(engineAttempt) \(media.gfCatchup?.jumps ?? 0)")
+         case .vlcKit:
+             VLCPlayerEngineView(
+                 media: media, clock: clock, mediaSwapper: mediaSwapper,
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
+index 54d6317..1027992 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
+@@ -114,7 +114,7 @@ extension KSPlayerEngineView {
+         guard let playing = gfPlaying.media, let window = playing.gfCatchup else { return false }
+         if let offset = GFCatchupSeek.offset(for: jump, current: clock.current, in: window),
+            let next = playing.gfCatchupShifted(to: offset) {
+-            mediaSwapper.swap { selectMedia(next) }
++            mediaSwapper.swap { onSelectMedia?(next) } // the host opens it in a fresh player: no held frame
+         }
+         return true
+     }
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Options.swift b/Lume/Views/Player/KSPlayerEngineView+Options.swift
+index 2464d56..daa367d 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Options.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Options.swift
+@@ -153,9 +153,13 @@ enum KSPlayerOptionsFactory {
+         if media.gfCatchup != nil { KSOptions.firstPlayerType = KSMEPlayer.self }
+         // Lume GF: each step of a channel change, at the time it happened, in the diagnostic report ("Zap: ...";
+         // deps/KSPlayer/0003), and the full-screen player's live changes timed for our server (GFZapReporter)
++        let catchup = media.gfCatchup != nil
+         KSOptions.gfZapReport = { line in
+             Logger.player.info("Zap: \(line, privacy: .public)")
+             GFZapReporter.shared.note(line)
++            // Lume GF: a catch-up programme's opening steps reach the server's app log, so a jump that stalls shows
++            // where (the lines name only the file, not the address)
++            if catchup { GFLiveLog.note("replay: \(line)") }
+         }
+         // with the Low Latency and Live Buffer settings, which the server cannot see
+         if !isEmbedded {
