@@ -1,0 +1,59 @@
+diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+index 3ecbd57..6f406e4 100644
+--- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+@@ -388,6 +388,7 @@ import SwiftUI
+                 onEditingChanged: onSliderEditingChanged
+             )
+             .tint(.white)
++            .onDisappear { GFPlayerSliding.shared.active = false } // Lume GF: gone mid-drag
+         }
+ 
+         private var timeLabels: some View {
+@@ -405,6 +406,7 @@ import SwiftUI
+ 
+         private func onSliderEditingChanged(editing: Bool) {
+             isSeeking = editing
++            GFPlayerSliding.shared.active = editing // Lume GF: the level swipes stand aside meanwhile
+             if editing {
+                 hideTask?.cancel()
+             } else {
+diff --git a/Lume/Views/Player/PlaybackTimeline.swift b/Lume/Views/Player/PlaybackTimeline.swift
+index 0e4a9a3..38bbdef 100644
+--- a/Lume/Views/Player/PlaybackTimeline.swift
++++ b/Lume/Views/Player/PlaybackTimeline.swift
+@@ -31,9 +31,13 @@ import SwiftUI
+                     set: { seekPosition = $0 }
+                 ),
+                 in: 0 ... max(duration.isFinite ? duration : 1, 1),
+-                onEditingChanged: onEditingChanged
++                onEditingChanged: { editing in
++                    GFPlayerSliding.shared.active = editing // Lume GF: the level swipes stand aside meanwhile
++                    onEditingChanged(editing)
++                }
+             )
+             .tint(.white)
++            .onDisappear { GFPlayerSliding.shared.active = false } // Lume GF: gone mid-drag (a replay jump)
+ 
+             HStack {
+                 Text(timeString(from: isSeeking ? seekPosition : clock.current))
+diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+index f1b692d..21dc1c8 100644
+--- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+@@ -394,6 +394,7 @@ import VLCKit
+                 onEditingChanged: onSliderEditingChanged
+             )
+             .tint(.white)
++            .onDisappear { GFPlayerSliding.shared.active = false } // Lume GF: gone mid-drag
+         }
+ 
+         private var timeLabels: some View {
+@@ -411,6 +412,7 @@ import VLCKit
+ 
+         private func onSliderEditingChanged(editing: Bool) {
+             isSeeking = editing
++            GFPlayerSliding.shared.active = editing // Lume GF: the level swipes stand aside meanwhile
+             if editing {
+                 hideTask?.cancel()
+             } else {

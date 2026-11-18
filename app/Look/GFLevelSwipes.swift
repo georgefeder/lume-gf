@@ -19,6 +19,16 @@ extension View {
     }
 }
 
+/// Lume GF: a slider on the player (the position bar) held under the finger. The level swipes stand aside until it
+/// lets go: their drag, recognised a few points into the slider's, cancelled the slider's, so a seek landed as soon as
+/// the finger moved (Georgs, 18 Nov: "doesn't allow me to slowly scrub forward"; a replay jumped one minute a try).
+@MainActor
+@Observable
+final class GFPlayerSliding {
+    static let shared = GFPlayerSliding()
+    var active = false
+}
+
 #if os(iOS)
     /// What the pill shows, and the levels behind it.
     @MainActor
@@ -167,15 +177,19 @@ extension View {
                     pill.animation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.25),
                                    value: model.shown)
                 }
-                .simultaneousGesture(drag, including: enabled ? .all : .subviews)
+                .simultaneousGesture(drag, including: enabled && !GFPlayerSliding.shared.active ? .all : .subviews)
                 .onAppear {
                     model.watchVolume()
                     #if GF_DEMO
                         if GFDemo.moves.contains("level") { model.show(.volume, 0.62) }
                     #endif
                 }
-                .onDisappear { model.restoreBrightness() }
+                .onDisappear {
+                    model.restoreBrightness()
+                    GFPlayerSliding.shared.active = false // a slider closed with the player mid-drag
+                }
                 .onChange(of: scenePhase) { _, phase in
+                    GFPlayerSliding.shared.active = false // a slider held as the app left the screen
                     if phase == .active { model.comeBack() } else { model.leave() }
                 }
                 // the end of a level swipe, lifted or cut short (gesture state goes back to nil either way)
