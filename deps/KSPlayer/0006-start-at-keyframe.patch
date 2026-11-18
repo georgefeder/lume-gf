@@ -19,20 +19,19 @@ index b3df891..5ccbb65 100644
      public var destinationDynamicRange: DynamicRange?
      public var videoAdaptable = true
 diff --git a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
-index 10a0c6b..a8d39eb 100644
+index 10a0c6b..adc582c 100644
 --- a/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
 +++ b/Sources/KSPlayer/MEPlayer/MEPlayerItem.swift
-@@ -541,6 +541,9 @@ extension MEPlayerItem {
-         }
-     }
- 
+@@ -53,6 +53,8 @@ public final class MEPlayerItem: Sendable {
+     private var maxFrameDuration = 10.0
+     private var videoAudioTracks = [CapacityProtocol]()
+     private var videoTrack: SyncPlayerItemTrack<VideoVTBFrame>?
 +    /// Lume GF: the first video keyframe was read (`KSOptions.gfStartAtKeyframe`).
 +    private var gfKeyframeSeen = false
-+
-     private func reading() -> Int32 {
-         let packet = Packet()
-         guard let corePacket = packet.corePacket else {
-@@ -574,6 +577,12 @@ extension MEPlayerItem {
+     private var audioTrack: SyncPlayerItemTrack<AudioFrame>?
+     private(set) var assetTracks = [FFmpegAssetTrack]()
+     private var videoAdaptation: VideoAdaptationState?
+@@ -574,6 +576,12 @@ extension MEPlayerItem {
              let first = assetTracks.first { $0.trackID == corePacket.pointee.stream_index }
              if let first, first.isEnabled {
                  packet.assetTrack = first
