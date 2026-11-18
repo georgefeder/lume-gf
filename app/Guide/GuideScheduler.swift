@@ -102,7 +102,7 @@ final class GuideScheduler {
         serverAnnounced || nextCheck() <= now || (GuideRefresher.wholeImportAllowed && wholeImportDue(now: now))
     }
 
-    /// A whole import a short wake left (changed channels: the wake took the hour's changes only): due with the app open
+    /// A whole import a short wake left (changed channels: the wake took the changes only): due with the app open
     /// or in the overnight import, not again within 15 minutes of the last try.
     private func wholeImportDue(now: Date) -> Bool {
         guard let container else { return false }
