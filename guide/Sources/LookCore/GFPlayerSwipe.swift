@@ -42,6 +42,12 @@ nonisolated enum GFPlayerSwipe {
         Int((min(1, max(0, level)) * 100).rounded())
     }
 
+    /// The notch a level sits in, one every 5 %: a swipe ticks softly each time it crosses into another (Georgs,
+    /// 18 Nov: "a nice blurry haptic feedback").
+    static func notch(_ level: Double) -> Int {
+        Int((min(1, max(0, level)) * 20).rounded(.down))
+    }
+
     /// The SF Symbol for a level: a small or a full sun; a speaker with no, one, two or three waves.
     static func symbol(_ kind: Kind, level: Double) -> String {
         switch kind {
