@@ -1,8 +1,16 @@
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index 3ecbd57..94efd0f 100644
+index 3ecbd57..6f406e4 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-@@ -405,6 +405,7 @@ import SwiftUI
+@@ -388,6 +388,7 @@ import SwiftUI
+                 onEditingChanged: onSliderEditingChanged
+             )
+             .tint(.white)
++            .onDisappear { GFPlayerSliding.shared.active = false } // Lume GF: gone mid-drag
+         }
+ 
+         private var timeLabels: some View {
+@@ -405,6 +406,7 @@ import SwiftUI
  
          private func onSliderEditingChanged(editing: Bool) {
              isSeeking = editing
@@ -30,10 +38,18 @@ index 0e4a9a3..38bbdef 100644
              HStack {
                  Text(timeString(from: isSeeking ? seekPosition : clock.current))
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index f1b692d..e5f0bdd 100644
+index f1b692d..21dc1c8 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-@@ -411,6 +411,7 @@ import VLCKit
+@@ -394,6 +394,7 @@ import VLCKit
+                 onEditingChanged: onSliderEditingChanged
+             )
+             .tint(.white)
++            .onDisappear { GFPlayerSliding.shared.active = false } // Lume GF: gone mid-drag
+         }
+ 
+         private var timeLabels: some View {
+@@ -411,6 +412,7 @@ import VLCKit
  
          private func onSliderEditingChanged(editing: Bool) {
              isSeeking = editing

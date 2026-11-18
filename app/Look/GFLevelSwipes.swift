@@ -189,6 +189,7 @@ final class GFPlayerSliding {
                     GFPlayerSliding.shared.active = false // a slider closed with the player mid-drag
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    GFPlayerSliding.shared.active = false // a slider held as the app left the screen
                     if phase == .active { model.comeBack() } else { model.leave() }
                 }
                 // the end of a level swipe, lifted or cut short (gesture state goes back to nil either way)
