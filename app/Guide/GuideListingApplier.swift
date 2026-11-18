@@ -141,6 +141,7 @@ nonisolated struct GuideListingApplier {
             parse = XMLTVParser.parseChecked(fileURL: fileURL, batchSize: 2000, shouldStop: shouldStop) { batch in
                 autoreleasepool { run.apply(batch.filter { $0.end > nowFirst.start && $0.start < nowFirst.end }) }
             }
+            GFGuidePause.shared.waitWhileHeld() // no write while video plays
             try? run.context.save()
             run.pending = 0
             if parse.completed { onNowReady() }
@@ -158,6 +159,7 @@ nonisolated struct GuideListingApplier {
         var start = 0
         while start < deletions.count {
             let chunk = Array(deletions[start ..< min(start + Self.deleteChunk, deletions.count)])
+            GFGuidePause.shared.waitWhileHeld() // no write while video plays
             try? run.context.delete(model: EPGListing.self, where: #Predicate { chunk.contains($0.id) })
             start += Self.deleteChunk
         }
@@ -170,6 +172,7 @@ nonisolated struct GuideListingApplier {
         }
         index.rows = stored
         result.deleted = deletions.count
+        GFGuidePause.shared.waitWhileHeld() // no write while video plays
         try? run.context.save()
         return result
     }
@@ -217,6 +220,7 @@ nonisolated struct GuideListingApplier {
                 }
                 run.pending += ids.count
                 if run.pending >= Self.saveThreshold {
+                    GFGuidePause.shared.waitWhileHeld() // no write while video plays
                     try? context.save()
                     run.pending = 0
                 }
@@ -228,11 +232,13 @@ nonisolated struct GuideListingApplier {
             var start = 0
             while start < removed.count {
                 let chunk = Array(removed[start ..< min(start + Self.deleteChunk, removed.count)])
+                GFGuidePause.shared.waitWhileHeld() // no write while video plays
                 try? context.delete(model: EPGListing.self, where: #Predicate { chunk.contains($0.id) })
                 start += Self.deleteChunk
             }
             result.deleted = removed.count
         }
+        GFGuidePause.shared.waitWhileHeld() // no write while video plays
         try? context.save()
         return result
     }
@@ -306,6 +312,7 @@ nonisolated struct GuideListingApplier {
             result.updated += plan.updates.count
             pending += plan.inserts.count + plan.updates.count
             if pending >= GuideListingApplier.saveThreshold {
+                GFGuidePause.shared.waitWhileHeld() // no write while video plays
                 try? context.save()
                 pending = 0
             }

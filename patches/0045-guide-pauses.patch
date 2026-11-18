@@ -1,5 +1,5 @@
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index 6a8c5ef..794d493 100644
+index 6a8c5ef..72db883 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
 @@ -123,18 +123,18 @@ final class EPGSyncService {
@@ -27,5 +27,15 @@ index 6a8c5ef..794d493 100644
 +        GFGuidePause.shared.hold(false)
 +        if task != nil { GFLiveLog.note("guide refresh goes on: the video ended") }
          runOwedRefresh()
+     }
+ 
+@@ -179,7 +179,8 @@ final class EPGSyncService {
+ 
+     /// Lume GF: Apple's background time ran out. Stop a running refresh; the next trigger continues it.
+     func cancelBackgroundRefresh() {
+-        guard let task, isBackgroundRefresh else { return }
++        // a paused "Sync Now" too: the wake waits on it, and it would hold the time until iOS ends the app
++        guard let task, isBackgroundRefresh || GFGuidePause.shared.isHeld else { return }
+         task.cancel()
      }
  
