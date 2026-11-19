@@ -37,6 +37,8 @@ nonisolated struct GFPlayEvent: Equatable, Sendable {
         case engine
         /// The HLS address tried as MPEG-TS after it failed.
         case tsRetry = "ts-retry"
+        /// The viewer, behind live after a pause, went back to live.
+        case goLive = "go-live"
     }
 
     let kind: Kind
