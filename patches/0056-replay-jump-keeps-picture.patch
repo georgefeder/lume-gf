@@ -1,0 +1,139 @@
+diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
+index b076a52..b69547d 100644
+--- a/Lume/Views/Player/FullScreenPlayerView.swift
++++ b/Lume/Views/Player/FullScreenPlayerView.swift
+@@ -98,8 +98,8 @@ struct FullScreenPlayerView: View {
+     /// something no engine could play, every engine retrying it every second). Only that attempt plays the TS
+     /// address; the engines after it start from the address as listed, as before.
+     @State var gfTSRetry: (mediaID: String, engineAttempt: Int)?
+-    /// Lume GF: the catch-up item already tried a second time, and the count that opens it afresh (gfRetryCatchup).
+-    @State var gfCatchupRetried: String?
++    /// Lume GF: the catch-up item tried again and how often, and the count that opens it afresh (gfRetryCatchup).
++    @State var gfCatchupRetried: (id: String, count: Int)?
+     @State var gfCatchupWaiting: String?
+     @State var gfCatchupRetryTick = 0
+ 
+@@ -457,10 +457,15 @@ struct FullScreenPlayerView: View {
+     }
+ 
+     /// Lume GF: a catch-up programme the archive refused (the provider's 458, "not ready": a programme just ended, or
+-    /// opens too close together) is asked once more after 10 s, no sooner and no more often, so a burst doesn't use
+-    /// up the account's connections; a second refusal shows the error (Oracle Admin, 19 Nov).
++    /// opens too close together) is asked again after 3 s, then after 8 s, and no more, so a burst doesn't use up the
++    /// account's connections; a third refusal shows the error (Oracle Admin, 19 Nov). Once after 10 s, at first: the
++    /// refusals come and go within seconds, and a replay waited 13 s to start (Georgs, 19 Nov: "it took a while").
+     var gfCatchupRetryLeft: Bool {
+-        activeMedia.gfCatchup != nil && gfCatchupRetried != activeMedia.id
++        activeMedia.gfCatchup != nil && gfCatchupRetriesDone < 2
++    }
++
++    private var gfCatchupRetriesDone: Int {
++        gfCatchupRetried?.id == activeMedia.id ? gfCatchupRetried?.count ?? 0 : 0
+     }
+ 
+     private func gfRetryCatchup() -> Bool {
+@@ -469,11 +474,13 @@ struct FullScreenPlayerView: View {
+         // the refused player stays up, reporting rather than reconnecting, until the fresh one replaces it
+         guard gfCatchupWaiting != id else { return true }
+         gfCatchupWaiting = id
+-        GFLiveLog.note("replay: refused, again in 10 s")
++        let done = gfCatchupRetriesDone
++        let wait = done == 0 ? 3 : 8
++        GFLiveLog.note("replay: refused, again in \(wait) s")
+         Task { @MainActor in
+-            try? await Task.sleep(for: .seconds(10))
++            try? await Task.sleep(for: .seconds(wait))
+             guard activeMedia.id == id else { return }
+-            gfCatchupRetried = id
++            gfCatchupRetried = (id, done + 1)
+             gfCatchupWaiting = nil
+             gfCatchupRetryTick += 1
+         }
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
+index 9cd5da5..0024616 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
+@@ -193,8 +193,31 @@ extension KSPlayerEngineView {
+         guard let playing = gfPlaying.media, let window = playing.gfCatchup else { return false }
+         if let offset = GFCatchupSeek.offset(for: jump, current: clock.current, in: window),
+            let next = playing.gfCatchupShifted(to: offset) {
+-            mediaSwapper.swap { onSelectMedia?(next) } // the host opens it in a fresh player: no held frame
++            // the host opens it in a fresh player: the picture on screen goes over to it (gfCatchupArrive)
++            let open = { mediaSwapper.swap { onSelectMedia?(next) } }
++            guard hasStartedPlayback, gfDrawn, let player = coordinator.playerLayer?.player as? KSMEPlayer else {
++                open()
++                return true
++            }
++            Task { @MainActor in
++                GFCatchupHold.shared.keep(await player.thumbnailImageAtCurrentTime(), for: next.id)
++                open()
++            }
+         }
+         return true
+     }
++
++    /// Lume GF: a replay that jumped (Georgs, 19 Nov: "for the whole thing not to disappear"). The fresh player keeps
++    /// the controls up from the start, the bar at the minute it jumped to and the old picture under the spinner until
++    /// the new one moves, instead of a black screen with the programme's name.
++    var gfJumped: Bool {
++        (media.gfCatchup?.jumps ?? 0) > 0
++    }
++
++    func gfCatchupArrive() {
++        guard gfJumped, let window = media.gfCatchup else { return }
++        clock.current = window.offset
++        clock.duration = window.length
++        if let frame = GFCatchupHold.shared.take(for: media.id) { holdZapFrame(frame) }
++    }
+ }
+diff --git a/Lume/Views/Player/KSPlayerEngineView+ZapFrame.swift b/Lume/Views/Player/KSPlayerEngineView+ZapFrame.swift
+index 8a157de..f881257 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+ZapFrame.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+ZapFrame.swift
+@@ -49,7 +49,7 @@ extension KSPlayerEngineView {
+         }
+     }
+ 
+-    private func holdZapFrame(_ frame: CGImage?) {
++    func holdZapFrame(_ frame: CGImage?) {
+         zapFrame = frame
+         zapFrameToken &+= 1
+         let token = zapFrameToken
+diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
+index ed3a352..0f5e943 100644
+--- a/Lume/Views/Player/KSPlayerEngineView.swift
++++ b/Lume/Views/Player/KSPlayerEngineView.swift
+@@ -501,7 +501,7 @@ struct KSPlayerEngineView: View {
+                 // paused behind its Play button.
+                 // Lume GF: below the fold they go after a while too, leaving the reflection; a tap there brings them
+                 // back (Georgs, 24 Oct). The demo's fold shows them though its made-up channel never plays.
+-                if isControlsVisible, hasStartedPlayback && !loadFailed || GFTabletop.demoFold {
++                if isControlsVisible, (hasStartedPlayback || gfJumped) && !loadFailed || GFTabletop.demoFold {
+                     controlsOverlay
+                         .gfTabletopArea(gfTabletop?.panel, from: .bottom, bottomInset: gfTabletop?.bottomInset ?? 0)
+                         // Lume GF: across the whole width beside the iPhone Duo front screen's side column, as the
+@@ -515,14 +515,14 @@ struct KSPlayerEngineView: View {
+                     .gfTabletopArea(gfTabletop?.video, from: .top)
+ 
+                 if isBuffering {
+-                    PlayerLoadingIndicator(title: hasStartedPlayback ? nil : media.title)
++                    PlayerLoadingIndicator(title: hasStartedPlayback || gfJumped ? nil : media.title)
+                         .gfTabletopArea(gfTabletop?.video, from: .top)
+                         .gfControlsBesideSideColumn() // Lume GF: centred on the iPhone Duo's outer screen
+                         .transition(.opacity)
+                 }
+ 
+                 // Lume GF: a channel that has not started can still be closed (Georgs, 1 Nov)
+-                if !hasStartedPlayback, !loadFailed, !GFTabletop.demoFold {
++                if !hasStartedPlayback, !gfJumped, !loadFailed, !GFTabletop.demoFold {
+                     GFLoadingCloseButton(onClose: { closePlayer() })
+                         .transition(.opacity)
+                 }
+@@ -548,6 +548,7 @@ struct KSPlayerEngineView: View {
+                 observePipState()
+                 startStartupWatchdog()
+                 seedAdoptedSessionState()
++                gfCatchupArrive() // Lume GF
+             }
+             .onDisappear {
+                 hideTask?.cancel()
