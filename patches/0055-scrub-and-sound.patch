@@ -1,0 +1,169 @@
+diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+index 6f406e4..836c5d4 100644
+--- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
+@@ -379,7 +379,7 @@ import SwiftUI
+         }
+ 
+         private var scrubber: some View {
+-            Slider(
++            GFScrubber( // Lume GF: a bar the level swipes can't cut off (GFScrubber)
+                 value: Binding<TimeInterval>(
+                     get: { isSeeking ? seekPosition : (currentTime.isFinite ? currentTime : 0) },
+                     set: { seekPosition = $0 }
+@@ -388,7 +388,6 @@ import SwiftUI
+                 onEditingChanged: onSliderEditingChanged
+             )
+             .tint(.white)
+-            .onDisappear { GFPlayerSliding.shared.active = false } // Lume GF: gone mid-drag
+         }
+ 
+         private var timeLabels: some View {
+@@ -406,7 +405,6 @@ import SwiftUI
+ 
+         private func onSliderEditingChanged(editing: Bool) {
+             isSeeking = editing
+-            GFPlayerSliding.shared.active = editing // Lume GF: the level swipes stand aside meanwhile
+             if editing {
+                 hideTask?.cancel()
+             } else {
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
+index 41e6320..9cd5da5 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
+@@ -7,6 +7,7 @@
+ //  the player. Kept out of the main file, which is at its length cap.
+ //
+ 
++import AVFoundation
+ import KSPlayer
+ import QuartzCore
+ import SwiftUI
+@@ -114,6 +115,33 @@ extension KSPlayerEngineView {
+             clock.duration = total
+         }
+         gfNoteBehindLive(current)
++        gfMendAudio()
++    }
++
++    /// Lume GF: the sound back after an interruption. A voice message recorded with the player in picture in
++    /// picture stopped iOS's audio engine under it, and on play the picture came back without sound (Georgs, 19 Nov).
++    /// While playing: after an interruption the engine is started afresh (it may still say it runs), and an engine
++    /// found stopped (another app's audio set-up stops it too) is started again, at most every 5 s. Only for a stream
++    /// with sound: one without never starts the engine.
++    private func gfMendAudio() {
++        #if os(iOS)
++            // playable: while it buffers KSPlayer pauses the engine on purpose
++            guard hasStartedPlayback, let player = coordinator.playerLayer?.player, player.isPlaying,
++                  player.loadState == .playable,
++                  let output = (player as? KSMEPlayer)?.audioOutput as? AudioEnginePlayer
++            else { return }
++            let cut = tick.gfAudioCut
++            guard cut || !output.engine.isRunning, !player.tracks(mediaType: .audio).isEmpty else { return }
++            let now = CACurrentMediaTime()
++            guard now - tick.gfAudioMendAt >= 5 else { return }
++            tick.gfAudioMendAt = now
++            tick.gfAudioCut = false
++            try? AVAudioSession.sharedInstance().setActive(true)
++            if cut { output.engine.stop() }
++            output.play()
++            GFLiveLog.note("player: sound started again (\(cut ? "after an interruption" : "engine was stopped"), "
++                + "running: \(output.engine.isRunning))")
++        #endif
+     }
+ 
+     /// Lume GF: a live channel paused, or stalled, plays on from where it stopped, so it falls behind live by the
+diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
+index 5a46f64..ed3a352 100644
+--- a/Lume/Views/Player/KSPlayerEngineView.swift
++++ b/Lume/Views/Player/KSPlayerEngineView.swift
+@@ -1,3 +1,4 @@
++import AVFoundation
+ import Combine
+ import KSPlayer
+ import OSLog
+@@ -339,6 +340,14 @@ struct KSPlayerEngineView: View {
+             .onChange(of: engine.isPlaying) { _, _ in
+                 resetHideTimer()
+             }
++            #if os(iOS)
++                // Lume GF: a call or a voice message stops the sound under the player; mended at the next play
++                // (gfMendAudio)
++                .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { note in
++                    let type = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
++                    if type == AVAudioSession.InterruptionType.ended.rawValue { tick.gfAudioCut = true }
++                }
++            #endif
+             .onChange(of: scenePhase) { _, phase in
+                 // The Home button backgrounds the app without calling
+                 // onDisappear, so pause here to stop audio when the player
+diff --git a/Lume/Views/Player/PlaybackClock.swift b/Lume/Views/Player/PlaybackClock.swift
+index 67826ec..23c344e 100644
+--- a/Lume/Views/Player/PlaybackClock.swift
++++ b/Lume/Views/Player/PlaybackClock.swift
+@@ -52,6 +52,10 @@ final class PlaybackTickScratch {
+     var lastDriftRecovery: TimeInterval = -.infinity
+     /// Lume GF: a live open's wall clock and playhead at a moment it was at live, for how far behind it falls.
+     var gfLiveAnchor: (media: String, wall: TimeInterval, playhead: TimeInterval)?
++    /// Lume GF: an audio interruption (a call, a voice message) since the sound last ran, and the last time the
++    /// sound was started again (GFAudio in KSPlayerEngineView+Actions).
++    var gfAudioCut = false
++    var gfAudioMendAt: TimeInterval = -.infinity
+ 
+     /// Back to the fresh-session baseline, for stream swaps.
+     func reset() {
+diff --git a/Lume/Views/Player/PlaybackTimeline.swift b/Lume/Views/Player/PlaybackTimeline.swift
+index 38bbdef..4c1fd66 100644
+--- a/Lume/Views/Player/PlaybackTimeline.swift
++++ b/Lume/Views/Player/PlaybackTimeline.swift
+@@ -25,19 +25,15 @@ import SwiftUI
+ 
+         var body: some View {
+             let duration = clock.displayDuration(growing: timeline)
+-            Slider(
++            GFScrubber( // Lume GF: a bar the level swipes can't cut off (GFScrubber)
+                 value: Binding<TimeInterval>(
+                     get: { isSeeking ? seekPosition : (clock.current.isFinite ? clock.current : 0) },
+                     set: { seekPosition = $0 }
+                 ),
+                 in: 0 ... max(duration.isFinite ? duration : 1, 1),
+-                onEditingChanged: { editing in
+-                    GFPlayerSliding.shared.active = editing // Lume GF: the level swipes stand aside meanwhile
+-                    onEditingChanged(editing)
+-                }
++                onEditingChanged: onEditingChanged
+             )
+             .tint(.white)
+-            .onDisappear { GFPlayerSliding.shared.active = false } // Lume GF: gone mid-drag (a replay jump)
+ 
+             HStack {
+                 Text(timeString(from: isSeeking ? seekPosition : clock.current))
+diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+index 21dc1c8..5504b18 100644
+--- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
++++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
+@@ -385,7 +385,7 @@ import VLCKit
+         }
+ 
+         private var scrubber: some View {
+-            Slider(
++            GFScrubber( // Lume GF: a bar the level swipes can't cut off (GFScrubber)
+                 value: Binding<TimeInterval>(
+                     get: { isSeeking ? seekPosition : (currentTime.isFinite ? currentTime : 0) },
+                     set: { seekPosition = $0 }
+@@ -394,7 +394,6 @@ import VLCKit
+                 onEditingChanged: onSliderEditingChanged
+             )
+             .tint(.white)
+-            .onDisappear { GFPlayerSliding.shared.active = false } // Lume GF: gone mid-drag
+         }
+ 
+         private var timeLabels: some View {
+@@ -412,7 +411,6 @@ import VLCKit
+ 
+         private func onSliderEditingChanged(editing: Bool) {
+             isSeeking = editing
+-            GFPlayerSliding.shared.active = editing // Lume GF: the level swipes stand aside meanwhile
+             if editing {
+                 hideTask?.cancel()
+             } else {
