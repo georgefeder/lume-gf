@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if !os(tvOS) // Apple TV has no slider: its bar is TVPlayerControlsOverlay's
 /// Lume GF: the player's position bar, in place of the system slider (iPhone and iPad). The system slider's drag is
 /// UIKit's, and the level swipes' drag over the whole player cancelled it a moment into a scrub, or, once they were
 /// told to stand aside, as soon as the finger touched it: a seek landed at once and a replay opened one minute on, a
@@ -92,3 +93,4 @@ struct GFScrubber: View {
         }
     #endif
 }
+#endif
