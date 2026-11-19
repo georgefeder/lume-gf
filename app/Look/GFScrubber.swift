@@ -56,6 +56,7 @@ struct GFScrubber: View {
                             let share = min(max(drag.location.x / width, 0), 1)
                             value = bounds.lowerBound + share * (bounds.upperBound - bounds.lowerBound)
                         }
+                        .onEnded { _ in finish() } // a tap too quick for the held state to be seen changing
                 )
             }
             .frame(height: 30)
