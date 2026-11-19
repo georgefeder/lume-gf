@@ -11,9 +11,8 @@ final class GFCatchupHold {
         held = frame.map { (id, $0) }
     }
 
-    /// The picture kept for `id`, once: any other is dropped.
+    /// The picture kept for `id`. Kept on after: a refused replay's retry opens the same item in a fresh player again.
     func take(for id: String) -> CGImage? {
-        defer { held = nil }
-        return held?.id == id ? held?.frame : nil
+        held?.id == id ? held?.frame : nil
     }
 }

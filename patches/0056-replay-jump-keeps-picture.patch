@@ -50,23 +50,32 @@ index b076a52..b69547d 100644
              gfCatchupRetryTick += 1
          }
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-index 9cd5da5..0024616 100644
+index 9cd5da5..e60805e 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-@@ -193,8 +193,31 @@ extension KSPlayerEngineView {
+@@ -193,8 +193,40 @@ extension KSPlayerEngineView {
          guard let playing = gfPlaying.media, let window = playing.gfCatchup else { return false }
          if let offset = GFCatchupSeek.offset(for: jump, current: clock.current, in: window),
             let next = playing.gfCatchupShifted(to: offset) {
 -            mediaSwapper.swap { onSelectMedia?(next) } // the host opens it in a fresh player: no held frame
-+            // the host opens it in a fresh player: the picture on screen goes over to it (gfCatchupArrive)
-+            let open = { mediaSwapper.swap { onSelectMedia?(next) } }
++            // the host opens it in a fresh player: the picture on screen goes over to it (gfCatchupArrive), kept
++            // only for a swap that goes through
++            let open = { (frame: CGImage?) in
++                mediaSwapper.swap {
++                    GFCatchupHold.shared.keep(frame, for: next.id)
++                    onSelectMedia?(next)
++                }
++            }
++            // not started yet (a jump during a jump): the picture still held from before
 +            guard hasStartedPlayback, gfDrawn, let player = coordinator.playerLayer?.player as? KSMEPlayer else {
-+                open()
++                open(zapFrame)
 +                return true
 +            }
 +            Task { @MainActor in
-+                GFCatchupHold.shared.keep(await player.thumbnailImageAtCurrentTime(), for: next.id)
-+                open()
++                let frame = await player.thumbnailImageAtCurrentTime()
++                // meanwhile the viewer may have zapped, or closed the player
++                guard gfPlaying.media?.id == playing.id, coordinator.playerLayer?.player as? KSMEPlayer === player else { return }
++                open(frame)
 +            }
          }
          return true
