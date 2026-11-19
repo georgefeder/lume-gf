@@ -30,10 +30,18 @@ index 2802650..d032b69 100644
  
          // MARK: - Secondary Controls (grouped glass pill)
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-index 1027992..cd3b41a 100644
+index 1027992..41e6320 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-@@ -29,6 +29,12 @@ extension KSPlayerEngineView {
+@@ -8,6 +8,7 @@
+ //
+ 
+ import KSPlayer
++import QuartzCore
+ import SwiftUI
+ 
+ #if canImport(AppKit)
+@@ -29,6 +30,12 @@ extension KSPlayerEngineView {
          ), owner: coordinator)
      }
  
@@ -46,7 +54,7 @@ index 1027992..cd3b41a 100644
      func togglePlay() {
          let playing: Bool
          #if os(tvOS)
-@@ -106,6 +112,30 @@ extension KSPlayerEngineView {
+@@ -106,6 +113,50 @@ extension KSPlayerEngineView {
          } else if total.isFinite, total > 0 {
              clock.duration = total
          }
@@ -72,8 +80,28 @@ index 1027992..cd3b41a 100644
 +            return
 +        }
 +        let behind = (now - anchor.wall) - (current - anchor.playhead)
++        // close to live, the anchor moves up, so the player's clock running a touch slower than the wall's over
++        // hours never adds up to "behind"
++        if behind < 2 { tick.gfLiveAnchor = (media.id, now, current) }
 +        let shown = behind < 5 ? 0 : behind.rounded(.down) // a moment's wobble is still live
 +        if clock.gfBehindLive != shown { clock.gfBehindLive = shown }
++    }
++
++    /// Lume GF: the channel opens afresh at live (Go Live, a retry, a reconnect): measured anew from its first picture.
++    func gfBackAtLive() {
++        tick.gfLiveAnchor = nil
++        if clock.gfBehindLive != 0 { clock.gfBehindLive = 0 }
++        if clock.gfPausedAt != nil { clock.gfPausedAt = nil }
++    }
++
++    /// Lume GF: a live channel paused (by the viewer, a call, a voice message): the badge counts the pause as it goes.
++    func gfNotePause(_ state: KSPlayerState) {
++        guard media.isLive, hasStartedPlayback else { return }
++        if state == .paused {
++            if clock.gfPausedAt == nil { clock.gfPausedAt = Date() }
++        } else if clock.gfPausedAt != nil {
++            clock.gfPausedAt = nil
++        }
      }
  
      /// Lume GF: a seek in a catch-up programme asks the archive again from that minute, as a new item, instead of
@@ -91,16 +119,47 @@ index 3e40ee4..eaa532b 100644
              )
          }
  
+diff --git a/Lume/Views/Player/KSPlayerEngineView+Playback.swift b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+index 84fa150..2885516 100644
+--- a/Lume/Views/Player/KSPlayerEngineView+Playback.swift
++++ b/Lume/Views/Player/KSPlayerEngineView+Playback.swift
+@@ -122,6 +122,7 @@ extension KSPlayerEngineView {
+     /// confirmed healthy again. `.playedToTheEnd` is a clean finish, not a drop,
+     /// so it is left alone.
+     func handleState(_ state: KSPlayerState) {
++        gfNotePause(state) // Lume GF
+         // The stall watchdog lives exactly as long as a mid-playback `.buffering`
+         // window on a live stream; any other state means the engine moved on.
+         // Startup buffering is excluded — `startupTimeout` already covers it.
+@@ -340,6 +341,7 @@ extension KSPlayerEngineView {
+         hasStartedPlayback = false
+         hasSeenReadyToPlay = false
+         tick.lastPlayhead = -1
++        gfBackAtLive() // Lume GF
+         reconnector.reset()
+         #if os(tvOS)
+             engine.reset()
+@@ -390,6 +392,7 @@ extension KSPlayerEngineView {
+         // prematurely clear the spinner or reset the reconnect budget.
+         hasSeenReadyToPlay = false
+         tick.lastPlayhead = -1
++        gfBackAtLive() // Lume GF
+         if !media.isLive, media.gfCatchup == nil, clock.current > 1 { // Lume GF: not inside a catch-up file
+             layer.options.startPlayTime = clock.current
+         }
 diff --git a/Lume/Views/Player/PlaybackClock.swift b/Lume/Views/Player/PlaybackClock.swift
-index ef93e03..5e9f28c 100644
+index ef93e03..67826ec 100644
 --- a/Lume/Views/Player/PlaybackClock.swift
 +++ b/Lume/Views/Player/PlaybackClock.swift
-@@ -20,12 +20,15 @@ final class PlaybackClock {
+@@ -20,12 +20,19 @@ final class PlaybackClock {
      /// opened it; empty when unknown. The Cast sheet warns from these when no
      /// track would play on a receiver.
      var audioCodecs: [String] = []
 +    /// Lume GF: how far a live channel plays behind live, in whole seconds; 0 at live (GFLiveBadge).
 +    var gfBehindLive: TimeInterval = 0
++    /// Lume GF: when a live channel was paused, nil while it plays: the badge counts on through the pause, when the
++    /// player sends no ticks.
++    var gfPausedAt: Date?
  
      /// Reset to zero when the host swaps to a different stream.
      func reset() {
@@ -108,10 +167,11 @@ index ef93e03..5e9f28c 100644
          duration = 0
          if !audioCodecs.isEmpty { audioCodecs = [] }
 +        if gfBehindLive != 0 { gfBehindLive = 0 }
++        if gfPausedAt != nil { gfPausedAt = nil }
      }
  }
  
-@@ -43,11 +46,14 @@ final class PlaybackTickScratch {
+@@ -43,11 +50,14 @@ final class PlaybackTickScratch {
      /// When the last drift-triggered stream rebuild fired, for the re-fire
      /// cooldown in `noteClockDrift`.
      var lastDriftRecovery: TimeInterval = -.infinity

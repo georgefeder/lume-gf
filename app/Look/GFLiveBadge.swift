@@ -9,7 +9,18 @@ struct GFLiveBadge: View {
     let onGoLive: () -> Void
 
     var body: some View {
-        let behind = clock.gfBehindLive
+        if let pausedAt = clock.gfPausedAt {
+            // paused, the player sends no ticks: the line counts on by itself, once a second
+            TimelineView(.periodic(from: pausedAt, by: 1)) { context in
+                let total = clock.gfBehindLive + context.date.timeIntervalSince(pausedAt)
+                line(behind: total < 5 ? 0 : total.rounded(.down))
+            }
+        } else {
+            line(behind: clock.gfBehindLive)
+        }
+    }
+
+    private func line(behind: TimeInterval) -> some View {
         HStack(spacing: 7) {
             Circle()
                 .fill(behind > 0 ? Color.white.opacity(0.5) : .red)
