@@ -28,8 +28,11 @@ struct GFScrubber: View {
         var body: some View {
             GeometryReader { proxy in
                 let width = max(proxy.size.width, 1)
-                let knob: CGFloat = dragging ? 24 : 16
-                let x = width * fraction
+                // the knob's middle runs from end to end of the track, so it stays under the finger right to the ends
+                let inset = Self.knob.width / 2
+                let track = max(width - inset * 2, 1)
+                let x = inset + track * fraction
+                let knob = dragging ? Self.heldKnob : Self.knob
                 ZStack(alignment: .leading) {
                     Capsule()
                         .fill(.white.opacity(0.3))
@@ -37,11 +40,13 @@ struct GFScrubber: View {
                     Capsule()
                         .fill(.white)
                         .frame(width: x, height: dragging ? 6 : 4)
-                    Circle()
-                        .fill(.white)
-                        .frame(width: knob, height: knob)
-                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-                        .offset(x: min(max(x - knob / 2, 0), width - knob))
+                    // the system slider's knob: a white pill, and a clear glass lens, bigger, while held
+                    Capsule()
+                        .fill(.white.opacity(dragging ? 0.08 : 1))
+                        .frame(width: knob.width, height: knob.height)
+                        .glassEffectCompat(dragging ? .clear : .regular, in: Capsule())
+                        .shadow(color: .black.opacity(dragging ? 0.15 : 0.25), radius: 4, y: 1)
+                        .offset(x: x - knob.width / 2)
                 }
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
@@ -54,14 +59,14 @@ struct GFScrubber: View {
                                 GFPlayerSliding.shared.active = true
                                 onEditingChanged(true)
                             }
-                            let share = min(max(drag.location.x / width, 0), 1)
+                            let share = min(max((drag.location.x - inset) / track, 0), 1)
                             value = bounds.lowerBound + share * (bounds.upperBound - bounds.lowerBound)
                         }
                         .onEnded { _ in finish() } // a tap too quick for the held state to be seen changing
                 )
             }
             .frame(height: 30)
-            .animation(.smooth(duration: 0.15), value: dragging)
+            .animation(.smooth(duration: 0.2), value: dragging)
             .onChange(of: held) { _, isHeld in
                 if !isHeld { finish() }
             }
@@ -74,6 +79,9 @@ struct GFScrubber: View {
                 Slider(value: $value, in: bounds, onEditingChanged: onEditingChanged)
             }
         }
+
+        private static let knob = CGSize(width: 38, height: 24)
+        private static let heldKnob = CGSize(width: 58, height: 36)
 
         private var fraction: CGFloat {
             let span = bounds.upperBound - bounds.lowerBound
