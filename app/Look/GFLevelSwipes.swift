@@ -19,9 +19,9 @@ extension View {
     }
 }
 
-/// Lume GF: a slider on the player (the position bar) held under the finger. The level swipes stand aside until it
-/// lets go: their drag, recognised a few points into the slider's, cancelled the slider's, so a seek landed as soon as
-/// the finger moved (Georgs, 18 Nov: "doesn't allow me to slowly scrub forward"; a replay jumped one minute a try).
+/// Lume GF: the player's position bar (GFScrubber) held under the finger. A drag that starts meanwhile sets no level.
+/// (Once it switched the level swipes' gesture off instead, and the switch itself cut the bar's drag off as soon as
+/// the finger touched it, 19 Nov.)
 @MainActor
 @Observable
 final class GFPlayerSliding {
@@ -177,7 +177,7 @@ final class GFPlayerSliding {
                     pill.animation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.25),
                                    value: model.shown)
                 }
-                .simultaneousGesture(drag, including: enabled && !GFPlayerSliding.shared.active ? .all : .subviews)
+                .simultaneousGesture(drag, including: enabled ? .all : .subviews)
                 .onAppear {
                     model.watchVolume()
                     #if GF_DEMO
@@ -207,7 +207,8 @@ final class GFPlayerSliding {
             DragGesture(minimumDistance: GFPlayerSwipe.threshold, coordinateSpace: .local)
                 .updating($track) { value, track, _ in
                     if track == nil {
-                        let kind = GFPlayerSwipe.isVertical(value.translation)
+                        // read here, never in the body: a gesture changed under the finger cancels the bar's
+                        let kind = !GFPlayerSliding.shared.active && GFPlayerSwipe.isVertical(value.translation)
                             ? GFPlayerSwipe.kind(start: value.startLocation, size: size) : nil
                         track = Track(kind: kind, start: kind.map { model.current($0) } ?? 0)
                         model.isDraggingVolume = kind == .volume
