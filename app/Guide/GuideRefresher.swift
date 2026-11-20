@@ -65,7 +65,10 @@ nonisolated final class GuideRefresher {
         let channelsKey = GuideFingerprint.ofSet(knownChannelIDs)
         let sameChannels = state.mayAskUnchanged(channelsKey: channelsKey)
         let whole = Self.wholeImportAllowed // decided once: a wake's end must not change it halfway
-        let conditional = !force && hasGuide && (sameChannels || !whole)
+        // a whole import owed (a short wake took a whole guide in as changes) asks for the whole guide once there is
+        // time: a change file would clear the debt without dropping moved programmes
+        let owed = whole && state.wholeImportOwed == true
+        let conditional = !force && hasGuide && (sameChannels || !whole) && !owed
         // the server's change file since the build this device has (GuideDelta), when it still keeps one; else it
         // answers with the full guide. Asked by date alone: a change file's ETag is not the full guide's, so an ETag
         // kept from one would make the server send the full guide again instead of "unchanged".
