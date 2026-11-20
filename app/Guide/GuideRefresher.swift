@@ -65,7 +65,10 @@ nonisolated final class GuideRefresher {
         let channelsKey = GuideFingerprint.ofSet(knownChannelIDs)
         let sameChannels = state.mayAskUnchanged(channelsKey: channelsKey)
         let whole = Self.wholeImportAllowed // decided once: a wake's end must not change it halfway
-        let conditional = !force && hasGuide && (sameChannels || !whole)
+        // a whole import owed (a short wake took a whole guide in as changes) asks for the whole guide once there is
+        // time: a change file would clear the debt without dropping moved programmes
+        let owed = whole && state.wholeImportOwed == true
+        let conditional = !force && hasGuide && (sameChannels || !whole) && !owed
         // the server's change file since the build this device has (GuideDelta), when it still keeps one; else it
         // answers with the full guide. Asked by date alone: a change file's ETag is not the full guide's, so an ETag
         // kept from one would make the server send the full guide again instead of "unchanged".
@@ -117,7 +120,10 @@ nonisolated final class GuideRefresher {
                 }
                 // channels changed since the last whole import: their key stays the old one, so the whole import they
                 // need still comes when there is time
-                return try applyChanges(delta, file: file, sourceID: sourceID, state: state,
+                let removed = delta.removed.compactMap { gone in
+                    XMLTVDate.parse(gone.start).map { GuideDiffPlanner.id(channelId: gone.channel, start: $0) }
+                }
+                return try applyChanges(removed: removed, file: file, sourceID: sourceID, state: state,
                                         knownChannelIDs: knownChannelIDs,
                                         channelsKey: sameChannels ? channelsKey : state.channelsKey, etag: etag,
                                         lastModified: lastModified, serverBuild: serverBuild,
@@ -137,6 +143,19 @@ nonisolated final class GuideRefresher {
                     $0.recordSameFile(etag: etag, lastModified: lastModified, serverBuild: serverBuild, at: now())
                 }
                 return Outcome(claimedChannelIDs: state.channelIDs.intersection(knownChannelIDs), summary: "same file")
+            }
+            // In a short wake, not by reading the stored guide first: that alone took the whole wake (19-20 Nov 2026: the iPhone,
+            // more than 6 hours behind, spent each wake's ~25 s reading its stored programmes and was cut off before
+            // writing one, every wake for a day, until its guide ran out). A short wake takes the file in as changes:
+            // what is on now first, then the rest, each programme by id, saved every batch, the same ones left alone, so
+            // the next wake goes on from there. Moved programmes and dropped channels wait for the whole import, owed
+            // until the app is open.
+            if !whole {
+                return try applyChanges(removed: [], file: file, sourceID: sourceID, state: state,
+                                        knownChannelIDs: knownChannelIDs, channelsKey: state.channelsKey, etag: etag,
+                                        lastModified: lastModified, serverBuild: serverBuild, wholeImportOwed: true,
+                                        whole: whole,
+                                        nowFirst: DateInterval(start: now(), duration: GuideDiffPlanner.nowFirstSpan))
             }
             timing?.path = "whole"
             let started = Date()
@@ -198,18 +217,31 @@ nonisolated final class GuideRefresher {
         }
     }
 
-    /// The server's change file (GuideDelta): only its programmes are written, the stored guide is not read.
-    private func applyChanges(_ delta: GuideDelta.Header, file: URL, sourceID: UUID, state: GuideSourceState,
+    /// The server's change file (GuideDelta), or a whole guide in a short wake (`nowFirst`: what is on now goes in
+    /// and shows first): only its programmes are written, the stored guide is not read.
+    private func applyChanges(removed: [String], file: URL, sourceID: UUID, state: GuideSourceState,
                               knownChannelIDs: Set<String>, channelsKey: UInt64?, etag: String?, lastModified: String?,
-                              serverBuild: Date?, wholeImportOwed: Bool, whole: Bool) throws -> Outcome {
+                              serverBuild: Date?, wholeImportOwed: Bool, whole: Bool,
+                              nowFirst: DateInterval? = nil) throws -> Outcome {
         let started = Date()
-        let removed = delta.removed.compactMap { gone in
-            XMLTVDate.parse(gone.start).map { GuideDiffPlanner.id(channelId: gone.channel, start: $0) }
+        timing?.path = nowFirst == nil ? "delta" : "patch"
+        let applier = GuideListingApplier(container: container)
+        let saveEvery = whole ? GuideListingApplier.saveThreshold : GuideListingApplier.wakeSaveThreshold
+        var first = GuideListingApplier.Result()
+        if let nowFirst {
+            first = applier.applyChanges(fileURL: file, claimableChannels: knownChannelIDs, removed: [],
+                                         window: nowFirst, saveEvery: saveEvery)
+            if first.completed { onNowReady() }
         }
-        timing?.path = "delta"
-        let result = GuideListingApplier(container: container)
-            .applyChanges(fileURL: file, claimableChannels: knownChannelIDs, removed: removed,
-                          saveEvery: whole ? GuideListingApplier.saveThreshold : GuideListingApplier.wakeSaveThreshold)
+        var result = first.completed || nowFirst == nil
+            ? applier.applyChanges(fileURL: file, claimableChannels: knownChannelIDs, removed: removed,
+                                   saveEvery: saveEvery)
+            : first
+        if nowFirst != nil, first.completed { // the second pass found the first one's programmes the same
+            result.inserted += first.inserted
+            result.updated += first.updated
+            result.claimedChannels.formUnion(first.claimedChannels)
+        }
         timing?.apply = GFGuideTiming.ms(since: started)
         timing?.inserted = result.inserted
         timing?.updated = result.updated

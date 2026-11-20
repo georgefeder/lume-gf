@@ -7,7 +7,8 @@ import Foundation
 nonisolated struct GFGuideTiming: Equatable {
     /// "wake" (a push or background refresh, ~25 s) or "app" (open, or the overnight import).
     var kind: String
-    /// What came back and what was done: "unchanged", "delta", "whole", "same", "later", "failed".
+    /// What came back and what was done: "unchanged", "delta", "whole", "patch" (a
+    /// whole guide taken in as changes in a short wake), "same", "later", "failed".
     var path = "failed"
     /// Milliseconds: the download, reading the stored guide, writing the changes.
     var download: Int?
