@@ -285,6 +285,15 @@ nonisolated final class GuideRefresher {
         states.update(sourceID) { $0.recordUnchanged(at: now()) }
     }
 
+    /// A Stalker portal's guide that did not come (Lume 3.3's portal sources skip this refresher): counts as a failed
+    /// try, so the usual wait comes before the next one instead of the app staying "due"; a stopped one only waits.
+    func recordPortalFailed(sourceID: UUID) {
+        let cancelled = Task.isCancelled, at = now()
+        states.update(sourceID) { state in
+            if cancelled { state.lastAttempt = at } else { state.recordFailure("portal guide failed", at: at) }
+        }
+    }
+
     /// Credential-free reason (never a URL), like Lume's own guide logging.
     static func reason(_ error: Error) -> String {
         if let m3u = error as? M3UError { return m3u.logDescription }

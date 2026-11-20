@@ -99,10 +99,10 @@ index 2a4c0c0..f4a9e4d 100644
          currentText = ""
          if elementName == "programme" {
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
-index 96a623a..006f298 100644
+index 96a623a..1e79a11 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
 +++ b/Lume/Services/Sync/EPGSyncManager.swift
-@@ -63,62 +63,46 @@ actor EPGSyncManager {
+@@ -63,62 +63,49 @@ actor EPGSyncManager {
      ///   `[Playlist].isLocked`). Their linked sources are skipped — the guide
      ///   is fetched from the provider with that playlist's credentials.
      @discardableResult
@@ -158,7 +158,10 @@ index 96a623a..006f298 100644
 +                result = await sync(sourceID: source.id, url: source.url, knownChannelIDs: unclaimedChannelIDs,
 +                                    refresher: refresher, force: force)
 +            } else {
-+                guard let download = await download(source) else { continue }
++                guard let download = await download(source) else {
++                    refresher.recordPortalFailed(sourceID: source.id) // Lume GF: so it doesn't stay due
++                    continue
++                }
 +                guard !Task.isCancelled else {
 +                    markStatus(source.id, .idle)
 +                    return anySucceeded
@@ -186,7 +189,7 @@ index 96a623a..006f298 100644
          return anySucceeded
      }
  
-@@ -138,6 +122,45 @@ actor EPGSyncManager {
+@@ -138,6 +125,45 @@ actor EPGSyncManager {
          let payload: EPGPayload
      }
  

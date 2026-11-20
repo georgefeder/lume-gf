@@ -34,7 +34,7 @@ index e1d9cc7..50014f8 100644
 +    }
  }
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
-index 006f298..6209a06 100644
+index 1e79a11..e6ee31f 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
 +++ b/Lume/Services/Sync/EPGSyncManager.swift
 @@ -79,6 +79,9 @@ actor EPGSyncManager {
