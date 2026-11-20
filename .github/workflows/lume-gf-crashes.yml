@@ -1,0 +1,33 @@
+name: Lume GF crashes
+# The newest TestFlight crash reports testers shared, cut to the crash itself (ci/asc_crashes.py; about 30 seconds).
+# Reads only; prints no names, emails, comments, keys or ids.
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: How many reports
+        default: "3"
+
+permissions:
+  contents: read
+
+jobs:
+  crashes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Shared crash reports
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          COUNT: ${{ inputs.count }}
+        run: |
+          umask 077
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+          status=0
+          ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" python3 ci/asc_crashes.py "$COUNT" || status=$?
+          rm -f "$RUNNER_TEMP/asc.p8"
+          exit $status
