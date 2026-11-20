@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Player/AetherEngineEngineView.swift b/Lume/Views/Player/AetherEngineEngineView.swift
-index 3cf529f..ed179e6 100644
+index 6ef25a9..1b36e08 100644
 --- a/Lume/Views/Player/AetherEngineEngineView.swift
 +++ b/Lume/Views/Player/AetherEngineEngineView.swift
-@@ -148,7 +148,7 @@ import SwiftUI
+@@ -145,7 +145,7 @@ import SwiftUI
              .subtitleSearch(isPresented: $isSearchingSubtitles, media: media) { subtitle in
                  coordinator.loadExternalSubtitle(subtitle)
              }

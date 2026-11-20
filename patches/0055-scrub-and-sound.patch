@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index 6f406e4..836c5d4 100644
+index 3b1d79e..ec8ea10 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-@@ -379,7 +379,7 @@ import SwiftUI
+@@ -380,7 +380,7 @@ import SwiftUI
          }
  
          private var scrubber: some View {
@@ -11,7 +11,7 @@ index 6f406e4..836c5d4 100644
                  value: Binding<TimeInterval>(
                      get: { isSeeking ? seekPosition : (currentTime.isFinite ? currentTime : 0) },
                      set: { seekPosition = $0 }
-@@ -388,7 +388,6 @@ import SwiftUI
+@@ -389,7 +389,6 @@ import SwiftUI
                  onEditingChanged: onSliderEditingChanged
              )
              .tint(.white)
@@ -19,7 +19,7 @@ index 6f406e4..836c5d4 100644
          }
  
          private var timeLabels: some View {
-@@ -406,7 +405,6 @@ import SwiftUI
+@@ -407,7 +406,6 @@ import SwiftUI
  
          private func onSliderEditingChanged(editing: Bool) {
              isSeeking = editing
@@ -28,7 +28,7 @@ index 6f406e4..836c5d4 100644
                  hideTask?.cancel()
              } else {
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-index 41e6320..9cd5da5 100644
+index 496f00c..8312b94 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 @@ -7,6 +7,7 @@
@@ -39,7 +39,7 @@ index 41e6320..9cd5da5 100644
  import KSPlayer
  import QuartzCore
  import SwiftUI
-@@ -114,6 +115,33 @@ extension KSPlayerEngineView {
+@@ -111,6 +112,33 @@ extension KSPlayerEngineView {
              clock.duration = total
          }
          gfNoteBehindLive(current)
@@ -74,7 +74,7 @@ index 41e6320..9cd5da5 100644
  
      /// Lume GF: a live channel paused, or stalled, plays on from where it stopped, so it falls behind live by the
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index 5a46f64..ed3a352 100644
+index c27a10b..39ed7a1 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -1,3 +1,4 @@
@@ -82,7 +82,7 @@ index 5a46f64..ed3a352 100644
  import Combine
  import KSPlayer
  import OSLog
-@@ -339,6 +340,14 @@ struct KSPlayerEngineView: View {
+@@ -336,6 +337,14 @@ struct KSPlayerEngineView: View {
              .onChange(of: engine.isPlaying) { _, _ in
                  resetHideTimer()
              }
@@ -139,7 +139,7 @@ index 38bbdef..4c1fd66 100644
              HStack {
                  Text(timeString(from: isSeeking ? seekPosition : clock.current))
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index 21dc1c8..5504b18 100644
+index b695360..89b632b 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 @@ -385,7 +385,7 @@ import VLCKit

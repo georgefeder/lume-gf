@@ -12,10 +12,10 @@ index 953e431..919fa73 100644
  
      /// The detail screen that opened this stream offers other sources of the
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index ac83f3d..b076a52 100644
+index 47a939f..5bf3a18 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -98,6 +98,10 @@ struct FullScreenPlayerView: View {
+@@ -95,6 +95,10 @@ struct FullScreenPlayerView: View {
      /// something no engine could play, every engine retrying it every second). Only that attempt plays the TS
      /// address; the engines after it start from the address as listed, as before.
      @State var gfTSRetry: (mediaID: String, engineAttempt: Int)?
@@ -26,7 +26,7 @@ index ac83f3d..b076a52 100644
  
      /// Set when Stalker `create_link` resolution fails, so the host shows the
      /// failure overlay instead of an endless spinner.
-@@ -201,7 +205,9 @@ struct FullScreenPlayerView: View {
+@@ -198,7 +202,9 @@ struct FullScreenPlayerView: View {
      /// shows its error overlay, rather than looping through the fallback chain
      /// (which would only land back on engines that can't cast video).
      var hasFallbackEngine: Bool {
@@ -37,7 +37,7 @@ index ac83f3d..b076a52 100644
      }
  
      /// Called by an engine when it can't start the stream. Advances to the next
-@@ -210,6 +216,7 @@ struct FullScreenPlayerView: View {
+@@ -207,6 +213,7 @@ struct FullScreenPlayerView: View {
      /// Jellyfin/Emby version that has others to try (see `reportsStartupFailure`);
      /// otherwise the last engine shows its own error overlay instead.
      private func fallBackToNextEngine() {
@@ -45,7 +45,7 @@ index ac83f3d..b076a52 100644
          if gfTryAsTS() { return } // Lume GF
          guard hasFallbackEngine else { return recoverWithAnotherSource() }
          let failed = engine
-@@ -449,6 +456,30 @@ struct FullScreenPlayerView: View {
+@@ -447,6 +454,30 @@ struct FullScreenPlayerView: View {
          return true
      }
  
@@ -76,7 +76,7 @@ index ac83f3d..b076a52 100644
      @ViewBuilder
      private var playerView: some View {
          if showsCastSurface {
-@@ -509,7 +540,7 @@ struct FullScreenPlayerView: View {
+@@ -507,7 +538,7 @@ struct FullScreenPlayerView: View {
                  media: media, clock: clock, mediaSwapper: mediaSwapper,
                  nextUpMedia: nextUpMedia, itemNeighbours: itemNeighbours, skipSegments: skipSegments,
                  reportsStartupFailure: reportsStartupFailure,
@@ -85,7 +85,7 @@ index ac83f3d..b076a52 100644
                  onPlaybackFailed: fallBackToNextEngine,
                  onSelectMedia: switchMedia,
                  onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler, coordinator: adoptedKSCoordinator ?? .init(), isAdoptedSession: adoptedKSCoordinator != nil
-@@ -517,7 +548,7 @@ struct FullScreenPlayerView: View {
+@@ -515,7 +546,7 @@ struct FullScreenPlayerView: View {
              // Lume GF: each jump in a catch-up programme opens in a fresh player, the way the programme's first open
              // does, rather than swapping the address inside the running one: that swap's open was dropped within
              // 0.15 s and never came back (Georgs, 18 Nov: a frozen frame, then Play only spun; GFCatchupSeek)

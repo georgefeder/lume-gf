@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index 73ff7d6..ac83f3d 100644
+index 62efdcf..47a939f 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -514,7 +514,10 @@ struct FullScreenPlayerView: View {
+@@ -512,7 +512,10 @@ struct FullScreenPlayerView: View {
                  onSelectMedia: switchMedia,
                  onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler, coordinator: adoptedKSCoordinator ?? .init(), isAdoptedSession: adoptedKSCoordinator != nil
              )
@@ -15,10 +15,10 @@ index 73ff7d6..ac83f3d 100644
              VLCPlayerEngineView(
                  media: media, clock: clock, mediaSwapper: mediaSwapper,
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-index 54d6317..1027992 100644
+index dd69cc5..8484424 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-@@ -114,7 +114,7 @@ extension KSPlayerEngineView {
+@@ -111,7 +111,7 @@ extension KSPlayerEngineView {
          guard let playing = gfPlaying.media, let window = playing.gfCatchup else { return false }
          if let offset = GFCatchupSeek.offset(for: jump, current: clock.current, in: window),
             let next = playing.gfCatchupShifted(to: offset) {

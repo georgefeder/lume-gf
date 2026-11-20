@@ -66,7 +66,7 @@ index 3560802..18329c1 100644
      }
  }
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index 99beace..2802650 100644
+index b5e3990..eaa9105 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -48,6 +48,9 @@ import SwiftUI
@@ -79,25 +79,27 @@ index 99beace..2802650 100644
  
          @Environment(\.modelContext) private var modelContext
          /// Mirrors the backing model's favorite flag; refreshed when the media
-@@ -168,7 +171,7 @@ import SwiftUI
+@@ -169,7 +172,8 @@ import SwiftUI
  
                  if !media.isLive {
                      Button {
--                        coordinator.skip(interval: -15)
-+                        if !onCatchupJump(.by(-15)) { coordinator.skip(interval: -15) } // Lume GF
+-                        coordinator.skip(interval: -PlayerSkipInterval.stored().seconds)
++                        let step = PlayerSkipInterval.stored().seconds // Lume GF: a catch-up programme asks the archive
++                        if !onCatchupJump(.by(TimeInterval(-step))) { coordinator.skip(interval: -step) }
                          onResetHideTimer()
                      } label: {
-                         circleGlyph("gobackward.15", size: 22, diameter: 60)
-@@ -189,7 +192,7 @@ import SwiftUI
+                         circleGlyph(PlayerSkipInterval.stored().backwardSymbol, size: 22, diameter: 60)
+@@ -190,7 +194,8 @@ import SwiftUI
  
                  if !media.isLive {
                      Button {
--                        coordinator.skip(interval: 15)
-+                        if !onCatchupJump(.by(15)) { coordinator.skip(interval: 15) } // Lume GF
+-                        coordinator.skip(interval: PlayerSkipInterval.stored().seconds)
++                        let step = PlayerSkipInterval.stored().seconds // Lume GF: a catch-up programme asks the archive
++                        if !onCatchupJump(.by(TimeInterval(step))) { coordinator.skip(interval: step) }
                          onResetHideTimer()
                      } label: {
-                         circleGlyph("goforward.15", size: 22, diameter: 60)
-@@ -421,7 +424,7 @@ import SwiftUI
+                         circleGlyph(PlayerSkipInterval.stored().forwardSymbol, size: 22, diameter: 60)
+@@ -422,7 +427,7 @@ import SwiftUI
                  hideTask?.cancel()
                  coordinator.playerLayer?.pause()
              } else {
@@ -107,7 +109,7 @@ index 99beace..2802650 100644
                  if isPlaying {
                      coordinator.playerLayer?.play()
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-index c5c2f46..54d6317 100644
+index cd05644..dd69cc5 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 @@ -19,11 +19,12 @@ extension KSPlayerEngineView {
@@ -124,7 +126,7 @@ index c5c2f46..54d6317 100644
              advance: onRemoteAdvance
          ), owner: coordinator)
      }
-@@ -94,4 +95,27 @@ extension KSPlayerEngineView {
+@@ -91,4 +92,27 @@ extension KSPlayerEngineView {
              dismiss.dismissPlayer()
          #endif
      }
@@ -189,7 +191,7 @@ index 5d8fd62..7107799 100644
          }
          Logger.player.log("reconnect: reloading KSPlayer stream")
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index ae16bd5..e26ebf3 100644
+index 21ffa0b..1fb1e7a 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
 @@ -126,6 +126,7 @@ struct KSPlayerEngineView: View {
@@ -200,7 +202,7 @@ index ae16bd5..e26ebf3 100644
      /// PiP state and its observer task are `internal` (not `private`) so the
      /// PiP observation in `KSPlayerEngineView+Playback.swift` can drive them.
      @State var isPipActive = false
-@@ -243,14 +244,7 @@ struct KSPlayerEngineView: View {
+@@ -240,14 +241,7 @@ struct KSPlayerEngineView: View {
                      // which triggers "onChange updated multiple times per
                      // frame" warnings.
                      DispatchQueue.main.async {
@@ -216,7 +218,7 @@ index ae16bd5..e26ebf3 100644
                          notePlaybackProgress(current)
                          noteClockDrift()
                          // syncState (onStateChanged) already refreshes this
-@@ -325,6 +319,7 @@ struct KSPlayerEngineView: View {
+@@ -322,6 +316,7 @@ struct KSPlayerEngineView: View {
              .hueFrameSource(coordinator, isPictureInPicture: isPipActive)
              .onAppear {
                  engine.attach(coordinator: coordinator)
@@ -224,7 +226,7 @@ index ae16bd5..e26ebf3 100644
                  attachNowPlayingTransport()
                  scheduleHide()
                  startStartupWatchdog()
-@@ -352,6 +347,7 @@ struct KSPlayerEngineView: View {
+@@ -349,6 +344,7 @@ struct KSPlayerEngineView: View {
                  }
              }
              .onChange(of: media) { _, _ in
@@ -232,7 +234,7 @@ index ae16bd5..e26ebf3 100644
                  // The host swapped the stream (KSPlayer reloads its URL
                  // automatically). Reset local scrubbing / panel state.
                  gfDrawn = false // Lume GF
-@@ -464,14 +460,7 @@ struct KSPlayerEngineView: View {
+@@ -461,14 +457,7 @@ struct KSPlayerEngineView: View {
                      }
                  } onPlay: { current, total in
                      DispatchQueue.main.async {
@@ -248,7 +250,7 @@ index ae16bd5..e26ebf3 100644
                          notePlaybackProgress(current)
                          noteClockDrift()
                          chaseVideoInfo()
-@@ -570,6 +559,7 @@ struct KSPlayerEngineView: View {
+@@ -567,6 +556,7 @@ struct KSPlayerEngineView: View {
              #endif
              .onChange(of: media.id) { _, _ in
                  gfDrawn = false // Lume GF
@@ -256,7 +258,7 @@ index ae16bd5..e26ebf3 100644
                  resetVideoInfo()
                  // An in-player swap reuses the KSPlayerLayer but re-prepares it;
                  // re-arm the observation so the task can never be left awaiting a
-@@ -587,7 +577,7 @@ struct KSPlayerEngineView: View {
+@@ -584,7 +574,7 @@ struct KSPlayerEngineView: View {
                  .playerVolume(coordinator)
              #endif
                  .playerKeyboardShortcuts(PlayerKeyActions(

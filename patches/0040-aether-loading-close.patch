@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Player/AetherEngineEngineView.swift b/Lume/Views/Player/AetherEngineEngineView.swift
-index c2f2a61..3cf529f 100644
+index 595f687..6ef25a9 100644
 --- a/Lume/Views/Player/AetherEngineEngineView.swift
 +++ b/Lume/Views/Player/AetherEngineEngineView.swift
-@@ -127,6 +127,15 @@ import SwiftUI
+@@ -124,6 +124,15 @@ import SwiftUI
                          .transition(.opacity)
                  }
  

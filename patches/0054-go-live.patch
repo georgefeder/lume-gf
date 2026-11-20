@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index 2802650..d032b69 100644
+index eaa9105..68f2ab3 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -51,6 +51,8 @@ import SwiftUI
@@ -11,7 +11,7 @@ index 2802650..d032b69 100644
  
          @Environment(\.modelContext) private var modelContext
          /// Mirrors the backing model's favorite flag; refreshed when the media
-@@ -262,16 +264,7 @@ import SwiftUI
+@@ -265,16 +267,7 @@ import SwiftUI
          }
  
          private var liveIndicator: some View {
@@ -30,7 +30,7 @@ index 2802650..d032b69 100644
  
          // MARK: - Secondary Controls (grouped glass pill)
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-index 1027992..41e6320 100644
+index 8484424..496f00c 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 @@ -8,6 +8,7 @@
@@ -54,7 +54,7 @@ index 1027992..41e6320 100644
      func togglePlay() {
          let playing: Bool
          #if os(tvOS)
-@@ -106,6 +113,50 @@ extension KSPlayerEngineView {
+@@ -103,6 +110,50 @@ extension KSPlayerEngineView {
          } else if total.isFinite, total > 0 {
              clock.duration = total
          }
