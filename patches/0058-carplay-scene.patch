@@ -1,8 +1,17 @@
 diff --git a/Lume/LumeAppDelegate.swift b/Lume/LumeAppDelegate.swift
-index 5f599ef..b88f5e6 100644
+index 5f599ef..9f6ed52 100644
 --- a/Lume/LumeAppDelegate.swift
 +++ b/Lume/LumeAppDelegate.swift
-@@ -66,5 +66,23 @@
+@@ -1,5 +1,8 @@
+ #if os(iOS)
+     import UIKit
++    #if canImport(CarPlay)
++        import CarPlay
++    #endif
+ 
+     /// Exists for hooks with no SwiftUI equivalent: the background
+     /// `URLSession` relaunch, the app-wide orientation mask the player narrows
+@@ -66,5 +69,24 @@
          ) -> UIInterfaceOrientationMask {
              PlayerOrientationLock.supportedOrientations
          }
@@ -18,6 +27,7 @@ index 5f599ef..b88f5e6 100644
 +            #if canImport(CarPlay)
 +                if connectingSceneSession.role == .carTemplateApplication {
 +                    let configuration = UISceneConfiguration(name: "CarPlay", sessionRole: connectingSceneSession.role)
++                    configuration.sceneClass = CPTemplateApplicationScene.self
 +                    configuration.delegateClass = GFCarPlaySceneDelegate.self
 +                    return configuration
 +                }
