@@ -141,6 +141,9 @@ print(" ".join(f"{i}:{n}" for (_, i), n in zip(d, ["inner", "outer"])))' || true
 
 IOS=$(sh "$CI/pick-simulator.sh" iOS)
 APP=$(build "$IOS" iphonesimulator); BID=$(start "$IOS" "$APP")
+# the scene manifest as built (CarPlay's scene and its delegate class: patch 0057), for the log
+echo "screenshots: built scene manifest:" >&2
+plutil -extract UIApplicationSceneManifest xml1 -o - "$APP/Info.plist" >&2 || echo "screenshots: no scene manifest in the built app" >&2
 # a freshly booted iPhone shows first-boot notices (the Apple Intelligence banner covered a picture once)
 echo "screenshots: letting the iPhone settle ($SETTLE s)"; sleep "$SETTLE"
 for LOOK in dark light; do
