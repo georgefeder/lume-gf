@@ -18,3 +18,5 @@ LumeCloudBackendPairingTests  # keychain, as above
 LumeCloudBackendSyncTests     # keychain, as above
 LumeCloudKeyStoreTests        # keychain, as above
 HueCredentialStoreTests       # Lume 3.1's Hue pairing: keychain, as SimklTokenStoreTests ("savePairing" fails, run 42739281271)
+WholeCatalogLocalizationTests # Lume 3.3's own: its catalog reader ignores plural variations, and Lume's Arabic "Skip back/forward %lld seconds" are plurals, so it reads them as untranslated (run 44645722860; LumeTests/Helpers/TestHelpers.swift localizations(for:)). Drop once Lume fixes it
+EPGRefreshTests               # Lume 3.3's own guide refresh, which Lume GF replaces with GuideRefresher (GuideRefresherTests): a channel a file stops carrying keeps its programmes until they are over, so a cut-off file never empties a channel (run 44645722860)
