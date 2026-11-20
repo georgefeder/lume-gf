@@ -1,5 +1,5 @@
 diff --git a/Lume/Services/Player/PlayerSettings.swift b/Lume/Services/Player/PlayerSettings.swift
-index 00339e6..65c5300 100644
+index 20bf711..e2c3a71 100644
 --- a/Lume/Services/Player/PlayerSettings.swift
 +++ b/Lume/Services/Player/PlayerSettings.swift
 @@ -111,8 +111,11 @@ nonisolated enum StreamInfoDetailLevel: String, CaseIterable, Identifiable {
@@ -16,7 +16,7 @@ index 00339e6..65c5300 100644
  
      /// Decode the stored priority into a complete, de-duplicated engine list.
 diff --git a/LumeTests/Services/PlayerSettingsTests.swift b/LumeTests/Services/PlayerSettingsTests.swift
-index fc4f86a..b70070f 100644
+index 5011e3e..3c55b74 100644
 --- a/LumeTests/Services/PlayerSettingsTests.swift
 +++ b/LumeTests/Services/PlayerSettingsTests.swift
 @@ -158,19 +158,18 @@ struct PlayerEnginePriorityTests {

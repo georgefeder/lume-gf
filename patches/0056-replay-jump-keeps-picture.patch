@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index b076a52..b69547d 100644
+index 5bf3a18..c063a50 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -98,8 +98,8 @@ struct FullScreenPlayerView: View {
+@@ -95,8 +95,8 @@ struct FullScreenPlayerView: View {
      /// something no engine could play, every engine retrying it every second). Only that attempt plays the TS
      /// address; the engines after it start from the address as listed, as before.
      @State var gfTSRetry: (mediaID: String, engineAttempt: Int)?
@@ -13,7 +13,7 @@ index b076a52..b69547d 100644
      @State var gfCatchupWaiting: String?
      @State var gfCatchupRetryTick = 0
  
-@@ -457,10 +457,15 @@ struct FullScreenPlayerView: View {
+@@ -455,10 +455,15 @@ struct FullScreenPlayerView: View {
      }
  
      /// Lume GF: a catch-up programme the archive refused (the provider's 458, "not ready": a programme just ended, or
@@ -32,7 +32,7 @@ index b076a52..b69547d 100644
      }
  
      private func gfRetryCatchup() -> Bool {
-@@ -469,11 +474,13 @@ struct FullScreenPlayerView: View {
+@@ -467,11 +472,13 @@ struct FullScreenPlayerView: View {
          // the refused player stays up, reporting rather than reconnecting, until the fresh one replaces it
          guard gfCatchupWaiting != id else { return true }
          gfCatchupWaiting = id
@@ -50,10 +50,10 @@ index b076a52..b69547d 100644
              gfCatchupRetryTick += 1
          }
 diff --git a/Lume/Views/Player/KSPlayerEngineView+Actions.swift b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-index 9cd5da5..df9a001 100644
+index 8312b94..6dee5c2 100644
 --- a/Lume/Views/Player/KSPlayerEngineView+Actions.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView+Actions.swift
-@@ -193,8 +193,42 @@ extension KSPlayerEngineView {
+@@ -190,8 +190,42 @@ extension KSPlayerEngineView {
          guard let playing = gfPlaying.media, let window = playing.gfCatchup else { return false }
          if let offset = GFCatchupSeek.offset(for: jump, current: clock.current, in: window),
             let next = playing.gfCatchupShifted(to: offset) {
@@ -111,10 +111,10 @@ index 8a157de..f881257 100644
          zapFrameToken &+= 1
          let token = zapFrameToken
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index ed3a352..0f5e943 100644
+index 39ed7a1..dd6f20e 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
-@@ -501,7 +501,7 @@ struct KSPlayerEngineView: View {
+@@ -498,7 +498,7 @@ struct KSPlayerEngineView: View {
                  // paused behind its Play button.
                  // Lume GF: below the fold they go after a while too, leaving the reflection; a tap there brings them
                  // back (Georgs, 24 Oct). The demo's fold shows them though its made-up channel never plays.
@@ -123,7 +123,7 @@ index ed3a352..0f5e943 100644
                      controlsOverlay
                          .gfTabletopArea(gfTabletop?.panel, from: .bottom, bottomInset: gfTabletop?.bottomInset ?? 0)
                          // Lume GF: across the whole width beside the iPhone Duo front screen's side column, as the
-@@ -515,14 +515,14 @@ struct KSPlayerEngineView: View {
+@@ -512,14 +512,14 @@ struct KSPlayerEngineView: View {
                      .gfTabletopArea(gfTabletop?.video, from: .top)
  
                  if isBuffering {
@@ -140,7 +140,7 @@ index ed3a352..0f5e943 100644
                      GFLoadingCloseButton(onClose: { closePlayer() })
                          .transition(.opacity)
                  }
-@@ -548,6 +548,7 @@ struct KSPlayerEngineView: View {
+@@ -545,6 +545,7 @@ struct KSPlayerEngineView: View {
                  observePipState()
                  startStartupWatchdog()
                  seedAdoptedSessionState()

@@ -14,7 +14,7 @@ index e47fa33..59d9c63 100644
                  case .empty:
                      // Reserve the logo's vertical space without flashing the
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index 050f004..7bb0b87 100644
+index 8d347c4..6f03138 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
 @@ -40,12 +40,15 @@ import SwiftUI
@@ -40,19 +40,19 @@ index 050f004..7bb0b87 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/AVPlayerEngineView.swift b/Lume/Views/Player/AVPlayerEngineView.swift
-index c5026d5..39a7567 100644
+index d610534..8826c21 100644
 --- a/Lume/Views/Player/AVPlayerEngineView.swift
 +++ b/Lume/Views/Player/AVPlayerEngineView.swift
-@@ -421,6 +421,7 @@ struct AVPlayerEngineView: View {
+@@ -418,6 +418,7 @@ struct AVPlayerEngineView: View {
      }
  
      private func closePlayer() {
 +        coordinator.player.pause() // Lume GF: AirPlay stops with the picture, not after the close animation
          #if os(macOS)
-             if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
-                 window.toggleFullScreen(nil)
+             MacPlayerWindowRouter.shared.closePlayer()
+         #else
 diff --git a/Lume/Views/Player/EngineControlsOverlay.swift b/Lume/Views/Player/EngineControlsOverlay.swift
-index 51b42a5..903fdf1 100644
+index df47a3a..0bf940b 100644
 --- a/Lume/Views/Player/EngineControlsOverlay.swift
 +++ b/Lume/Views/Player/EngineControlsOverlay.swift
 @@ -80,12 +80,15 @@ import SwiftUI
@@ -78,7 +78,7 @@ index 51b42a5..903fdf1 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index 8ee7102..67d15dd 100644
+index 19c8da5..9ab07f9 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -65,12 +65,15 @@ import SwiftUI
@@ -104,7 +104,7 @@ index 8ee7102..67d15dd 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineCoordinator.swift b/Lume/Views/Player/LumeEngineCoordinator.swift
-index 7e860ad..5003e3b 100644
+index 8ac3505..66dfa8d 100644
 --- a/Lume/Views/Player/LumeEngineCoordinator.swift
 +++ b/Lume/Views/Player/LumeEngineCoordinator.swift
 @@ -272,6 +272,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
@@ -122,19 +122,19 @@ index 7e860ad..5003e3b 100644
          let session = session
          let playing = isPlaying
 diff --git a/Lume/Views/Player/LumeEngineEngineView.swift b/Lume/Views/Player/LumeEngineEngineView.swift
-index 96b23a6..61b6f1e 100644
+index 13c74b8..8a2689b 100644
 --- a/Lume/Views/Player/LumeEngineEngineView.swift
 +++ b/Lume/Views/Player/LumeEngineEngineView.swift
-@@ -485,6 +485,7 @@ struct LumeEngineEngineView: View {
+@@ -482,6 +482,7 @@ struct LumeEngineEngineView: View {
      }
  
      private func closePlayer() {
 +        coordinator.pauseForClose() // Lume GF: AirPlay stops with the picture
          #if os(macOS)
-             if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
-                 window.toggleFullScreen(nil)
+             MacPlayerWindowRouter.shared.closePlayer()
+         #else
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index 6584418..c754ec2 100644
+index 435ccf2..bb305e5 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 @@ -43,12 +43,15 @@ import VLCKit

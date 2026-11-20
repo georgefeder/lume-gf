@@ -34,19 +34,19 @@ index e1d9cc7..50014f8 100644
 +    }
  }
 diff --git a/Lume/Services/Sync/EPGSyncManager.swift b/Lume/Services/Sync/EPGSyncManager.swift
-index 219c697..c38ae3f 100644
+index 006f298..6209a06 100644
 --- a/Lume/Services/Sync/EPGSyncManager.swift
 +++ b/Lume/Services/Sync/EPGSyncManager.swift
-@@ -55,6 +55,9 @@ actor EPGSyncManager {
+@@ -79,6 +79,9 @@ actor EPGSyncManager {
              return false
          }
  
 +        refresher.allChannelIDs = knownChannelIDs // Lume GF: old programmes of channels outside it are orphans
 +        // Lume GF: a stale guide's programmes on now show before the rest of its file is in
 +        refresher.onNowReady = { Task { @MainActor in EPGSyncService.shared.guideNowReady() } }
-         // Lume GF: no clearListings(). Each source's new guide is applied as only-what-changed on top of the stored
-         // one (GuideRefresher), so a failed or cut-off download never empties the guide.
- 
+         // Lume GF: an XMLTV source goes through GuideRefresher (asked only-if-changed, applied as only-what-changed
+         // on top of the stored guide, so a failed or cut-off download never empties it); a Stalker portal's guide
+         // (Lume 3.3) is read after every file as Lume does, deleting only what it no longer lists on its channels.
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
 index 97c3f39..9767d13 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
@@ -165,16 +165,16 @@ index df851af..02acd6f 100644
              }
              .alert("Clear Recently Watched", isPresented: $confirmingClear) {
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index f1f8b0f..f3b0524 100644
+index c7ca4ee..709a4ac 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
-@@ -171,6 +171,9 @@ struct MainTabView: View {
-                 // Returning to the foreground re-checks staleness — for a long-lived
-                 // app this is the practical equivalent of "on launch".
-                 if phase == .active {
-+                    // Lume GF: a playlist tried earlier in this run may be due again (an Apple TV keeps the app
-+                    // for days); only what is queued or syncing now stays marked
-+                    autoSyncQueue.gfForgetFinished()
-                     enqueueDueSyncs(playlists)
-                 }
-                 // Coming back to `.active` also refreshes stale sports data.
+@@ -184,6 +184,9 @@ struct MainTabView: View {
+             // Returning to the foreground re-checks staleness — for a long-lived
+             // app this is the practical equivalent of "on launch".
+             if phase == .active {
++                // Lume GF: a playlist tried earlier in this run may be due again (an Apple TV keeps the app
++                // for days); only what is queued or syncing now stays marked
++                autoSyncQueue.gfForgetFinished()
+                 enqueueDueSyncs(playlists)
+             }
+             // Coming back to `.active` also refreshes stale sports data.

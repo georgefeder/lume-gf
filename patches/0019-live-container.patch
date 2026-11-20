@@ -55,10 +55,10 @@ index 342d98d..bc98b83 100644
          return adoption.engineAttempt == engineAttempt && adoption.mediaID == activeMedia.id
      }
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index c595822..7168739 100644
+index be7f73e..78cc702 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -93,6 +93,11 @@ struct FullScreenPlayerView: View {
+@@ -90,6 +90,11 @@ struct FullScreenPlayerView: View {
      /// resolution is in flight (the loading indicator shows). Engines that play a
      /// directly usable URL (Xtream / m3u) bypass this entirely — see `displayMedia`.
      @State var resolvedMedia: PlayableMedia?
@@ -70,7 +70,7 @@ index c595822..7168739 100644
  
      /// Set when Stalker `create_link` resolution fails, so the host shows the
      /// failure overlay instead of an endless spinner.
-@@ -205,6 +210,7 @@ struct FullScreenPlayerView: View {
+@@ -202,6 +207,7 @@ struct FullScreenPlayerView: View {
      /// Jellyfin/Emby version that has others to try (see `reportsStartupFailure`);
      /// otherwise the last engine shows its own error overlay instead.
      private func fallBackToNextEngine() {
@@ -78,7 +78,7 @@ index c595822..7168739 100644
          guard hasFallbackEngine else { return recoverWithAnotherSource() }
          let failed = engine
          engineAttempt += 1
-@@ -413,17 +419,40 @@ struct FullScreenPlayerView: View {
+@@ -411,17 +417,40 @@ struct FullScreenPlayerView: View {
          case .pending: return nil
          case .notSourced: break
          }

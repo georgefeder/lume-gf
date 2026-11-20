@@ -43,10 +43,10 @@ index afe76a1..18c3242 100644
              "engine fallback \(previous, privacy: .public) -> \(replacement, privacy: .public)"
          )
 diff --git a/Lume/Views/Player/FullScreenPlayerView.swift b/Lume/Views/Player/FullScreenPlayerView.swift
-index dc58764..73ff7d6 100644
+index 94d950c..62efdcf 100644
 --- a/Lume/Views/Player/FullScreenPlayerView.swift
 +++ b/Lume/Views/Player/FullScreenPlayerView.swift
-@@ -444,6 +444,7 @@ struct FullScreenPlayerView: View {
+@@ -442,6 +442,7 @@ struct FullScreenPlayerView: View {
                PlaylistStreamFormat.gfOtherContainer(of: media.url) != nil
          else { return false }
          gfTSRetry = (media.id, engineAttempt)
@@ -135,10 +135,10 @@ index 7107799..7661fbf 100644
          // Reset session gates so stale callbacks from the previous session don't
          // prematurely clear the spinner or reset the reconnect budget.
 diff --git a/Lume/Views/Player/KSPlayerEngineView.swift b/Lume/Views/Player/KSPlayerEngineView.swift
-index e26ebf3..5a46f64 100644
+index 1fb1e7a..c27a10b 100644
 --- a/Lume/Views/Player/KSPlayerEngineView.swift
 +++ b/Lume/Views/Player/KSPlayerEngineView.swift
-@@ -332,6 +332,7 @@ struct KSPlayerEngineView: View {
+@@ -329,6 +329,7 @@ struct KSPlayerEngineView: View {
                  cancelStartupWatchdog()
                  cancelStallWatchdog()
                  PlaybackQoE.shared.endSession()
@@ -146,7 +146,7 @@ index e26ebf3..5a46f64 100644
                  NowPlayingService.shared.detachTransport(owner: coordinator)
                  coordinator.resetPlayer()
              }
-@@ -549,6 +550,7 @@ struct KSPlayerEngineView: View {
+@@ -546,6 +547,7 @@ struct KSPlayerEngineView: View {
                  cancelStartupWatchdog()
                  cancelStallWatchdog()
                  PlaybackQoE.shared.endSession()
