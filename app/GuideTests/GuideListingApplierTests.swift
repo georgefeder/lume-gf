@@ -132,6 +132,28 @@ struct GuideListingApplierTests {
         #expect(index.rows == GuideListingApplier(container: container).loadStored())
     }
 
+    @Test func `a whole guide taken in as changes: a window first, a stopped one goes on, the same left alone`() throws {
+        let container = try makeTestContainer()
+        let applier = GuideListingApplier(container: container)
+        let programmes = (0 ..< 1000).flatMap { hourly("ch\($0)", from: now.addingTimeInterval(-2 * 3600), count: 10) }
+        let file = try writeGuideFile(programmes) // 10,000: -2 h to +8 h on each channel
+        let channels = Set((0 ..< 1000).map { "ch\($0)" })
+        let window = DateInterval(start: now, duration: 4 * 3600)
+        let onNow = applier.applyChanges(fileURL: file, claimableChannels: channels, removed: [], window: window,
+                                         shouldStop: { false })
+        #expect(onNow.completed && onNow.inserted == 4000 && onNow.updated == 0)
+        let stopped = applier.applyChanges(fileURL: file, claimableChannels: channels, removed: [],
+                                           saveEvery: GuideListingApplier.wakeSaveThreshold, shouldStop: { true })
+        #expect(!stopped.completed && stopped.inserted + stopped.updated <= 2000)
+        let rest = applier.applyChanges(fileURL: file, claimableChannels: channels, removed: [], shouldStop: { false })
+        #expect(rest.completed && rest.updated == 0 && stopped.inserted + rest.inserted == 6000)
+        #expect(try rows(container).count == 10000)
+        let changed = try writeGuideFile(hourly("ch0", from: now, count: 1, title: "Changed"))
+        let again = applier.applyChanges(fileURL: changed, claimableChannels: channels, removed: [],
+                                         shouldStop: { false })
+        #expect(again.updated == 1 && again.inserted == 0 && again.claimedChannels == ["ch0"])
+    }
+
     @Test func `the stored guide is read whole in small pages`() throws {
         let container = try makeTestContainer()
         _ = apply(try writeGuideFile(hourly("c1", from: now, count: 5)), container, GuideStoredIndex(rows: [:]))

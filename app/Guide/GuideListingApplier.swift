@@ -185,8 +185,9 @@ nonisolated struct GuideListingApplier {
     /// batch's stored rows fetched in one go; `removed` (ids of programmes gone before they ended) are deleted once the
     /// file was read to the end. Nothing else of the stored guide is read: that is what made a whole import too slow for a
     /// background wake. Saved in batches and at the end, so a stop keeps what is done (the same file applied again
-    /// writes nothing twice).
-    func applyChanges(fileURL: URL, claimableChannels: Set<String>, removed: [String],
+    /// writes nothing twice: a stored programme that is the same is left alone). `window`: only the programmes it
+    /// overlaps (what is on now, ahead of the rest of a whole guide taken in this way, GuideRefresher).
+    func applyChanges(fileURL: URL, claimableChannels: Set<String>, removed: [String], window: DateInterval? = nil,
                       saveEvery: Int = saveThreshold,
                       shouldStop: @escaping () -> Bool = GFGuidePause.stopOrWait) -> Result {
         let context = ModelContext(container)
@@ -196,6 +197,7 @@ nonisolated struct GuideListingApplier {
             autoreleasepool {
                 var byID: [String: ParsedProgramme] = [:]
                 for p in batch where claimableChannels.contains(p.channelId) {
+                    if let window, p.end <= window.start || p.start >= window.end { continue }
                     let id = GuideDiffPlanner.id(channelId: p.channelId, start: p.start)
                     if byID[id] == nil { byID[id] = p }
                 }
@@ -204,15 +206,23 @@ nonisolated struct GuideListingApplier {
                 let rows = (try? context.fetch(FetchDescriptor<EPGListing>(
                     predicate: #Predicate { ids.contains($0.id) }
                 ))) ?? []
+                var written = byID.count
                 for row in rows {
                     guard let p = byID.removeValue(forKey: row.id) else { continue }
+                    run.result.claimedChannels.insert(p.channelId)
+                    let same = GuideFingerprint.of(end: row.end, title: row.title, subtitle: row.subtitle,
+                                                   category: row.category, description: row.listingDescription)
+                        == Self.fingerprint(p)
+                    if same {
+                        written -= 1
+                        continue
+                    }
                     row.title = p.title
                     row.listingDescription = p.description
                     row.end = p.end
                     row.subtitle = p.subtitle
                     row.category = GuideFingerprint.category(p.categories)
                     run.result.updated += 1
-                    run.result.claimedChannels.insert(p.channelId)
                 }
                 for (id, p) in byID {
                     context.insert(EPGListing(
@@ -223,7 +233,7 @@ nonisolated struct GuideListingApplier {
                     run.result.inserted += 1
                     run.result.claimedChannels.insert(p.channelId)
                 }
-                run.pending += ids.count
+                run.pending += written
                 if run.pending >= saveEvery {
                     GFGuidePause.shared.waitWhileHeld() // no write while video plays
                     try? context.save()
