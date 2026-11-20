@@ -92,6 +92,10 @@ expect "our container missing fails" 1 "$L" "our iCloud container missing in Lum
 L=$(patched widgetpush)
 /usr/libexec/PlistBuddy -c "Add :aps-environment string development" "$L/LumeWidgets/LumeWidgets.entitlements"
 expect "iCloud or push in the widgets fails" 1 "$L" "iCloud entitlement in the widgets"
+L=$(patched nocarplay); /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.carplay-video" "$L/Lume/Lume-iOS.entitlements"
+expect "no CarPlay video entitlement fails" 1 "$L" "CarPlay video entitlement missing"
+/usr/libexec/PlistBuddy -c "Print :com.apple.developer.carplay-video" "$(patched carplay)/Lume/Lume.entitlements" >/dev/null 2>&1 \
+  && { echo "FAIL CarPlay video outside the iPhone's entitlements"; fails=$((fails + 1)); } || echo "ok   CarPlay video only in the iPhone's"
 L=$(patched nobgmode); /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$L/Lume/Info.plist"
 expect "no remote-notification mode fails" 1 "$L" "remote-notification background mode missing"
 L=$(fixture topshelf); mkdir -p "$L/LumeTopShelf"; plist "$L/LumeTopShelf/Info.plist" NSExtensionPrincipalClass X
