@@ -1,0 +1,54 @@
+diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
+index 3933a83..ab7172a 100644
+--- a/Lume/LumeApp.swift
++++ b/Lume/LumeApp.swift
+@@ -39,6 +39,11 @@ struct LumeApp: App {
+         let (catalog, cloud) = Self.makeModelContainers()
+         catalogContainer = catalog
+         cloudContainer = cloud
++        #if os(iOS)
++            // Lume GF: the CarPlay and HomeView screens read the same stores (GFCarPlayCatalog)
++            GFCarPlayCatalog.catalogContainer = catalog
++            GFCarPlayCatalog.cloudContainer = cloud
++        #endif
+         #if os(iOS) && canImport(GoogleCast)
+             // Here rather than in the launch task: the app delegate's launch hook
+             // can resume a Cast session, which may end before that task runs.
+diff --git a/Lume/LumeAppDelegate.swift b/Lume/LumeAppDelegate.swift
+index 5f599ef..5aa1f42 100644
+--- a/Lume/LumeAppDelegate.swift
++++ b/Lume/LumeAppDelegate.swift
+@@ -1,5 +1,8 @@
+ #if os(iOS)
+     import UIKit
++    #if canImport(CarPlay)
++        import CarPlay // Lume GF: the CarPlay scene role and class
++    #endif
+ 
+     /// Exists for hooks with no SwiftUI equivalent: the background
+     /// `URLSession` relaunch, the app-wide orientation mask the player narrows
+@@ -29,6 +32,24 @@
+             return true
+         }
+ 
++        // Lume GF: the CarPlay scene (CarPlay and Apple HomeView) gets GFCarPlaySceneDelegate; every other scene keeps the
++        // configuration SwiftUI made for it
++        func application(
++            _: UIApplication,
++            configurationForConnecting connectingSceneSession: UISceneSession,
++            options _: UIScene.ConnectionOptions
++        ) -> UISceneConfiguration {
++            #if canImport(CarPlay)
++                if connectingSceneSession.role == .carTemplateApplication {
++                    let configuration = UISceneConfiguration(name: "CarPlay", sessionRole: connectingSceneSession.role)
++                    configuration.sceneClass = CPTemplateApplicationScene.self
++                    configuration.delegateClass = GFCarPlaySceneDelegate.self
++                    return configuration
++                }
++            #endif
++            return connectingSceneSession.configuration
++        }
++
+         func application(
+             _: UIApplication,
+             handleEventsForBackgroundURLSession identifier: String,
