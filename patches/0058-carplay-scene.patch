@@ -1,0 +1,28 @@
+diff --git a/Lume/LumeAppDelegate.swift b/Lume/LumeAppDelegate.swift
+index 5f599ef..b88f5e6 100644
+--- a/Lume/LumeAppDelegate.swift
++++ b/Lume/LumeAppDelegate.swift
+@@ -66,5 +66,23 @@
+         ) -> UIInterfaceOrientationMask {
+             PlayerOrientationLock.supportedOrientations
+         }
++
++        // Lume GF: CarPlay and Apple HomeView get the app's CarPlay screens (GFCarPlaySceneDelegate). Without this the
++        // SwiftUI app answers for every scene with its own delegate, CarPlay finds none of its methods there and the
++        // app crashes as the car or HomeView connects. Every other scene stays as SwiftUI sets it up.
++        func application(
++            _: UIApplication,
++            configurationForConnecting connectingSceneSession: UISceneSession,
++            options _: UIScene.ConnectionOptions
++        ) -> UISceneConfiguration {
++            #if canImport(CarPlay)
++                if connectingSceneSession.role == .carTemplateApplication {
++                    let configuration = UISceneConfiguration(name: "CarPlay", sessionRole: connectingSceneSession.role)
++                    configuration.delegateClass = GFCarPlaySceneDelegate.self
++                    return configuration
++                }
++            #endif
++            return connectingSceneSession.configuration
++        }
+     }
+ #endif
