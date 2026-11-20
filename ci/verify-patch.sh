@@ -37,6 +37,8 @@ while IFS= read -r E; do
 done <<EOF
 $ENTS
 EOF
+[ "$($PB -c 'Print :com.apple.developer.carplay-video' Lume/Lume-iOS.entitlements 2>/dev/null)" = "true" ] \
+  || bad "CarPlay video entitlement missing in Lume/Lume-iOS.entitlements"
 [ "$ours" -eq 1 ] || bad "our app group group.lv.georgefeder.lume is in no entitlements file"
 [ "$cloud" -eq 1 ] || bad "no app entitlements file under Lume/ any more (Lume moved them)"
 LEFT=$(grep -rlF --exclude-dir=.git "group.com.bilipp.lume" . | sed 's#^\./##' | tr '\n' ' ')

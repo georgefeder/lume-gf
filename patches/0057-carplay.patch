@@ -1,0 +1,46 @@
+diff --git a/Lume/Info.plist b/Lume/Info.plist
+index dfc71ca..3005694 100644
+--- a/Lume/Info.plist
++++ b/Lume/Info.plist
+@@ -67,6 +67,25 @@
+ 	</array>
+ 	<key>TMDBAccessToken</key>
+ 	<string></string>
++	<key>UIApplicationSceneManifest</key>
++	<dict>
++		<key>UIApplicationSupportsMultipleScenes</key>
++		<true/>
++		<key>UISceneConfigurations</key>
++		<dict>
++			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
++			<array>
++				<dict>
++					<key>UISceneClassName</key>
++					<string>CPTemplateApplicationScene</string>
++					<key>UISceneConfigurationName</key>
++					<string>CarPlay</string>
++					<key>UISceneDelegateClassName</key>
++					<string>$(PRODUCT_MODULE_NAME).GFCarPlaySceneDelegate</string>
++				</dict>
++			</array>
++		</dict>
++	</dict>
+ 	<key>UIBackgroundModes</key>
+ 	<array>
+ 		<string>audio</string>
+diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
+index 3933a83..ab7172a 100644
+--- a/Lume/LumeApp.swift
++++ b/Lume/LumeApp.swift
+@@ -39,6 +39,11 @@ struct LumeApp: App {
+         let (catalog, cloud) = Self.makeModelContainers()
+         catalogContainer = catalog
+         cloudContainer = cloud
++        #if os(iOS)
++            // Lume GF: the CarPlay and HomeView screens read the same stores (GFCarPlayCatalog)
++            GFCarPlayCatalog.catalogContainer = catalog
++            GFCarPlayCatalog.cloudContainer = cloud
++        #endif
+         #if os(iOS) && canImport(GoogleCast)
+             // Here rather than in the launch task: the app delegate's launch hook
+             // can resume a Cast session, which may end before that task runs.

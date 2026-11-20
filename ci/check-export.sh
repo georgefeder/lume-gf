@@ -33,6 +33,10 @@ for B in "$APP" "$APP"/PlugIns/*.appex; do
       || bad "push is not production in $N"
     printf '%s\n' "$E" | grep -A1 "<key>com.apple.developer.ubiquity-kvstore-identifier</key>" \
       | grep -q "<string>$TEAM.lv.georgefeder.lume</string>" || bad "our key-value store missing in $N"
+    if [ "$PLATFORM" = iOS ]; then
+      printf '%s\n' "$E" | grep -A1 "<key>com.apple.developer.carplay-video</key>" | grep -q "<true/>" \
+        || bad "CarPlay video entitlement missing in $N"
+    fi
   else
     printf '%s\n' "$E" | grep -qiE "aps-environment|icloud|ubiquity" && bad "push/iCloud entitlement in $N"
   fi

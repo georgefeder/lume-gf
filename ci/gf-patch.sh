@@ -29,6 +29,13 @@ sed -nE 's/.*CODE_SIGN_ENTITLEMENTS(\[[^]]*\])?"? = "?([^";]+)"?;.*/\2/p' "$PBX"
         -c "Add :aps-environment string development" "$E" ;;
   esac
 done
+# 2b. CarPlay video, iPhone app only (Apple granted it 20 Nov 2026, case 23654122): CarPlay's own lists and Apple's video
+#     player in a parked car, and Apple HomeView shows CarPlay video apps as they are
+E=Lume/Lume-iOS.entitlements
+if [ -f "$E" ]; then
+  $PB -c "Delete :com.apple.developer.carplay-video" "$E" 2>/dev/null || true
+  $PB -c "Add :com.apple.developer.carplay-video bool true" "$E"
+fi
 # 3. our app group, in every file that names Lume's (entitlements, Swift)
 grep -rlF --exclude-dir=.git "$UP_GROUP" . | while IFS= read -r F; do sed -i '' "s/${UP_GROUP}/${GF_GROUP}/g" "$F"; done
 # 4. home-screen name

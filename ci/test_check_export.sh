@@ -19,6 +19,8 @@ ents() {  # $1 file, then flags: group, debug, appid=<value>
                 -c "Add :com.apple.developer.icloud-container-identifiers:0 string iCloud.lv.georgefeder.lume" \
                 -c "Add :com.apple.developer.ubiquity-kvstore-identifier string $TEAM.lv.georgefeder.lume" "$f" >/dev/null ;;
     lumecloud) $PB -c "Add :com.apple.developer.icloud-container-identifiers:1 string iCloud.bilipp.Lume" "$f" >/dev/null ;;
+    carplay) $PB -c "Add :com.apple.developer.carplay-video bool true" "$f" >/dev/null ;;
+    nocarplay) $PB -c "Delete :com.apple.developer.carplay-video" "$f" >/dev/null ;;
     pushdev) $PB -c "Add :aps-environment string development" "$f" >/dev/null ;;
     appid=*) $PB -c "Set :application-identifier ${a#appid=}" "$f" >/dev/null ;;
   esac; done
@@ -39,7 +41,7 @@ ipa() {  # $1 name, $2 display name, $3 app entitlement flags (comma list), $4 e
         -c "Add :CFBundlePackageType string XPC!" "$X/Info.plist" >/dev/null
     ents "$D/x.plist" $(echo "$4" | tr ',' ' '); codesign -f -s - --entitlements "$D/x.plist" "$X" 2>/dev/null
   fi
-  ents "$D/a.plist" $(echo "$3" | tr ',' ' '); codesign -f -s - --entitlements "$D/a.plist" "$A" 2>/dev/null
+  ents "$D/a.plist" carplay $(echo "$3" | tr ',' ' '); codesign -f -s - --entitlements "$D/a.plist" "$A" 2>/dev/null
   mkdir -p "$D/export"; (cd "$D" && zip -qr "export/Lume GF.ipa" Payload); echo "$D/export"
 }
 expect() {  # $1 name, $2 0|1, $3 export dir, $4 platform, [$5 text]
@@ -56,6 +58,7 @@ expect "Lume's container fails" 1 "$(ipa lumecloud 'Lume GF' group,icloud,lumecl
 expect "development push fails" 1 "$(ipa pushdev 'Lume GF' group,icloud,pushdev group)" iOS "push is not production in Lume.app"
 expect "iCloud in the widgets fails" 1 "$(ipa xcloud 'Lume GF' group,icloud,push group,icloud)" iOS "push/iCloud entitlement in LumeWidgets.appex"
 expect "another team's app id fails" 1 "$(ipa appid 'Lume GF' group,icloud,push,appid=ZZZZZ99999.lv.georgefeder.lume group)" iOS "application-identifier"
+expect "iOS app without CarPlay video fails" 1 "$(ipa nocarplay 'Lume GF' group,icloud,push,nocarplay group)" iOS "CarPlay video entitlement missing in Lume.app"
 expect "wrong home-screen name fails" 1 "$(ipa name 'Lume' group,icloud,push group)" iOS "display name"
 expect "tvOS export without app group passes" 0 "$(ipa tv 'Lume GF' icloud,push none)" tvOS "check-export: OK"
 # Lume 2.7: the Apple TV app has an extension (the Top Shelf), which shares the app group with it
