@@ -1,5 +1,6 @@
 #if os(iOS) && canImport(CarPlay)
     import CarPlay
+    import CoreMedia
     import UIKit
 
     /// Lume GF: Lume GF on CarPlay and Apple HomeView, which shows CarPlay video apps as they are
@@ -18,17 +19,19 @@
             didConnect interfaceController: CPInterfaceController
         ) {
             self.interfaceController = interfaceController
+            GFCarPlayPlayer.shared.onFailure = { [weak self] channel in self?.showCantPlay(channel) }
             let tabs = CPTabBarTemplate(templates: [favouritesTab(), recentTab(), groupsTab()])
             interfaceController.setRootTemplate(tabs, animated: false, completion: nil)
         }
 
         func templateApplicationScene(
             _: CPTemplateApplicationScene,
-            didDisconnect _: CPInterfaceController
+            didDisconnectInterfaceController _: CPInterfaceController
         ) {
             logoTasks.forEach { $0.cancel() }
             logoTasks = []
             interfaceController = nil
+            GFCarPlayPlayer.shared.onFailure = nil
             GFCarPlayPlayer.shared.stop()
         }
 
@@ -87,14 +90,21 @@
             let now = GFCarPlayCatalog.nowTitles(for: channels)
             let rows = channels.map { channel in
                 let programme = channel.epgChannelID.flatMap { now[$0] }
-                let item = CPListItem(text: channel.title, detailText: programme,
-                                      image: UIImage(systemName: "tv"))
-                item.playbackConfiguration = CPPlaybackConfiguration(
-                    preferredPresentation: .video, playbackAction: .play,
-                    elapsedTime: .zero, duration: .indefinite
-                )
+                // a channel Apple's player can't open says so in its row, before the system opens its video player
+                let detail = channel.hlsURL == nil ? String(localized: "Plays only on iPhone") : programme
+                let item = CPListItem(text: channel.title, detailText: detail, image: UIImage(systemName: "tv"))
+                if channel.hlsURL != nil, #available(iOS 26.4, *) {
+                    item.playbackConfiguration = CPPlaybackConfiguration(
+                        preferredPresentation: .video, playbackAction: .play,
+                        elapsedTime: .zero, duration: .indefinite
+                    )
+                }
                 item.handler = { [weak self] _, completion in
-                    self?.play(channel, programme: programme)
+                    if channel.hlsURL == nil {
+                        self?.showCantPlay(channel)
+                    } else {
+                        GFCarPlayPlayer.shared.play(channel, programme: programme)
+                    }
                     completion()
                 }
                 loadLogo(channel.logoURL, into: item)
@@ -105,8 +115,7 @@
             return template
         }
 
-        private func play(_ channel: GFCarPlayCatalog.Channel, programme: String?) {
-            guard !GFCarPlayPlayer.shared.play(channel, programme: programme) else { return }
+        private func showCantPlay(_: GFCarPlayCatalog.Channel) {
             let alert = CPAlertTemplate(
                 titleVariants: [String(localized: "This channel can't play here. Watch it on your iPhone.")],
                 actions: [CPAlertAction(title: String(localized: "OK"), style: .cancel) { [weak self] _ in

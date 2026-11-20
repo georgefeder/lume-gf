@@ -19,6 +19,8 @@
             let title: String
             let logoURL: URL?
             let epgChannelID: String?
+            /// What Apple's player opens; nil when the channel can't play there (the row then says so up front).
+            let hlsURL: URL?
         }
 
         struct Group {
@@ -67,12 +69,9 @@
         /// The address Apple's player opens: the channel through Dispatcharr's own HLS output. An Xtream playlist's
         /// `.m3u8` makes Dispatcharr segment the stream it already fetches (its stream_xc picks the output from the
         /// extension), so the car is one more viewer of the same provider line, not a second fetch. AVPlayer can't
-        /// open the `.ts` the app's own player uses. Stalker channels have no fixed address: none.
-        static func hlsURL(forChannelID id: String) -> URL? {
-            guard let context,
-                  let stream = stream(id: id, in: context),
-                  let playlist = PlaylistOwner.playlist(forPrefixedID: id, in: context)
-            else { return nil }
+        /// open the `.ts` the app's own player uses. An m3u playlist gets the same swap only on an Xtream-style
+        /// `/live/.../<id>.ts` address; a Stalker channel (no fixed address) or any other shape: none.
+        private static func hlsURL(for stream: LiveStream, playlist: Playlist) -> URL? {
             switch playlist.sourceType {
             case .stalker:
                 return nil
@@ -81,7 +80,12 @@
             default:
                 guard let url = LiveStreamURLResolver.playbackURL(for: stream, playlist: playlist),
                       !LiveStreamURLResolver.needsTapTimeResolution(url) else { return nil }
-                return url.pathExtension == "ts" ? url.deletingPathExtension().appendingPathExtension("m3u8") : url
+                switch url.pathExtension.lowercased() {
+                case "m3u8": return url
+                case "ts" where url.path.contains("/live/"):
+                    return url.deletingPathExtension().appendingPathExtension("m3u8")
+                default: return nil
+                }
             }
         }
 
@@ -108,12 +112,20 @@
             guard let context else { return [] }
             let sort = ContentSortOption(rawValue: UserDefaults.standard.string(forKey: SortStorageKey.liveContent)
                 ?? "") ?? .playlist
-            let streams = (try? context.fetch(LiveChannelQuery.descriptor(for: listScope, sort: sort))) ?? []
+            var descriptor = LiveChannelQuery.descriptor(for: listScope, sort: sort)
+            // a group is one playlist's and a child's restriction removes the whole group, so its first `limit` rows
+            // are the ones shown (a big group would otherwise load every channel on each tap)
+            if case .category = listScope { descriptor.fetchLimit = limit }
+            let streams = (try? context.fetch(descriptor)) ?? []
             let visible = LiveChannelQuery.scoped(streams, scope: listScope, catalogScope: scope(in: context),
                                                   restriction: restriction(in: context))
-            return visible.prefix(limit).map {
-                Channel(id: $0.id, title: GFChannelNames.title(for: $0.name),
-                        logoURL: $0.streamIcon.flatMap(URL.init(string:)), epgChannelID: $0.epgChannelId)
+            let playlists = Dictionary(((try? context.fetch(FetchDescriptor<Playlist>())) ?? []).map { ($0.id, $0) },
+                                       uniquingKeysWith: { first, _ in first })
+            return visible.prefix(limit).map { stream in
+                let playlist = PlaylistOwner.declaredOwner(of: stream.id).flatMap { playlists[$0] }
+                return Channel(id: stream.id, title: GFChannelNames.title(for: stream.name),
+                               logoURL: stream.streamIcon.flatMap(URL.init(string:)), epgChannelID: stream.epgChannelId,
+                               hlsURL: playlist.flatMap { hlsURL(for: stream, playlist: $0) })
             }
         }
 
@@ -134,7 +146,8 @@
                                       hiddenCategoryIDs: Set(hidden.map(\.id)))
         }
 
-        /// A profile that can't be read counts as a child's: the car shows less rather than a locked group.
+        /// As the app: no active profile, or one not stored, is not a child's; a store that can't be read counts as a
+        /// child's, so the car shows less rather than a locked group.
         private static var activeProfileIsChild: Bool {
             guard let id = ActiveProfileStore.current else { return false }
             guard let cloudContainer else { return true }
