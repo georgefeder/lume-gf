@@ -67,7 +67,9 @@ enum GFSettingsCatalog {
         PlayerSettings.Aether.forwardBufferSegmentsKey, PlayerSettings.Aether.liveJoinProfileKey,
         PlayerSettings.Aether.matchContentKey, PlayerSettings.Aether.nativeRemoteHLSKey,
         PlayerSettings.Aether.prepareNativeSubtitlesKey, PlayerSettings.Aether.probeSizeKey,
-        PlayerSettings.Aether.upscaleLowResolutionKey
+        PlayerSettings.Aether.upscaleLowResolutionKey,
+        // Lume 3.3: the skip buttons' interval (an Apple TV's default differs from an iPhone's)
+        PlayerSettings.Playback.skipIntervalKey
     ]
 
     /// Left to the device by our sync. The Live TV rail switches are synced by Lume itself since 2.5, account-wide
@@ -85,6 +87,8 @@ enum GFSettingsCatalog {
         PlayerSettings.Hue.enabledKey, PlayerSettings.Hue.intensityKey, PlayerSettings.Hue.entertainmentAreaKey,
         // Lume GF: the Apple TV's Settings opens where it was left, each device its own
         GFSettingsPlace.lastCategoryKey,
+        // Lume 3.3: where a Mac opens a stream (its own window or the library's)
+        PlayerSettings.macPlayerPresentationKey,
         // Lume GF: films and series on this Apple TV or not (GFTVFilms), each device its own
         GFCatalogPlan.tvFilmsAndSeriesKey
     ]
