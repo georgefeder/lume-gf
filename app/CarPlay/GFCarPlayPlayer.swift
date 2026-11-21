@@ -35,6 +35,7 @@
         private var audioError = ""
         private var rateObserver: NSObjectProtocol?
         private var commandTargets: [(MPRemoteCommand, Any)] = []
+        private let videoLayer = AVPlayerLayer()
         private(set) var channelID: String?
         private var statusObservation: NSKeyValueObservation?
         private var startTask: Task<Void, Never>?
@@ -140,7 +141,22 @@
                 }
             }
             player.replaceCurrentItem(with: item)
+            attachVideoLayer()
             player.play()
+        }
+
+        /// AirPlay sends video only for a player that has a video layer; without one the receiver gets the stream as
+        /// sound (HomeView, 21 Nov 2026: AirPlay video active, but only an audio Now Playing card). So a 1-point,
+        /// invisible layer on the phone's window carries the player while the car or HomeView shows the picture.
+        private func attachVideoLayer() {
+            videoLayer.player = player
+            guard videoLayer.superlayer == nil,
+                  let window = UIApplication.shared.connectedScenes
+                      .compactMap({ $0 as? UIWindowScene })
+                      .flatMap(\.windows).first(where: \.isKeyWindow) else { return }
+            videoLayer.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+            videoLayer.opacity = 0.01
+            window.layer.addSublayer(videoLayer)
         }
 
         /// Play, pause, toggle and stop for the car's and HomeView's controls, on the now-playing session's command
@@ -182,6 +198,8 @@
             statusObservation = nil
             player.pause()
             player.replaceCurrentItem(with: nil)
+            videoLayer.player = nil
+            videoLayer.removeFromSuperlayer()
             guard channelID != nil else { return }
             channelID = nil
             session.nowPlayingInfoCenter.nowPlayingInfo = nil
