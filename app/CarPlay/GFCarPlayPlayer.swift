@@ -1,11 +1,14 @@
 #if os(iOS)
     import AVFoundation
     import MediaPlayer
+    import os
+    import UIKit
 
     /// Lume GF: plays a channel picked on CarPlay or HomeView. Apple's player only, because CarPlay video is AirPlay video
     /// (developer.apple.com/documentation/carplay/video): the system shows this AVPlayer on the car's or HomeView's
     /// screen, and as sound only while the car is moving. Lume's own engines draw into the phone's views and can't
-    /// reach that screen.
+    /// reach that screen. HomeView on its 27.2.1 software plays it as sound only with a Now Playing card, as it does
+    /// UHF's and Apple's own example streams (21 Nov 2026, phone logs: AirPlay video active, item handed over).
     @MainActor
     final class GFCarPlayPlayer {
         static let shared = GFCarPlayPlayer()
@@ -26,6 +29,13 @@
         /// fails, or the start check reports), not straight away (developer.apple.com/documentation/carplay/cplistitem/handler).
         private var started: (() -> Void)?
         private var playingObservation: NSKeyValueObservation?
+        nonisolated private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "lume", category: "carplay")
+        /// Why the player last stopped or failed to start (AVPlayer's rate change reason, the audio session's error):
+        /// in the diagnosis line and the log.
+        private var lastRateReason = ""
+        private var audioError = ""
+        private var rateObserver: NSObjectProtocol?
+        private var commandTargets: [(MPRemoteCommand, Any)] = []
         private(set) var channelID: String?
         private var statusObservation: NSKeyValueObservation?
         private var startTask: Task<Void, Never>?
@@ -41,6 +51,23 @@
             player.allowsExternalPlayback = true
             player.usesExternalPlaybackWhileExternalScreenIsActive = true
             player.automaticallyWaitsToMinimizeStalling = true
+            rateObserver = NotificationCenter.default.addObserver(
+                forName: AVPlayer.rateDidChangeNotification, object: player, queue: .main
+            ) { [weak self] note in
+                let reason = (note.userInfo?[AVPlayer.rateDidChangeReasonKey] as? AVPlayer.RateDidChangeReason)
+                let name = switch reason {
+                case .setRateCalled: "set"
+                case .setRateFailed: "set failed"
+                case .audioSessionInterrupted: "interrupted"
+                case .appBackgrounded: "backgrounded"
+                default: reason?.rawValue ?? "?"
+                }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.lastRateReason = "rate \(self.player.rate) \(name)"
+                    Self.log.notice("CarPlay player \(self.lastRateReason, privacy: .public)")
+                }
+            }
         }
 
         /// Starts `channel`; the same channel again only resumes it. `started` runs once it plays or can't.
@@ -55,6 +82,7 @@
             channelID = channel.id
             self.started = started
             playingObservation = player.observe(\.timeControlStatus) { [weak self] player, _ in
+                Self.log.notice("CarPlay player status \(player.timeControlStatus.rawValue, privacy: .public)")
                 guard player.timeControlStatus == .playing else { return }
                 Task { @MainActor in self?.finishStart() }
             }
@@ -64,7 +92,7 @@
                 // starts, and each open of the 302 starts another HLS session (seen 21 Nov 2026)
                 let resolved = await Self.resolveRedirect(url)
                 guard let self, !Task.isCancelled, self.channelID == channel.id else { return }
-                self.start(resolved, channel: channel, programme: programme)
+                await self.start(resolved, channel: channel, programme: programme)
                 try? await Task.sleep(for: Self.startTimeout)
                 guard !Task.isCancelled, self.channelID == channel.id,
                       self.player.timeControlStatus != .playing else { return }
@@ -73,10 +101,34 @@
             }
         }
 
-        private func start(_ url: URL, channel: GFCarPlayCatalog.Channel, programme: String?) {
+        /// Order matters: HomeView lets only an app that can be the Now Playing app start sound (audiomxd, 21 Nov 2026:
+        /// "Disallow session activation because it has PebbleInteraction predicted routes and it is NOT eligible to
+        /// become the NowPlayingApp", canBeNowPlayingApp NO). So the Now Playing info and the play/pause commands are
+        /// in place and the now-playing session is active before the audio session starts.
+        private func start(_ url: URL, channel: GFCarPlayCatalog.Channel, programme: String?) async {
+            lastRateReason = ""
+            audioError = ""
+            publishNowPlaying(channel, programme: programme)
+            registerCommands()
+            let active = await session.becomeActiveIfPossible()
+            guard !Task.isCancelled, channelID == channel.id else { return }
+            Self.log.notice("CarPlay player: now-playing session active \(active, privacy: .public)")
+            if !active { audioError = "session inactive" }
             let audio = AVAudioSession.sharedInstance()
-            try? audio.setCategory(.playback, mode: .moviePlayback, options: [])
-            try? audio.setActive(true)
+            do {
+                // long-form video: the video routing context (AirPlay video to the HomeView/car screen); without it a
+                // Now Playing app lands in System Music, and HomeView took the stream as audio only (21 Nov 2026:
+                // "opted into system music due to now playing capability", Now Playing screen with no picture)
+                try audio.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo, options: [])
+                try audio.setActive(true)
+            } catch {
+                let code = (error as NSError).code
+                let state = UIApplication.shared.applicationState.rawValue
+                Self.log.error(
+                    "CarPlay player: audio session \((error as NSError).domain, privacy: .public) \(code, privacy: .public), app state \(state, privacy: .public)"
+                )
+                audioError += (audioError.isEmpty ? "" : " ") + "audio \(Self.fourCC(code)) app \(state)"
+            }
             let item = AVPlayerItem(url: url)
             item.preferredForwardBufferDuration = 4 // live: as the app's AVPlayer engine does
             statusObservation = item.observe(\.status) { [weak self] item, _ in
@@ -89,9 +141,33 @@
                 }
             }
             player.replaceCurrentItem(with: item)
-            session.becomeActiveIfPossible { _ in }
             player.play()
-            publishNowPlaying(channel, programme: programme)
+        }
+
+        /// Play, pause, toggle and stop for the car's and HomeView's controls, on the now-playing session's command
+        /// centre and the app's shared one (the system counts an app with no command handlers as unable to be the Now
+        /// Playing app). Removed again in stop(); Lume's own player adds and removes its own (NowPlayingService).
+        private func registerCommands() {
+            guard commandTargets.isEmpty else { return }
+            for center in [session.remoteCommandCenter, MPRemoteCommandCenter.shared()] {
+                let handlers: [(MPRemoteCommand, () -> Void)] = [
+                    (center.playCommand, { [weak self] in self?.player.play() }),
+                    (center.pauseCommand, { [weak self] in self?.player.pause() }),
+                    (center.togglePlayPauseCommand, { [weak self] in
+                        guard let player = self?.player else { return }
+                        if player.timeControlStatus == .paused { player.play() } else { player.pause() }
+                    }),
+                    (center.stopCommand, { [weak self] in self?.stop() }),
+                ]
+                for (command, action) in handlers {
+                    command.isEnabled = true
+                    let target = command.addTarget { _ in
+                        MainActor.assumeIsolated { action() }
+                        return .success
+                    }
+                    commandTargets.append((command, target))
+                }
+            }
         }
 
         private func finishStart() {
@@ -110,6 +186,10 @@
             guard channelID != nil else { return }
             channelID = nil
             session.nowPlayingInfoCenter.nowPlayingInfo = nil
+            // the app's own player owns the shared Now Playing while it is up (NowPlayingService)
+            if NowPlayingService.shared.currentMedia == nil { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil }
+            for (command, target) in commandTargets { command.removeTarget(target) }
+            commandTargets = []
         }
 
         /// Dispatcharr answers a channel's `.m3u8` with a 302 to its session's playlist (`/proxy/hls/<token>/`). Asked
@@ -126,6 +206,14 @@
             return target
         }
 
+
+        /// An OSStatus as its four letters when it is one ('!pla'), else the number.
+        private static func fourCC(_ code: Int) -> String {
+            let value = UInt32(truncatingIfNeeded: code)
+            let bytes = [24, 16, 8, 0].map { UInt8((value >> UInt32($0)) & 0xFF) }
+            guard bytes.allSatisfy({ $0 >= 32 && $0 < 127 }) else { return String(code) }
+            return "'" + String(decoding: bytes, as: UTF8.self) + "'"
+        }
 
         /// One short line on where the player got stuck, shown in the car so a photo of it says what went wrong: item
         /// status, what the player waits for, segments loaded, the last error, whether AirPlay video took it.
@@ -150,6 +238,8 @@
             } else if let event = item.errorLog()?.events.last {
                 parts.append("err \(event.errorDomain) \(event.errorStatusCode) \(event.errorComment ?? "")")
             }
+            if !lastRateReason.isEmpty { parts.append(lastRateReason) }
+            if !audioError.isEmpty { parts.append(audioError) }
             parts.append(player.isExternalPlaybackActive ? "airplay on" : "airplay off")
             if let videoSupported { parts.append(videoSupported ? "video ok" : "no video") }
             return parts.joined(separator: " · ")
@@ -167,6 +257,7 @@
             ]
             if programme != nil { info[MPMediaItemPropertyArtist] = channel.title }
             session.nowPlayingInfoCenter.nowPlayingInfo = info
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
     }
 
