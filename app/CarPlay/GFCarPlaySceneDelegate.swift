@@ -7,9 +7,10 @@
     /// (developer.apple.com/documentation/carplay/video). Three tabs built from CarPlay's own templates: Favourites,
     /// Recently Watched and the channel groups. Picking a channel plays it in Apple's video player (GFCarPlayPlayer).
     /// Connected by LumeAppDelegate for the CarPlay scene role; shows only with Apple's CarPlay video entitlement.
-    final class GFCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
+    final class GFCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate, CPSessionConfigurationDelegate {
         private var interfaceController: CPInterfaceController?
         private var logoTasks: [Task<Void, Never>] = []
+        private var sessionConfiguration: CPSessionConfiguration?
 
         /// Logos at the size CarPlay draws list images (about 44-60 pt at 3x).
         private static let logoPixels: CGFloat = 180
@@ -19,7 +20,12 @@
             didConnect interfaceController: CPInterfaceController
         ) {
             self.interfaceController = interfaceController
-            GFCarPlayPlayer.shared.onFailure = { [weak self] channel in self?.showCantPlay(channel) }
+            GFCarPlayPlayer.shared.onFailure = { [weak self] _, why in self?.showCantPlay(why: why) }
+            if #available(iOS 26.4, *) {
+                let configuration = CPSessionConfiguration(delegate: self)
+                sessionConfiguration = configuration
+                GFCarPlayPlayer.shared.videoSupported = configuration.supportsVideoPlayback
+            }
             let tabs = CPTabBarTemplate(templates: [favouritesTab(), recentTab(), groupsTab()])
             interfaceController.setRootTemplate(tabs, animated: false, completion: nil)
         }
@@ -31,6 +37,7 @@
             logoTasks.forEach { $0.cancel() }
             logoTasks = []
             interfaceController = nil
+            sessionConfiguration = nil
             GFCarPlayPlayer.shared.onFailure = nil
             GFCarPlayPlayer.shared.stop()
         }
@@ -96,16 +103,16 @@
                 if channel.hlsURL != nil, #available(iOS 26.4, *) {
                     item.playbackConfiguration = CPPlaybackConfiguration(
                         preferredPresentation: .video, playbackAction: .play,
-                        elapsedTime: .zero, duration: .indefinite
+                        elapsedTime: .zero, duration: .zero // 0 = live (the header's own words)
                     )
                 }
                 item.handler = { [weak self] _, completion in
                     if channel.hlsURL == nil {
-                        self?.showCantPlay(channel)
+                        self?.showCantPlay(why: "")
+                        completion()
                     } else {
-                        GFCarPlayPlayer.shared.play(channel, programme: programme)
+                        GFCarPlayPlayer.shared.play(channel, programme: programme, started: completion)
                     }
-                    completion()
                 }
                 loadLogo(channel.logoURL, into: item)
                 return item
@@ -115,9 +122,11 @@
             return template
         }
 
-        private func showCantPlay(_: GFCarPlayCatalog.Channel) {
+        /// `why`: the player's own line on where it got stuck (GFCarPlayPlayer), under the message.
+        private func showCantPlay(why: String) {
+            let message = String(localized: "This channel can't play here. Watch it on your iPhone.")
             let alert = CPAlertTemplate(
-                titleVariants: [String(localized: "This channel can't play here. Watch it on your iPhone.")],
+                titleVariants: [why.isEmpty ? message : "\(message)\n\(why)"],
                 actions: [CPAlertAction(title: String(localized: "OK"), style: .cancel) { [weak self] _ in
                     self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
                 }]
