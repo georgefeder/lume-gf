@@ -36,7 +36,10 @@ fi
 if [ "$1 $2" = "simctl spawn" ]; then [ -e "$DEAD" ] || echo "123 0 UIKitApplication:lv.test.lume[1234]"; fi
 exit 0
 EOF
-printf '#!/bin/sh\necho lv.test.lume\n' > "$T/bin/plutil"
+cat > "$T/bin/plutil" <<'EOF'
+#!/bin/sh
+case "$*" in *UISceneDelegateClassName*) echo Lume.GFCarPlaySceneDelegate ;; *) echo lv.test.lume ;; esac
+EOF
 cat > "$T/bin/swift" <<'EOF'
 #!/bin/sh
 echo "swift $*" >> "$LOG"
