@@ -14,7 +14,7 @@
         /// a short line on why (the player's state and its last error) to show under the message.
         var onFailure: ((GFCarPlayCatalog.Channel, String) -> Void)?
 
-        /// How long a channel may take to start before the car shows why it hasn't.
+        /// How long a channel may take to start before the car shows why it hasn't (it keeps trying meanwhile).
         private static let startTimeout: Duration = .seconds(15)
 
         private let player = AVPlayer()
@@ -23,7 +23,11 @@
         private var startTask: Task<Void, Never>?
         /// Hands this player to the system, so CarPlay and HomeView know which player's video to show (and publishes
         /// Now Playing from it).
-        private lazy var session = MPNowPlayingSession(players: [player])
+        private lazy var session: MPNowPlayingSession = {
+            let session = MPNowPlayingSession(players: [player])
+            session.automaticallyPublishesNowPlayingInfo = false // the channel and programme, set below
+            return session
+        }()
 
         private init() {
             player.allowsExternalPlayback = true
@@ -34,7 +38,7 @@
         /// Starts `channel`; the same channel again only resumes it.
         func play(_ channel: GFCarPlayCatalog.Channel, programme: String?) {
             guard let url = channel.hlsURL else { onFailure?(channel, ""); return }
-            if channelID == channel.id, player.currentItem != nil {
+            if channelID == channel.id, player.currentItem != nil || startTask != nil {
                 player.play()
                 return
             }
@@ -50,9 +54,7 @@
                 try? await Task.sleep(for: Self.startTimeout)
                 guard !Task.isCancelled, self.channelID == channel.id,
                       self.player.timeControlStatus != .playing else { return }
-                let why = self.diagnosis()
-                self.stop()
-                self.onFailure?(channel, why)
+                self.onFailure?(channel, self.diagnosis())
             }
         }
 
@@ -72,7 +74,7 @@
                 }
             }
             player.replaceCurrentItem(with: item)
-            session.becomeActiveIfPossible()
+            session.becomeActiveIfPossible { _ in }
             player.play()
             publishNowPlaying(channel, programme: programme)
         }
@@ -92,11 +94,10 @@
         /// once here, so the player gets the session's own address; the channel's address as it is when there is no
         /// redirect or the request fails.
         private static func resolveRedirect(_ url: URL) async -> URL {
-            var request = URLRequest(url: url, timeoutInterval: 10)
-            request.httpMethod = "GET"
+            let request = URLRequest(url: url, timeoutInterval: 10)
             let session = URLSession(configuration: .ephemeral, delegate: NoRedirects(), delegateQueue: nil)
-            defer { session.finishTasksAndInvalidate() }
-            guard let (_, response) = try? await session.data(for: request),
+            defer { session.invalidateAndCancel() } // headers only: a 200 here would be the stream itself
+            guard let (_, response) = try? await session.bytes(for: request),
                   let http = response as? HTTPURLResponse, (300 ..< 400).contains(http.statusCode),
                   let location = http.value(forHTTPHeaderField: "Location"),
                   let target = URL(string: location, relativeTo: url)?.absoluteURL else { return url }
