@@ -7,7 +7,8 @@
     /// Lume GF: plays a channel picked on CarPlay or HomeView. Apple's player only, because CarPlay video is AirPlay video
     /// (developer.apple.com/documentation/carplay/video): the system shows this AVPlayer on the car's or HomeView's
     /// screen, and as sound only while the car is moving. Lume's own engines draw into the phone's views and can't
-    /// reach that screen.
+    /// reach that screen. HomeView on its 27.2.1 software plays it as sound only with a Now Playing card, as it does
+    /// UHF's and Apple's own example streams (21 Nov 2026, phone logs: AirPlay video active, item handed over).
     @MainActor
     final class GFCarPlayPlayer {
         static let shared = GFCarPlayPlayer()
@@ -35,7 +36,6 @@
         private var audioError = ""
         private var rateObserver: NSObjectProtocol?
         private var commandTargets: [(MPRemoteCommand, Any)] = []
-        private let videoLayer = AVPlayerLayer()
         private(set) var channelID: String?
         private var statusObservation: NSKeyValueObservation?
         private var startTask: Task<Void, Never>?
@@ -141,22 +141,7 @@
                 }
             }
             player.replaceCurrentItem(with: item)
-            attachVideoLayer()
             player.play()
-        }
-
-        /// AirPlay sends video only for a player that has a video layer; without one the receiver gets the stream as
-        /// sound (HomeView, 21 Nov 2026: AirPlay video active, but only an audio Now Playing card). So a 1-point,
-        /// invisible layer on the phone's window carries the player while the car or HomeView shows the picture.
-        private func attachVideoLayer() {
-            videoLayer.player = player
-            guard videoLayer.superlayer == nil,
-                  let window = UIApplication.shared.connectedScenes
-                      .compactMap({ $0 as? UIWindowScene })
-                      .flatMap(\.windows).first(where: \.isKeyWindow) else { return }
-            videoLayer.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
-            videoLayer.opacity = 0.01
-            window.layer.addSublayer(videoLayer)
         }
 
         /// Play, pause, toggle and stop for the car's and HomeView's controls, on the now-playing session's command
@@ -198,8 +183,6 @@
             statusObservation = nil
             player.pause()
             player.replaceCurrentItem(with: nil)
-            videoLayer.player = nil
-            videoLayer.removeFromSuperlayer()
             guard channelID != nil else { return }
             channelID = nil
             session.nowPlayingInfoCenter.nowPlayingInfo = nil

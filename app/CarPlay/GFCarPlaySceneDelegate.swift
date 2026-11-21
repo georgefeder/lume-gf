@@ -47,23 +47,12 @@
         private func favouritesTab() -> CPListTemplate {
             let template = channelList(
                 title: String(localized: "Favorites"),
-                channels: Self.testStreams + GFCarPlayCatalog.favourites(limit: CPListTemplate.maximumItemCount),
+                channels: GFCarPlayCatalog.favourites(limit: CPListTemplate.maximumItemCount),
                 empty: String(localized: "No favourite channels yet. Add some in Live TV on your iPhone.")
             )
             template.tabImage = UIImage(systemName: "star.fill")
             return template
         }
-
-        /// Debug builds only: Apple's own HLS examples on top of Favourites, to tell a stream problem from a playback
-        /// path problem on HomeView (a picture with these but not with Dispatcharr's = the stream).
-        #if DEBUG
-            private static let testStreams = [
-                ("Apple test (H.264)", "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8"),
-                ("Apple test (fMP4)", "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8"),
-            ].map { GFCarPlayCatalog.Channel(id: "gf-test-\($0.0)", title: $0.0, logoURL: nil, epgChannelID: nil, hlsURL: URL(string: $0.1)) }
-        #else
-            private static let testStreams: [GFCarPlayCatalog.Channel] = []
-        #endif
 
         private func recentTab() -> CPListTemplate {
             let template = channelList(
