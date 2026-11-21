@@ -34,6 +34,7 @@
         private var lastRateReason = ""
         private var audioError = ""
         private var rateObserver: NSObjectProtocol?
+        private var commandTargets: [(MPRemoteCommand, Any)] = []
         private(set) var channelID: String?
         private var statusObservation: NSKeyValueObservation?
         private var startTask: Task<Void, Never>?
@@ -90,7 +91,7 @@
                 // starts, and each open of the 302 starts another HLS session (seen 21 Nov 2026)
                 let resolved = await Self.resolveRedirect(url)
                 guard let self, !Task.isCancelled, self.channelID == channel.id else { return }
-                self.start(resolved, channel: channel, programme: programme)
+                await self.start(resolved, channel: channel, programme: programme)
                 try? await Task.sleep(for: Self.startTimeout)
                 guard !Task.isCancelled, self.channelID == channel.id,
                       self.player.timeControlStatus != .playing else { return }
@@ -99,31 +100,30 @@
             }
         }
 
-        private func start(_ url: URL, channel: GFCarPlayCatalog.Channel, programme: String?) {
-            let audio = AVAudioSession.sharedInstance()
+        /// Order matters: HomeView lets only an app that can be the Now Playing app start sound (audiomxd, 21 Nov 2026:
+        /// "Disallow session activation because it has PebbleInteraction predicted routes and it is NOT eligible to
+        /// become the NowPlayingApp", canBeNowPlayingApp NO). So the Now Playing info and the play/pause commands are
+        /// in place and the now-playing session is active before the audio session starts.
+        private func start(_ url: URL, channel: GFCarPlayCatalog.Channel, programme: String?) async {
             lastRateReason = ""
             audioError = ""
+            publishNowPlaying(channel, programme: programme)
+            registerCommands()
+            let active = await session.becomeActiveIfPossible()
+            guard !Task.isCancelled, channelID == channel.id else { return }
+            Self.log.notice("CarPlay player: now-playing session active \(active, privacy: .public)")
+            if !active { audioError = "session inactive" }
+            let audio = AVAudioSession.sharedInstance()
             do {
                 try audio.setCategory(.playback, mode: .moviePlayback, options: [])
                 try audio.setActive(true)
             } catch {
-                // the phone app counts as in the background while only CarPlay/HomeView shows it, and iOS refuses to
-                // start a non-mixable session from there (21 Nov 2026: "Session activation failed", then AVPlayer's
-                // rate "set failed"); a mixable one may start from the background
-                let first = error as NSError
+                let code = (error as NSError).code
                 let state = UIApplication.shared.applicationState.rawValue
                 Self.log.error(
-                    "CarPlay player: audio session \(first.domain, privacy: .public) \(first.code, privacy: .public), app state \(state, privacy: .public), category \(audio.category.rawValue, privacy: .public) \(audio.mode.rawValue, privacy: .public)"
+                    "CarPlay player: audio session \((error as NSError).domain, privacy: .public) \(code, privacy: .public), app state \(state, privacy: .public)"
                 )
-                audioError = "audio \(Self.fourCC(first.code)) app \(state)"
-                do {
-                    try audio.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
-                    try audio.setActive(true)
-                    audioError += " mix ok"
-                } catch {
-                    audioError += " mix \(Self.fourCC((error as NSError).code))"
-                    Self.log.error("CarPlay player: mixable session \((error as NSError).code, privacy: .public)")
-                }
+                audioError += (audioError.isEmpty ? "" : " ") + "audio \(Self.fourCC(code)) app \(state)"
             }
             let item = AVPlayerItem(url: url)
             item.preferredForwardBufferDuration = 4 // live: as the app's AVPlayer engine does
@@ -137,9 +137,33 @@
                 }
             }
             player.replaceCurrentItem(with: item)
-            session.becomeActiveIfPossible { _ in }
             player.play()
-            publishNowPlaying(channel, programme: programme)
+        }
+
+        /// Play, pause, toggle and stop for the car's and HomeView's controls, on the now-playing session's command
+        /// centre and the app's shared one (the system counts an app with no command handlers as unable to be the Now
+        /// Playing app). Removed again in stop(); Lume's own player adds and removes its own (NowPlayingService).
+        private func registerCommands() {
+            guard commandTargets.isEmpty else { return }
+            for center in [session.remoteCommandCenter, MPRemoteCommandCenter.shared()] {
+                let handlers: [(MPRemoteCommand, () -> Void)] = [
+                    (center.playCommand, { [weak self] in self?.player.play() }),
+                    (center.pauseCommand, { [weak self] in self?.player.pause() }),
+                    (center.togglePlayPauseCommand, { [weak self] in
+                        guard let player = self?.player else { return }
+                        if player.timeControlStatus == .paused { player.play() } else { player.pause() }
+                    }),
+                    (center.stopCommand, { [weak self] in self?.stop() }),
+                ]
+                for (command, action) in handlers {
+                    command.isEnabled = true
+                    let target = command.addTarget { _ in
+                        MainActor.assumeIsolated { action() }
+                        return .success
+                    }
+                    commandTargets.append((command, target))
+                }
+            }
         }
 
         private func finishStart() {
@@ -158,6 +182,10 @@
             guard channelID != nil else { return }
             channelID = nil
             session.nowPlayingInfoCenter.nowPlayingInfo = nil
+            // the app's own player owns the shared Now Playing while it is up (NowPlayingService)
+            if NowPlayingService.shared.currentMedia == nil { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil }
+            for (command, target) in commandTargets { command.removeTarget(target) }
+            commandTargets = []
         }
 
         /// Dispatcharr answers a channel's `.m3u8` with a 302 to its session's playlist (`/proxy/hls/<token>/`). Asked
@@ -225,6 +253,7 @@
             ]
             if programme != nil { info[MPMediaItemPropertyArtist] = channel.title }
             session.nowPlayingInfoCenter.nowPlayingInfo = info
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
     }
 
