@@ -161,6 +161,13 @@ nonisolated final class GuideRefresher {
             let started = Date()
             let applier = GuideListingApplier(container: container)
             let at = now()
+            if hasGuide {
+                return try applyWhole(applier, file: file, sourceID: sourceID, state: state,
+                                      knownChannelIDs: knownChannelIDs, channelsKey: channelsKey, etag: etag,
+                                      lastModified: lastModified, serverBuild: serverBuild, fileHash: fileHash,
+                                      whole: whole, started: started, at: at)
+            }
+            // a first import: nothing stored to compare with, so the planner's way (reading the empty store is free)
             let index: GuideStoredIndex
             if let read = self.index {
                 index = read
@@ -275,6 +282,61 @@ nonisolated final class GuideRefresher {
                        summary: "changes +\(result.inserted) ~\(result.updated) -\(result.deleted + cleared) in \(took) s")
     }
 
+    /// A whole import onto a stored guide, without reading it first (GuideListingApplier.applyWhole): each programme
+    /// goes in by id, saved every batch, then each channel drops what the file no longer has.
+    private func applyWhole(_ applier: GuideListingApplier, file: URL, sourceID: UUID, state: GuideSourceState,
+                            knownChannelIDs: Set<String>, channelsKey: UInt64, etag: String?, lastModified: String?,
+                            serverBuild: Date?, fileHash: String?, whole: Bool, started: Date,
+                            at: Date) throws -> Outcome {
+        timing?.path = "sweep"
+        clearLongOver(applier, file: file, state: state, now: at)
+        timing?.readStored = GFGuideTiming.ms(since: started)
+        if Task.isCancelled {
+            timing?.why = "stopped"
+            throw CancellationError()
+        }
+        let applying = Date()
+        let mine = state.channelIDs.intersection(knownChannelIDs)
+        let stale = applier.wantsNowFirst(channels: mine.isEmpty ? knownChannelIDs : mine, now: at)
+        let nowReady = onNowReady
+        let logged: () -> Void = {
+            let took = Self.seconds(since: started)
+            Logger.database.info("Guide: what is on now is in after \(took, privacy: .public) s")
+            nowReady()
+        }
+        let result = applier.applyWhole(fileURL: file, claimableChannels: knownChannelIDs, now: at,
+                                        allChannels: allChannelIDs,
+                                        nowFirst: stale ? DateInterval(start: at, duration: GuideDiffPlanner.nowFirstSpan)
+                                            : nil,
+                                        onNowReady: logged,
+                                        saveEvery: whole ? GuideListingApplier.saveThreshold
+                                            : GuideListingApplier.wakeSaveThreshold)
+        timing?.apply = GFGuideTiming.ms(since: applying)
+        timing?.inserted = result.inserted
+        timing?.updated = result.updated
+        timing?.deleted = result.deleted
+        timing?.finished = result.completed
+        index = nil // written to: no longer the stored guide
+        guard result.completed else {
+            timing?.why = Task.isCancelled ? "stopped" : "incomplete"
+            let why = Task.isCancelled ? "stopped" : "file not read to the end"
+            let text = "Guide: import \(why) after \(Self.seconds(since: started)) s, \(result.inserted) in so far"
+            Logger.database.info("\(text, privacy: .public)")
+            if Task.isCancelled { throw CancellationError() }
+            states.update(sourceID) { $0.recordFailure("guide file incomplete", at: now()) }
+            throw Failure.incompleteFile
+        }
+        states.update(sourceID) {
+            $0.recordImported(etag: etag, lastModified: lastModified, serverBuild: serverBuild,
+                              channelIDs: result.claimedChannels, at: now(), fileHash: fileHash,
+                              channelsKey: channelsKey)
+        }
+        let took = Self.seconds(since: started)
+        return Outcome(claimedChannelIDs: result.claimedChannels,
+                       summary: "+\(result.inserted) ~\(result.updated) -\(result.deleted) in \(took) s (no stored read)"
+                           + (stale ? " (now first)" : ""))
+    }
+
     /// A short wake got the whole guide: left for the app being open or the overnight import (`wholeImportDue`).
 
     /// The stored guide, read once per run and logged with its size (Lume's diagnostic report shows where the time
@@ -284,18 +346,23 @@ nonisolated final class GuideRefresher {
     private func readStored(_ applier: GuideListingApplier, file: URL, state: GuideSourceState,
                             now: Date) -> GuideStoredIndex {
         let started = Date()
-        var removed = 0
-        let behind = state.lastUpdate.map { now.timeIntervalSince($0) > GuideListingApplier.pruneAfter } ?? true
-        if behind, let earliest = GuideListingApplier.earliestStart(inFileAt: file) {
-            let dayAgo = now.addingTimeInterval(-GuideListingApplier.pruneAfter)
-            removed = applier.deleteEnded(before: min(earliest, dayAgo))
-            if removed > 0 { states.forgetFiles() }
-        }
+        let removed = clearLongOver(applier, file: file, state: state, now: now)
         let index = GuideStoredIndex(rows: applier.loadStored())
         let took = Self.seconds(since: started)
         let text = "Guide: \(removed) long-over programmes removed, \(index.rows.count) read in \(took) s"
         Logger.database.info("\(text, privacy: .public)")
         return index
+    }
+
+    /// A source with no complete import for a day: the programmes long over go first (`readStored`).
+    @discardableResult
+    private func clearLongOver(_ applier: GuideListingApplier, file: URL, state: GuideSourceState, now: Date) -> Int {
+        let behind = state.lastUpdate.map { now.timeIntervalSince($0) > GuideListingApplier.pruneAfter } ?? true
+        guard behind, let earliest = GuideListingApplier.earliestStart(inFileAt: file) else { return 0 }
+        let dayAgo = now.addingTimeInterval(-GuideListingApplier.pruneAfter)
+        let removed = applier.deleteEnded(before: min(earliest, dayAgo))
+        if removed > 0 { states.forgetFiles() }
+        return removed
     }
 
     private static func describe(_ answer: GuideFetcher.Result) -> String {

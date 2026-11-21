@@ -172,4 +172,50 @@ struct GuideListingApplierTests {
         #expect(index.rows.count == 2)
         #expect(index.rows == GuideListingApplier(container: container).loadStored())
     }
+    /// Stored on c1: 20 h ago (long over), 3 h ago, then hourly from 1 h ago to 3 h on; one long-over programme of a
+    /// channel no playlist has any more. The new file has c1 from now: the 2 h one gone, a new one at 4 h.
+    func sweepSetup() throws -> (ModelContainer, URL) {
+        let container = try makeTestContainer()
+        let five = hourly("c1", from: now.addingTimeInterval(-3600), count: 5)
+        let old = hourly("c1", from: now.addingTimeInterval(-20 * 3600), count: 1)
+        let past = hourly("c1", from: now.addingTimeInterval(-3 * 3600), count: 1)
+        let orphan = hourly("gone", from: now.addingTimeInterval(-20 * 3600), count: 1)
+        _ = apply(try writeGuideFile(five + old + past + orphan), container, GuideStoredIndex(rows: [:]),
+                  channels: ["c1", "gone"])
+        let file = try writeGuideFile([five[1], five[2], five[4]]
+            + hourly("c1", from: now.addingTimeInterval(4 * 3600), count: 1, title: "New"))
+        return (container, file)
+    }
+
+    @Test func `a whole guide without the stored read: gone ones within the span and orphans go, the past stays`() throws {
+        let (container, file) = try sweepSetup()
+        let result = GuideListingApplier(container: container)
+            .applyWhole(fileURL: file, claimableChannels: ["c1"], now: now, allChannels: ["c1"], shouldStop: { false })
+        #expect(result.completed && result.claimedChannels == ["c1"])
+        #expect(result.inserted == 1 && result.updated == 0 && result.deleted == 3) // 2 h on, 20 h ago, the orphan
+        #expect(try rows(container).map(\.title) == ["Show 0", "Show 0", "Show 1", "Show 2", "Show 4", "New 0"])
+    }
+
+    @Test func `a whole guide without the stored read deletes nothing when stopped, and finishes the next time`() throws {
+        let (container, file) = try sweepSetup()
+        let applier = GuideListingApplier(container: container)
+        let stopped = applier.applyWhole(fileURL: file, claimableChannels: ["c1"], now: now, allChannels: ["c1"],
+                                         shouldStop: { true })
+        #expect(!stopped.completed && stopped.deleted == 0)
+        #expect(try rows(container).count == 9)
+        let rest = applier.applyWhole(fileURL: file, claimableChannels: ["c1"], now: now, allChannels: ["c1"],
+                                      shouldStop: { false })
+        #expect(rest.completed && rest.deleted == 3 && rest.updated == 0)
+        #expect(try rows(container).count == 6)
+    }
+
+    @Test func `a stale guide is told from one count of what is on now`() throws {
+        let container = try makeTestContainer()
+        _ = apply(try writeGuideFile(hourly("c1", from: now, count: 2)), container, GuideStoredIndex(rows: [:]),
+                  channels: ["c1", "c2"])
+        let applier = GuideListingApplier(container: container)
+        #expect(!applier.wantsNowFirst(channels: ["c1"], now: now))
+        #expect(applier.wantsNowFirst(channels: ["c1", "c2", "c3"], now: now))
+        #expect(applier.wantsNowFirst(channels: ["c1"], now: now.addingTimeInterval(5 * 3600)))
+    }
 }

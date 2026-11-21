@@ -189,7 +189,7 @@ nonisolated struct GuideListingApplier {
     /// overlaps (what is on now, ahead of the rest of a whole guide taken in this way, GuideRefresher).
     func applyChanges(fileURL: URL, claimableChannels: Set<String>, removed: [String], window: DateInterval? = nil,
                       saveEvery: Int = saveThreshold,
-                      shouldStop: @escaping () -> Bool = GFGuidePause.stopOrWait) -> Result {
+                      shouldStop: @escaping () -> Bool = GFGuidePause.stopOrWait, sweep: Sweep? = nil) -> Result {
         let context = ModelContext(container)
         context.autosaveEnabled = false
         let run = ChangeRun()
@@ -202,6 +202,11 @@ nonisolated struct GuideListingApplier {
                     if byID[id] == nil { byID[id] = p }
                 }
                 guard !byID.isEmpty else { return }
+                if let sweep {
+                    for (id, p) in byID {
+                        sweep.see(id: id, channelId: p.channelId, start: p.start)
+                    }
+                }
                 let ids = Array(byID.keys)
                 let rows = (try? context.fetch(FetchDescriptor<EPGListing>(
                     predicate: #Predicate { ids.contains($0.id) }
@@ -256,6 +261,102 @@ nonisolated struct GuideListingApplier {
         GFGuidePause.shared.waitWhileHeld() // no write while video plays
         try? context.save()
         return result
+    }
+
+    /// A whole guide file applied without reading the stored guide first (GuideRefresher): its programmes go in by id
+    /// as in `applyChanges` (what is on now first when `nowFirst` is given), saved every batch, so a stop keeps what is
+    /// done and the next try writes nothing twice. Once the file is read to the end, `sweepGone` drops what it no
+    /// longer has. Reading the ~300,000 stored programmes first took about 5 minutes on the iPhone and never fitted the
+    /// overnight import (21 Nov 2026: cut off at the same point every night; "Sync Now" spun for minutes).
+    func applyWhole(fileURL: URL, claimableChannels: Set<String>, now: Date, allChannels: Set<String>? = nil,
+                    nowFirst: DateInterval? = nil, onNowReady: () -> Void = {}, saveEvery: Int = saveThreshold,
+                    shouldStop: @escaping () -> Bool = GFGuidePause.stopOrWait) -> Result {
+        var first = Result()
+        if let nowFirst {
+            first = applyChanges(fileURL: fileURL, claimableChannels: claimableChannels, removed: [], window: nowFirst,
+                                 saveEvery: saveEvery, shouldStop: shouldStop)
+            guard first.completed else { return first }
+            onNowReady()
+        }
+        // the second pass finds the first one's programmes the same; only it sees the whole span of each channel
+        let sweep = Sweep()
+        var result = applyChanges(fileURL: fileURL, claimableChannels: claimableChannels, removed: [],
+                                  saveEvery: saveEvery, shouldStop: shouldStop, sweep: sweep)
+        result.inserted += first.inserted
+        result.updated += first.updated
+        result.claimedChannels = Set(sweep.firstStart.keys)
+        guard result.completed else { return result }
+        let swept = sweepGone(sweep, now: now, allChannels: allChannels, shouldStop: shouldStop)
+        result.deleted = swept.deleted
+        result.completed = swept.completed
+        return result
+    }
+
+    /// GuideDiffPlanner's deletion rules without the stored guide in memory, one channel at a time: a stored programme
+    /// of a channel the file guides goes when the file no longer has it and it starts within the span the file covers
+    /// on that channel, or ended more than 12 hours ago; the long-over programmes of channels no playlist has any more
+    /// (`allChannels`) go too. Not completed when stopped (the next whole import sweeps again).
+    func sweepGone(_ sweep: Sweep, now: Date, allChannels: Set<String>?,
+                   shouldStop: () -> Bool = GFGuidePause.stopOrWait) -> (deleted: Int, completed: Bool) {
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        let cutoff = now.addingTimeInterval(-GuideDiffPlanner.keepPast)
+        var deleted = 0
+        var pending = 0
+        func save() {
+            GFGuidePause.shared.waitWhileHeld() // no write while video plays
+            try? context.save()
+            pending = 0
+        }
+        for channel in sweep.firstStart.keys.sorted() {
+            if shouldStop() {
+                save()
+                return (deleted, false)
+            }
+            guard let first = sweep.firstStart[channel] else { continue }
+            let kept = Array(sweep.seen[channel] ?? [])
+            let gone = #Predicate<EPGListing> {
+                $0.channelId == channel && ($0.start >= first || $0.end < cutoff) && !kept.contains($0.id)
+            }
+            let count = (try? context.fetchCount(FetchDescriptor(predicate: gone))) ?? 0
+            guard count > 0 else { continue }
+            try? context.delete(model: EPGListing.self, where: gone)
+            deleted += count
+            pending += count
+            if pending >= Self.deleteChunk { save() }
+        }
+        if let allChannels {
+            let all = Array(allChannels)
+            let orphaned = #Predicate<EPGListing> { $0.end < cutoff && !all.contains($0.channelId) }
+            let count = (try? context.fetchCount(FetchDescriptor(predicate: orphaned))) ?? 0
+            if count > 0 {
+                try? context.delete(model: EPGListing.self, where: orphaned)
+                deleted += count
+            }
+        }
+        save()
+        return (deleted, true)
+    }
+
+    /// Whether the stored guide has gone stale for `channels` (GuideDiffPlanner.wantsNowFirst), from one count of the
+    /// programmes on now instead of the whole stored guide.
+    func wantsNowFirst(channels: Set<String>, now: Date) -> Bool {
+        guard !channels.isEmpty else { return false }
+        let ids = Array(channels)
+        let onNow = #Predicate<EPGListing> { $0.start <= now && $0.end > now && ids.contains($0.channelId) }
+        let count = (try? ModelContext(container).fetchCount(FetchDescriptor(predicate: onNow))) ?? 0
+        return count * 2 < channels.count
+    }
+
+    /// What a whole file's pass saw of each channel, for `sweepGone`.
+    nonisolated final class Sweep {
+        var seen: [String: Set<String>] = [:]
+        var firstStart: [String: Date] = [:]
+
+        func see(id: String, channelId: String, start: Date) {
+            seen[channelId, default: []].insert(id)
+            if firstStart[channelId].map({ start < $0 }) ?? true { firstStart[channelId] = start }
+        }
     }
 
     static func stored(_ p: ParsedProgramme) -> GuideDiffPlanner.Stored {
