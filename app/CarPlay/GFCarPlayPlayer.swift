@@ -2,6 +2,7 @@
     import AVFoundation
     import MediaPlayer
     import os
+    import UIKit
 
     /// Lume GF: plays a channel picked on CarPlay or HomeView. Apple's player only, because CarPlay video is AirPlay video
     /// (developer.apple.com/documentation/carplay/video): the system shows this AVPlayer on the car's or HomeView's
@@ -106,8 +107,23 @@
                 try audio.setCategory(.playback, mode: .moviePlayback, options: [])
                 try audio.setActive(true)
             } catch {
-                audioError = "audio \((error as NSError).code)"
-                Self.log.error("CarPlay player: audio session \(error.localizedDescription, privacy: .public)")
+                // the phone app counts as in the background while only CarPlay/HomeView shows it, and iOS refuses to
+                // start a non-mixable session from there (21 Nov 2026: "Session activation failed", then AVPlayer's
+                // rate "set failed"); a mixable one may start from the background
+                let first = error as NSError
+                let state = UIApplication.shared.applicationState.rawValue
+                Self.log.error(
+                    "CarPlay player: audio session \(first.domain, privacy: .public) \(first.code, privacy: .public), app state \(state, privacy: .public), category \(audio.category.rawValue, privacy: .public) \(audio.mode.rawValue, privacy: .public)"
+                )
+                audioError = "audio \(Self.fourCC(first.code)) app \(state)"
+                do {
+                    try audio.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+                    try audio.setActive(true)
+                    audioError += " mix ok"
+                } catch {
+                    audioError += " mix \(Self.fourCC((error as NSError).code))"
+                    Self.log.error("CarPlay player: mixable session \((error as NSError).code, privacy: .public)")
+                }
             }
             let item = AVPlayerItem(url: url)
             item.preferredForwardBufferDuration = 4 // live: as the app's AVPlayer engine does
@@ -158,6 +174,14 @@
             return target
         }
 
+
+        /// An OSStatus as its four letters when it is one ('!pla'), else the number.
+        private static func fourCC(_ code: Int) -> String {
+            let value = UInt32(truncatingIfNeeded: code)
+            let bytes = [24, 16, 8, 0].map { UInt8((value >> UInt32($0)) & 0xFF) }
+            guard bytes.allSatisfy({ $0 >= 32 && $0 < 127 }) else { return String(code) }
+            return "'" + String(decoding: bytes, as: UTF8.self) + "'"
+        }
 
         /// One short line on where the player got stuck, shown in the car so a photo of it says what went wrong: item
         /// status, what the player waits for, segments loaded, the last error, whether AirPlay video took it.
