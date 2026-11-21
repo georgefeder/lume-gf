@@ -1,0 +1,48 @@
+diff --git a/Lume.xcodeproj/project.pbxproj b/Lume.xcodeproj/project.pbxproj
+index a51cdf2..45c9d24 100644
+--- a/Lume.xcodeproj/project.pbxproj
++++ b/Lume.xcodeproj/project.pbxproj
+@@ -688,8 +688,8 @@
+ 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Lume needs access to your local network to find TVs, Cast devices and Philips Hue Bridges, and to reach media servers, WebDAV shares and recording servers running on it.";
+ 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+ 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
+-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
++				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = NO;
++				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = NO;
+ 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+ 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+ 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+@@ -750,8 +750,8 @@
+ 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Lume needs access to your local network to find TVs, Cast devices and Philips Hue Bridges, and to reach media servers, WebDAV shares and recording servers running on it.";
+ 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+ 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
+-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
++				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = NO;
++				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = NO;
+ 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+ 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+ 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+@@ -1085,8 +1085,8 @@
+ 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Lume needs access to your local network to find TVs, Cast devices and Philips Hue Bridges, and to reach media servers, WebDAV shares and recording servers running on it.";
+ 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+ 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
+-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
++				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = NO;
++				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = NO;
+ 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+ 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+ 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+@@ -1574,8 +1574,8 @@
+ 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Lume needs access to your local network to find TVs, Cast devices and Philips Hue Bridges, and to reach media servers, WebDAV shares and recording servers running on it.";
+ 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+ 				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
+-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
++				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = NO;
++				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = NO;
+ 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+ 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+ 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;

@@ -2,7 +2,7 @@
 # Checks the exported, App Store-signed app before it is uploaded: Lume GF's bundle id and home-screen name, Georgs'
 # team in the app id, no debug entitlement, our iCloud container, key-value store and production push in the app
 # (never Lume's container), none of them in the extensions, and the app group in the app and every extension (iOS;
-# tvOS when the app has one, as the Top Shelf since Lume 2.7).
+# tvOS when the app has one, as the Top Shelf since Lume 2.7), and on iOS the CarPlay video entitlement and CarPlay scene.
 # Usage: sh check-export.sh <export dir> <TEAM_ID> <iOS|tvOS>
 set -u
 USAGE="usage: check-export.sh EXPORT_DIR TEAM_ID iOS|tvOS"
@@ -44,6 +44,10 @@ for B in "$APP" "$APP"/PlugIns/*.appex; do
     printf '%s\n' "$E" | grep -q "<string>group.lv.georgefeder.lume</string>" || bad "app group missing in $N"
   fi
 done
+# CarPlay and HomeView find their screens only through this entry; Xcode's generated scene manifest once replaced it
+# and the app crashed as HomeView connected (build 133)
+[ "$PLATFORM" = iOS ] && { [ "$($PB -c "Print :UIApplicationSceneManifest:UISceneConfigurations:CPTemplateApplicationSceneSessionRoleApplication:0:UISceneDelegateClassName" "$APP/Info.plist" 2>/dev/null)" = "Lume.GFCarPlaySceneDelegate" ] \
+  || bad "CarPlay scene (Lume.GFCarPlaySceneDelegate) missing in the scene manifest"; }
 for T in guide.refresh guide.import; do
   $PB -c "Print :BGTaskSchedulerPermittedIdentifiers" "$APP/Info.plist" 2>/dev/null | grep -q "lv.georgefeder.lume.$T" \
     || bad "background task lv.georgefeder.lume.$T not declared"

@@ -30,6 +30,11 @@ ipa() {  # $1 name, $2 display name, $3 app entitlement flags (comma list), $4 e
   $PB -c "Add :CFBundleIdentifier string lv.georgefeder.lume" -c "Add :CFBundleExecutable string Lume" \
       -c "Add :CFBundlePackageType string APPL" -c "Add :CFBundleDisplayName string $2" \
       -c "Add :CFBundleVersion string 7" "$A/Info.plist" >/dev/null
+  case "$1" in *noscene) ;; *)
+    S=":UIApplicationSceneManifest:UISceneConfigurations:CPTemplateApplicationSceneSessionRoleApplication"
+    $PB -c "Add $S array" -c "Add $S:0 dict" -c "Add $S:0:UISceneDelegateClassName string Lume.GFCarPlaySceneDelegate" \
+        "$A/Info.plist" >/dev/null ;;
+  esac
   case "$1" in *nobg) ;; *)
     $PB -c "Add :BGTaskSchedulerPermittedIdentifiers array" \
         -c "Add :BGTaskSchedulerPermittedIdentifiers:0 string lv.georgefeder.lume.guide.refresh" \
@@ -59,6 +64,7 @@ expect "development push fails" 1 "$(ipa pushdev 'Lume GF' group,icloud,pushdev 
 expect "iCloud in the widgets fails" 1 "$(ipa xcloud 'Lume GF' group,icloud,push group,icloud)" iOS "push/iCloud entitlement in LumeWidgets.appex"
 expect "another team's app id fails" 1 "$(ipa appid 'Lume GF' group,icloud,push,appid=ZZZZZ99999.lv.georgefeder.lume group)" iOS "application-identifier"
 expect "iOS app without CarPlay video fails" 1 "$(ipa nocarplay 'Lume GF' group,icloud,push,nocarplay group)" iOS "CarPlay video entitlement missing in Lume.app"
+expect "iOS app without the CarPlay scene fails" 1 "$(ipa noscene 'Lume GF' group,icloud,push group)" iOS "CarPlay scene"
 expect "wrong home-screen name fails" 1 "$(ipa name 'Lume' group,icloud,push group)" iOS "display name"
 expect "tvOS export without app group passes" 0 "$(ipa tv 'Lume GF' icloud,push none)" tvOS "check-export: OK"
 # Lume 2.7: the Apple TV app has an extension (the Top Shelf), which shares the app group with it
