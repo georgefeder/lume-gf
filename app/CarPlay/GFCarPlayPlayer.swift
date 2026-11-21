@@ -10,12 +10,20 @@
     final class GFCarPlayPlayer {
         static let shared = GFCarPlayPlayer()
 
-        /// Called when the channel's stream fails to open (an address Dispatcharr refuses, the provider line busy).
-        var onFailure: ((GFCarPlayCatalog.Channel) -> Void)?
+        /// Called when the channel's stream fails to open (an address Dispatcharr refuses, the provider line busy), with
+        /// a short line on why (the player's state and its last error) to show under the message.
+        var onFailure: ((GFCarPlayCatalog.Channel, String) -> Void)?
+
+        /// How long a channel may take to start before the car shows why it hasn't.
+        private static let startTimeout: Duration = .seconds(15)
 
         private let player = AVPlayer()
         private(set) var channelID: String?
         private var statusObservation: NSKeyValueObservation?
+        private var startTask: Task<Void, Never>?
+        /// Hands this player to the system, so CarPlay and HomeView know which player's video to show (and publishes
+        /// Now Playing from it).
+        private lazy var session = MPNowPlayingSession(players: [player])
 
         private init() {
             player.allowsExternalPlayback = true
@@ -25,39 +33,108 @@
 
         /// Starts `channel`; the same channel again only resumes it.
         func play(_ channel: GFCarPlayCatalog.Channel, programme: String?) {
-            guard let url = channel.hlsURL else { onFailure?(channel); return }
+            guard let url = channel.hlsURL else { onFailure?(channel, ""); return }
             if channelID == channel.id, player.currentItem != nil {
                 player.play()
                 return
             }
-            let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: .moviePlayback, options: [])
-            try? session.setActive(true)
+            stop()
+            channelID = channel.id
+            GFCarPlayCatalog.markWatched(channelID: channel.id)
+            startTask = Task { [weak self] in
+                // one Dispatcharr session per channel: AVPlayer opens the channel's address two or three times as it
+                // starts, and each open of the 302 starts another HLS session (seen 21 Nov 2026)
+                let resolved = await Self.resolveRedirect(url)
+                guard let self, !Task.isCancelled, self.channelID == channel.id else { return }
+                self.start(resolved, channel: channel, programme: programme)
+                try? await Task.sleep(for: Self.startTimeout)
+                guard !Task.isCancelled, self.channelID == channel.id,
+                      self.player.timeControlStatus != .playing else { return }
+                let why = self.diagnosis()
+                self.stop()
+                self.onFailure?(channel, why)
+            }
+        }
+
+        private func start(_ url: URL, channel: GFCarPlayCatalog.Channel, programme: String?) {
+            let audio = AVAudioSession.sharedInstance()
+            try? audio.setCategory(.playback, mode: .moviePlayback, options: [])
+            try? audio.setActive(true)
             let item = AVPlayerItem(url: url)
             item.preferredForwardBufferDuration = 4 // live: as the app's AVPlayer engine does
             statusObservation = item.observe(\.status) { [weak self] item, _ in
                 guard item.status == .failed else { return }
                 Task { @MainActor in
                     guard let self, self.channelID == channel.id else { return }
+                    let why = self.diagnosis()
                     self.stop()
-                    self.onFailure?(channel)
+                    self.onFailure?(channel, why)
                 }
             }
             player.replaceCurrentItem(with: item)
+            session.becomeActiveIfPossible()
             player.play()
-            channelID = channel.id
-            GFCarPlayCatalog.markWatched(channelID: channel.id)
             publishNowPlaying(channel, programme: programme)
         }
 
         func stop() {
+            startTask?.cancel()
+            startTask = nil
             statusObservation = nil
             player.pause()
             player.replaceCurrentItem(with: nil)
             guard channelID != nil else { return }
             channelID = nil
-            // the app's own player owns Now Playing while it is up (NowPlayingService)
-            if NowPlayingService.shared.currentMedia == nil { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil }
+            session.nowPlayingInfoCenter.nowPlayingInfo = nil
+        }
+
+        /// Dispatcharr answers a channel's `.m3u8` with a 302 to its session's playlist (`/proxy/hls/<token>/`). Asked
+        /// once here, so the player gets the session's own address; the channel's address as it is when there is no
+        /// redirect or the request fails.
+        private static func resolveRedirect(_ url: URL) async -> URL {
+            var request = URLRequest(url: url, timeoutInterval: 10)
+            request.httpMethod = "GET"
+            let session = URLSession(configuration: .ephemeral, delegate: NoRedirects(), delegateQueue: nil)
+            defer { session.finishTasksAndInvalidate() }
+            guard let (_, response) = try? await session.data(for: request),
+                  let http = response as? HTTPURLResponse, (300 ..< 400).contains(http.statusCode),
+                  let location = http.value(forHTTPHeaderField: "Location"),
+                  let target = URL(string: location, relativeTo: url)?.absoluteURL else { return url }
+            return target
+        }
+
+        private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+            func urlSession(
+                _: URLSession, task _: URLSessionTask, willPerformHTTPRedirection _: HTTPURLResponse,
+                newRequest _: URLRequest
+            ) async -> URLRequest? { nil }
+        }
+
+        /// One short line on where the player got stuck, shown in the car so a photo of it says what went wrong: item
+        /// status, what the player waits for, segments loaded, the last error, whether AirPlay video took it.
+        private func diagnosis() -> String {
+            guard let item = player.currentItem else { return "no item" }
+            let status = switch item.status {
+            case .readyToPlay: "ready"
+            case .failed: "failed"
+            default: "unknown"
+            }
+            var parts = ["item \(status)"]
+            if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
+                parts.append("waiting \(player.reasonForWaitingToPlay?.rawValue ?? "?")")
+            } else if player.timeControlStatus == .paused {
+                parts.append("paused")
+            }
+            if let access = item.accessLog()?.events.last {
+                parts.append("segs \(access.numberOfMediaRequests), stalls \(access.numberOfStalls)")
+            }
+            if let error = item.error as NSError? {
+                parts.append("err \(error.domain) \(error.code)")
+            } else if let event = item.errorLog()?.events.last {
+                parts.append("err \(event.errorDomain) \(event.errorStatusCode) \(event.errorComment ?? "")")
+            }
+            parts.append(player.isExternalPlaybackActive ? "airplay on" : "airplay off")
+            return parts.joined(separator: " · ")
         }
 
         /// What the car's Now Playing and mini player show: the channel and the programme on now, marked live. Left to
@@ -71,7 +148,7 @@
                 MPNowPlayingInfoPropertyPlaybackRate: 1.0,
             ]
             if programme != nil { info[MPMediaItemPropertyArtist] = channel.title }
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            session.nowPlayingInfoCenter.nowPlayingInfo = info
         }
     }
 #endif

@@ -19,7 +19,7 @@
             didConnect interfaceController: CPInterfaceController
         ) {
             self.interfaceController = interfaceController
-            GFCarPlayPlayer.shared.onFailure = { [weak self] channel in self?.showCantPlay(channel) }
+            GFCarPlayPlayer.shared.onFailure = { [weak self] _, why in self?.showCantPlay(why: why) }
             let tabs = CPTabBarTemplate(templates: [favouritesTab(), recentTab(), groupsTab()])
             interfaceController.setRootTemplate(tabs, animated: false, completion: nil)
         }
@@ -101,7 +101,7 @@
                 }
                 item.handler = { [weak self] _, completion in
                     if channel.hlsURL == nil {
-                        self?.showCantPlay(channel)
+                        self?.showCantPlay(why: "")
                     } else {
                         GFCarPlayPlayer.shared.play(channel, programme: programme)
                     }
@@ -115,9 +115,11 @@
             return template
         }
 
-        private func showCantPlay(_: GFCarPlayCatalog.Channel) {
+        /// `why`: the player's own line on where it got stuck (GFCarPlayPlayer), under the message.
+        private func showCantPlay(why: String) {
+            let message = String(localized: "This channel can't play here. Watch it on your iPhone.")
             let alert = CPAlertTemplate(
-                titleVariants: [String(localized: "This channel can't play here. Watch it on your iPhone.")],
+                titleVariants: [why.isEmpty ? message : "\(message)\n\(why)"],
                 actions: [CPAlertAction(title: String(localized: "OK"), style: .cancel) { [weak self] _ in
                     self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
                 }]
