@@ -7,9 +7,10 @@
     /// (developer.apple.com/documentation/carplay/video). Three tabs built from CarPlay's own templates: Favourites,
     /// Recently Watched and the channel groups. Picking a channel plays it in Apple's video player (GFCarPlayPlayer).
     /// Connected by LumeAppDelegate for the CarPlay scene role; shows only with Apple's CarPlay video entitlement.
-    final class GFCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
+    final class GFCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate, CPSessionConfigurationDelegate {
         private var interfaceController: CPInterfaceController?
         private var logoTasks: [Task<Void, Never>] = []
+        private var sessionConfiguration: CPSessionConfiguration?
 
         /// Logos at the size CarPlay draws list images (about 44-60 pt at 3x).
         private static let logoPixels: CGFloat = 180
@@ -20,6 +21,11 @@
         ) {
             self.interfaceController = interfaceController
             GFCarPlayPlayer.shared.onFailure = { [weak self] _, why in self?.showCantPlay(why: why) }
+            if #available(iOS 26.4, *) {
+                let configuration = CPSessionConfiguration(delegate: self)
+                sessionConfiguration = configuration
+                GFCarPlayPlayer.shared.videoSupported = configuration.supportsVideoPlayback
+            }
             let tabs = CPTabBarTemplate(templates: [favouritesTab(), recentTab(), groupsTab()])
             interfaceController.setRootTemplate(tabs, animated: false, completion: nil)
         }
@@ -31,6 +37,7 @@
             logoTasks.forEach { $0.cancel() }
             logoTasks = []
             interfaceController = nil
+            sessionConfiguration = nil
             GFCarPlayPlayer.shared.onFailure = nil
             GFCarPlayPlayer.shared.stop()
         }
@@ -96,16 +103,16 @@
                 if channel.hlsURL != nil, #available(iOS 26.4, *) {
                     item.playbackConfiguration = CPPlaybackConfiguration(
                         preferredPresentation: .video, playbackAction: .play,
-                        elapsedTime: .zero, duration: .indefinite
+                        elapsedTime: .zero, duration: .zero // 0 = live (the header's own words)
                     )
                 }
                 item.handler = { [weak self] _, completion in
                     if channel.hlsURL == nil {
                         self?.showCantPlay(why: "")
+                        completion()
                     } else {
-                        GFCarPlayPlayer.shared.play(channel, programme: programme)
+                        GFCarPlayPlayer.shared.play(channel, programme: programme, started: completion)
                     }
-                    completion()
                 }
                 loadLogo(channel.logoURL, into: item)
                 return item

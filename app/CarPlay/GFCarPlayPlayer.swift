@@ -17,7 +17,15 @@
         /// How long a channel may take to start before the car shows why it hasn't (it keeps trying meanwhile).
         private static let startTimeout: Duration = .seconds(15)
 
+        /// Whether the car or HomeView takes video at all (CPSessionConfiguration), set by the scene; shown in the
+        /// diagnosis line.
+        var videoSupported: Bool?
+
         private let player = AVPlayer()
+        /// The tapped row's completion: CarPlay spins on the row until it runs, so it runs once the channel plays (or
+        /// fails, or the start check reports), not straight away (developer.apple.com/documentation/carplay/cplistitem/handler).
+        private var started: (() -> Void)?
+        private var playingObservation: NSKeyValueObservation?
         private(set) var channelID: String?
         private var statusObservation: NSKeyValueObservation?
         private var startTask: Task<Void, Never>?
@@ -35,15 +43,21 @@
             player.automaticallyWaitsToMinimizeStalling = true
         }
 
-        /// Starts `channel`; the same channel again only resumes it.
-        func play(_ channel: GFCarPlayCatalog.Channel, programme: String?) {
-            guard let url = channel.hlsURL else { onFailure?(channel, ""); return }
+        /// Starts `channel`; the same channel again only resumes it. `started` runs once it plays or can't.
+        func play(_ channel: GFCarPlayCatalog.Channel, programme: String?, started: @escaping () -> Void) {
+            guard let url = channel.hlsURL else { started(); onFailure?(channel, ""); return }
             if channelID == channel.id, player.currentItem != nil || startTask != nil {
                 player.play()
+                started()
                 return
             }
             stop()
             channelID = channel.id
+            self.started = started
+            playingObservation = player.observe(\.timeControlStatus) { [weak self] player, _ in
+                guard player.timeControlStatus == .playing else { return }
+                Task { @MainActor in self?.finishStart() }
+            }
             GFCarPlayCatalog.markWatched(channelID: channel.id)
             startTask = Task { [weak self] in
                 // one Dispatcharr session per channel: AVPlayer opens the channel's address two or three times as it
@@ -54,6 +68,7 @@
                 try? await Task.sleep(for: Self.startTimeout)
                 guard !Task.isCancelled, self.channelID == channel.id,
                       self.player.timeControlStatus != .playing else { return }
+                self.finishStart()
                 self.onFailure?(channel, self.diagnosis())
             }
         }
@@ -79,7 +94,14 @@
             publishNowPlaying(channel, programme: programme)
         }
 
+        private func finishStart() {
+            playingObservation = nil
+            started?()
+            started = nil
+        }
+
         func stop() {
+            finishStart()
             startTask?.cancel()
             startTask = nil
             statusObservation = nil
@@ -135,6 +157,7 @@
                 parts.append("err \(event.errorDomain) \(event.errorStatusCode) \(event.errorComment ?? "")")
             }
             parts.append(player.isExternalPlaybackActive ? "airplay on" : "airplay off")
+            if let videoSupported { parts.append(videoSupported ? "video ok" : "no video") }
             return parts.joined(separator: " · ")
         }
 
