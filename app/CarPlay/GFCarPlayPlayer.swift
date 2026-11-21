@@ -115,7 +115,10 @@
             if !active { audioError = "session inactive" }
             let audio = AVAudioSession.sharedInstance()
             do {
-                try audio.setCategory(.playback, mode: .moviePlayback, options: [])
+                // long-form video: the video routing context (AirPlay video to the HomeView/car screen); without it a
+                // Now Playing app lands in System Music, and HomeView took the stream as audio only (21 Nov 2026:
+                // "opted into system music due to now playing capability", Now Playing screen with no picture)
+                try audio.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo, options: [])
                 try audio.setActive(true)
             } catch {
                 let code = (error as NSError).code
