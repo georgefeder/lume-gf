@@ -1,6 +1,7 @@
 #if os(iOS)
     import AVFoundation
     import MediaPlayer
+    import os
 
     /// Lume GF: plays a channel picked on CarPlay or HomeView. Apple's player only, because CarPlay video is AirPlay video
     /// (developer.apple.com/documentation/carplay/video): the system shows this AVPlayer on the car's or HomeView's
@@ -26,6 +27,12 @@
         /// fails, or the start check reports), not straight away (developer.apple.com/documentation/carplay/cplistitem/handler).
         private var started: (() -> Void)?
         private var playingObservation: NSKeyValueObservation?
+        nonisolated private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "lume", category: "carplay")
+        /// Why the player last stopped or failed to start (AVPlayer's rate change reason, the audio session's error):
+        /// in the diagnosis line and the log.
+        private var lastRateReason = ""
+        private var audioError = ""
+        private var rateObserver: NSObjectProtocol?
         private(set) var channelID: String?
         private var statusObservation: NSKeyValueObservation?
         private var startTask: Task<Void, Never>?
@@ -41,6 +48,23 @@
             player.allowsExternalPlayback = true
             player.usesExternalPlaybackWhileExternalScreenIsActive = true
             player.automaticallyWaitsToMinimizeStalling = true
+            rateObserver = NotificationCenter.default.addObserver(
+                forName: AVPlayer.rateDidChangeNotification, object: player, queue: .main
+            ) { [weak self] note in
+                let reason = (note.userInfo?[AVPlayer.rateDidChangeReasonKey] as? AVPlayer.RateDidChangeReason)
+                let name = switch reason {
+                case .setRateCalled: "set"
+                case .setRateFailed: "set failed"
+                case .audioSessionInterrupted: "interrupted"
+                case .appBackgrounded: "backgrounded"
+                default: reason?.rawValue ?? "?"
+                }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.lastRateReason = "rate \(self.player.rate) \(name)"
+                    Self.log.notice("CarPlay player \(self.lastRateReason, privacy: .public)")
+                }
+            }
         }
 
         /// Starts `channel`; the same channel again only resumes it. `started` runs once it plays or can't.
@@ -55,6 +79,7 @@
             channelID = channel.id
             self.started = started
             playingObservation = player.observe(\.timeControlStatus) { [weak self] player, _ in
+                Self.log.notice("CarPlay player status \(player.timeControlStatus.rawValue, privacy: .public)")
                 guard player.timeControlStatus == .playing else { return }
                 Task { @MainActor in self?.finishStart() }
             }
@@ -75,8 +100,15 @@
 
         private func start(_ url: URL, channel: GFCarPlayCatalog.Channel, programme: String?) {
             let audio = AVAudioSession.sharedInstance()
-            try? audio.setCategory(.playback, mode: .moviePlayback, options: [])
-            try? audio.setActive(true)
+            lastRateReason = ""
+            audioError = ""
+            do {
+                try audio.setCategory(.playback, mode: .moviePlayback, options: [])
+                try audio.setActive(true)
+            } catch {
+                audioError = "audio \((error as NSError).code)"
+                Self.log.error("CarPlay player: audio session \(error.localizedDescription, privacy: .public)")
+            }
             let item = AVPlayerItem(url: url)
             item.preferredForwardBufferDuration = 4 // live: as the app's AVPlayer engine does
             statusObservation = item.observe(\.status) { [weak self] item, _ in
@@ -150,6 +182,8 @@
             } else if let event = item.errorLog()?.events.last {
                 parts.append("err \(event.errorDomain) \(event.errorStatusCode) \(event.errorComment ?? "")")
             }
+            if !lastRateReason.isEmpty { parts.append(lastRateReason) }
+            if !audioError.isEmpty { parts.append(audioError) }
             parts.append(player.isExternalPlaybackActive ? "airplay on" : "airplay off")
             if let videoSupported { parts.append(videoSupported ? "video ok" : "no video") }
             return parts.joined(separator: " · ")
