@@ -173,9 +173,9 @@
     /// Stops at the first redirect, for GFCarPlayPlayer.resolveRedirect (a file-level class with the completion-handler
     /// form: Swift 6.3 crashed emitting the async form inside the player, run 44892380804).
     private final class NoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-            func urlSession(
-                _: URLSession, task _: URLSessionTask, willPerformHTTPRedirection _: HTTPURLResponse,
-                newRequest _: URLRequest, completionHandler: @escaping (URLRequest?) -> Void
-            ) { completionHandler(nil) }
+        func urlSession(
+            _: URLSession, task _: URLSessionTask, willPerformHTTPRedirection _: HTTPURLResponse,
+            newRequest _: URLRequest, completionHandler: @escaping (URLRequest?) -> Void
+        ) { completionHandler(nil) }
     }
 #endif
