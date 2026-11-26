@@ -12,7 +12,7 @@ index f455ee8..7be34d6 100644
      static let syncMovies = PerfSignpost("SyncMovies")
      static let syncSeries = PerfSignpost("SyncSeries")
 diff --git a/Lume/Services/Sync/AutoSyncQueue.swift b/Lume/Services/Sync/AutoSyncQueue.swift
-index 660096c..eb5e8ce 100644
+index 660096c..3501fad 100644
 --- a/Lume/Services/Sync/AutoSyncQueue.swift
 +++ b/Lume/Services/Sync/AutoSyncQueue.swift
 @@ -27,18 +27,24 @@ struct SyncJob: Identifiable, Equatable {
@@ -88,20 +88,18 @@ index 660096c..eb5e8ce 100644
          }
          promoteNextIfIdle(container: context.container)
      }
-@@ -252,11 +280,17 @@ final class AutoSyncQueue {
-             isManual: entry.job.isManual,
-             hasContent: AutoSync.hasContent(entry.job.id, in: container.mainContext)
-         )
-+        // Lume GF: a sync of this playlist out of sight makes way for this one
-+        GFBackgroundCatalogSync.shared.cancel(playlistID: entry.job.id)
-         task = Task(priority: priority) {
+@@ -256,7 +284,15 @@ final class AutoSyncQueue {
              var errorMessage: String?
              var wasStopped = false
              do {
 -                try await run(entry.playlist, container, progress, entry.job.full)
++                // Lume GF: a sync of this playlist out of sight makes way for this one, and has ended before it starts
++                // (never two writing the playlist at once)
++                await GFBackgroundCatalogSync.shared.stop(playlistID: entry.job.id)
 +                try await run(entry.playlist, container, progress, entry.job.full, entry.job.gfScope)
-+                // Lume GF: a first import's live channels are in; films and series follow out of sight
-+                if let then = entry.job.gfThen {
++                // Lume GF: a first import's live channels are in; films and series follow out of sight (not after a
++                // Stop that came as it ended)
++                if let then = entry.job.gfThen, !Task.isCancelled {
 +                    GFBackgroundCatalogSync.shared.enqueue(playlistID: entry.job.id, scope: then, container: container)
 +                }
              } catch {

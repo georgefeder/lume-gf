@@ -12,7 +12,7 @@ index a0dc1aa..3071b2b 100644
          EPGSyncService.shared.configure(container: catalog)
          GuideScheduler.shared.configure(container: catalog)
 diff --git a/Lume/Services/Sync/AutoSyncQueue.swift b/Lume/Services/Sync/AutoSyncQueue.swift
-index eb5e8ce..daf1fca 100644
+index 3501fad..4558bf3 100644
 --- a/Lume/Services/Sync/AutoSyncQueue.swift
 +++ b/Lume/Services/Sync/AutoSyncQueue.swift
 @@ -172,7 +172,7 @@ final class AutoSyncQueue {
