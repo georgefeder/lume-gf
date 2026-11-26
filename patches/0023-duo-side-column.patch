@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index 6f03138..7de6d34 100644
+index a3a771d..d9b20b3 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
 @@ -89,9 +89,16 @@ import SwiftUI
@@ -42,7 +42,7 @@ index 8826c21..f1ec0ae 100644
              }
          }
 diff --git a/Lume/Views/Player/EngineControlsOverlay.swift b/Lume/Views/Player/EngineControlsOverlay.swift
-index 0bf940b..3fe8efe 100644
+index 605e576..5b1406e 100644
 --- a/Lume/Views/Player/EngineControlsOverlay.swift
 +++ b/Lume/Views/Player/EngineControlsOverlay.swift
 @@ -129,9 +129,16 @@ import SwiftUI
@@ -64,7 +64,7 @@ index 0bf940b..3fe8efe 100644
              .padding(.horizontal, 20)
              .padding(.top, 12)
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index 9ab07f9..de2c0f6 100644
+index b9eea96..1da9a91 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -116,9 +116,16 @@ import SwiftUI
@@ -161,7 +161,7 @@ index 8a2689b..1694d25 100644
              }
          }
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index bb305e5..3dd8ff3 100644
+index d0b317a..7f335f7 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 @@ -92,9 +92,16 @@ import VLCKit

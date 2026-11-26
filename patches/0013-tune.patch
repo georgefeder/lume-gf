@@ -14,7 +14,7 @@ index e47fa33..59d9c63 100644
                  case .empty:
                      // Reserve the logo's vertical space without flashing the
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index 8d347c4..6f03138 100644
+index 66f0704..a3a771d 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
 @@ -40,12 +40,15 @@ import SwiftUI
@@ -52,7 +52,7 @@ index d610534..8826c21 100644
              MacPlayerWindowRouter.shared.closePlayer()
          #else
 diff --git a/Lume/Views/Player/EngineControlsOverlay.swift b/Lume/Views/Player/EngineControlsOverlay.swift
-index df47a3a..0bf940b 100644
+index 0e6d985..605e576 100644
 --- a/Lume/Views/Player/EngineControlsOverlay.swift
 +++ b/Lume/Views/Player/EngineControlsOverlay.swift
 @@ -80,12 +80,15 @@ import SwiftUI
@@ -78,7 +78,7 @@ index df47a3a..0bf940b 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index 19c8da5..9ab07f9 100644
+index 82f4968..b9eea96 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -65,12 +65,15 @@ import SwiftUI
@@ -104,7 +104,7 @@ index 19c8da5..9ab07f9 100644
              }
              .task(id: media.id) {
 diff --git a/Lume/Views/Player/LumeEngineCoordinator.swift b/Lume/Views/Player/LumeEngineCoordinator.swift
-index 8ac3505..66dfa8d 100644
+index bb5d4e4..0efa131 100644
 --- a/Lume/Views/Player/LumeEngineCoordinator.swift
 +++ b/Lume/Views/Player/LumeEngineCoordinator.swift
 @@ -272,6 +272,13 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
@@ -134,7 +134,7 @@ index 13c74b8..8a2689b 100644
              MacPlayerWindowRouter.shared.closePlayer()
          #else
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index 435ccf2..bb305e5 100644
+index adada66..d0b317a 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 @@ -43,12 +43,15 @@ import VLCKit

@@ -24,7 +24,7 @@ index 0d0ed24..dfc71ca 100644
  </dict>
  </plist>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 9d00492..347c0bd 100644
+index d52cda0..a93f7b5 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -33,6 +33,7 @@ struct LumeApp: App {
@@ -45,7 +45,7 @@ index 9d00492..347c0bd 100644
          let coordinator = CloudSyncCoordinator(
              catalogContainer: catalog,
              cloudContainer: cloud,
-@@ -464,6 +468,8 @@ struct LumeApp: App {
+@@ -470,6 +474,8 @@ struct LumeApp: App {
                      // nothing is pending (see `EPGRefreshGate`).
                      EPGSyncService.shared.configure(container: catalogContainer)
                      EPGSyncService.shared.syncIfDue()
@@ -54,7 +54,7 @@ index 9d00492..347c0bd 100644
  
                      // Seed the widget / Top Shelf snapshot once services are up
                      // (after profile bootstrap, so the catalog is profile-scoped).
-@@ -492,6 +498,7 @@ struct LumeApp: App {
+@@ -498,6 +504,7 @@ struct LumeApp: App {
                      Task { await backendChoiceWatcher.refresh() }
                  }
                  .onChange(of: scenePhase) { _, phase in
@@ -236,7 +236,7 @@ index 96a623a..1e79a11 100644
          for download in downloads {
              if case let .file(fileURL, isRemote: true) = download.payload {
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index 58065cd..97c3f39 100644
+index a0af15e..e1cf90f 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
 @@ -99,7 +99,7 @@ final class EPGSyncService {

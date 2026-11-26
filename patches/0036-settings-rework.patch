@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index 7de6d34..ddbfada 100644
+index d9b20b3..ae014d2 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-@@ -266,6 +266,7 @@ import SwiftUI
+@@ -272,6 +272,7 @@ import SwiftUI
                  PlayerQualityButton(onResetHideTimer: onResetHideTimer)
                  PlayerRecordButton(media: media, onResetHideTimer: onResetHideTimer)
                  PlayerVolumeControl(onResetHideTimer: onResetHideTimer)
@@ -11,10 +11,10 @@ index 7de6d34..ddbfada 100644
              .padding(.horizontal, 4)
              .glassEffectCompat(.regularInteractive, in: Capsule())
 diff --git a/Lume/Views/Player/EngineControlsOverlay.swift b/Lume/Views/Player/EngineControlsOverlay.swift
-index 3fe8efe..9082b8e 100644
+index 5b1406e..ac225d0 100644
 --- a/Lume/Views/Player/EngineControlsOverlay.swift
 +++ b/Lume/Views/Player/EngineControlsOverlay.swift
-@@ -312,6 +312,7 @@ import SwiftUI
+@@ -318,6 +318,7 @@ import SwiftUI
                  PlayerQualityButton(onResetHideTimer: onResetHideTimer)
                  PlayerRecordButton(media: media, onResetHideTimer: onResetHideTimer)
                  PlayerVolumeControl(onResetHideTimer: onResetHideTimer)
@@ -23,10 +23,10 @@ index 3fe8efe..9082b8e 100644
              .padding(.horizontal, 4)
              .glassEffectCompat(.regularInteractive, in: Capsule())
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index de2c0f6..b5e3990 100644
+index 1da9a91..64a8eb4 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-@@ -293,6 +293,7 @@ import SwiftUI
+@@ -299,6 +299,7 @@ import SwiftUI
                  PlayerQualityButton(onResetHideTimer: onResetHideTimer)
                  PlayerRecordButton(media: media, onResetHideTimer: onResetHideTimer)
                  PlayerVolumeControl(onResetHideTimer: onResetHideTimer)
@@ -35,7 +35,7 @@ index de2c0f6..b5e3990 100644
              .padding(.horizontal, 4)
              .glassEffectCompat(.regularInteractive, in: Capsule())
 diff --git a/Lume/Views/Player/TVPlayerControlsOverlay.swift b/Lume/Views/Player/TVPlayerControlsOverlay.swift
-index e7f8f89..9570042 100644
+index 5762570..db1de3d 100644
 --- a/Lume/Views/Player/TVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/TVPlayerControlsOverlay.swift
 @@ -147,7 +147,7 @@
@@ -47,7 +47,7 @@ index e7f8f89..9570042 100644
              }
          }
  
-@@ -386,12 +386,26 @@
+@@ -380,12 +380,26 @@
                      favoriteButton
                  }
                  recordButton
@@ -75,7 +75,7 @@ index e7f8f89..9570042 100644
          private var audioTrackMenu: some View {
              let tracks = coordinator.audioTrackOptions
 diff --git a/Lume/Views/Player/TVPlayerPanels.swift b/Lume/Views/Player/TVPlayerPanels.swift
-index 395b39a..ffbfb85 100644
+index bccfa42..53ac0dc 100644
 --- a/Lume/Views/Player/TVPlayerPanels.swift
 +++ b/Lume/Views/Player/TVPlayerPanels.swift
 @@ -33,6 +33,7 @@
@@ -87,10 +87,10 @@ index 395b39a..ffbfb85 100644
          case episode(String)
          case channel(String)
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index 3dd8ff3..5fc6c76 100644
+index 7f335f7..1f3c762 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-@@ -273,6 +273,7 @@ import VLCKit
+@@ -279,6 +279,7 @@ import VLCKit
                  PlayerQualityButton(onResetHideTimer: onResetHideTimer)
                  PlayerRecordButton(media: media, onResetHideTimer: onResetHideTimer)
                  PlayerVolumeControl(onResetHideTimer: onResetHideTimer)
@@ -330,10 +330,10 @@ index 8b1ac8d..021f0fa 100644
              paneFocusRequest += 1
              // Deferred: the pane only holds the new category's rows a render
 diff --git a/Lume/Views/Settings/TVLiveTVSettingsPane.swift b/Lume/Views/Settings/TVLiveTVSettingsPane.swift
-index b41430a..515d039 100644
+index 81734a3..2645d3d 100644
 --- a/Lume/Views/Settings/TVLiveTVSettingsPane.swift
 +++ b/Lume/Views/Settings/TVLiveTVSettingsPane.swift
-@@ -56,6 +56,9 @@
+@@ -58,6 +58,9 @@
              VStack(alignment: .leading, spacing: 28) {
                  layoutSection
                  categoriesSection

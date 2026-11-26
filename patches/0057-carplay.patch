@@ -29,7 +29,7 @@ index dfc71ca..3005694 100644
  	<array>
  		<string>audio</string>
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 3933a83..ab7172a 100644
+index 3071b2b..a422b54 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -39,6 +39,11 @@ struct LumeApp: App {

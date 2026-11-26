@@ -1,5 +1,5 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 8582000..7101ffa 100644
+index 3740464..479a0bd 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -14,7 +14,7 @@ struct LumeApp: App {

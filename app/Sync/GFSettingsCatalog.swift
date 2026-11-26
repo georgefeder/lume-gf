@@ -69,7 +69,11 @@ enum GFSettingsCatalog {
         PlayerSettings.Aether.prepareNativeSubtitlesKey, PlayerSettings.Aether.probeSizeKey,
         PlayerSettings.Aether.upscaleLowResolutionKey,
         // Lume 3.3: the skip buttons' interval (an Apple TV's default differs from an iPhone's)
-        PlayerSettings.Playback.skipIntervalKey
+        PlayerSettings.Playback.skipIntervalKey,
+        // Lume 3.4: AetherEngine's 1080p upscaling, untagged HDR and bitmap subtitle text, like its other options;
+        // the Apple TV guide preview's sound, like its size
+        PlayerSettings.Aether.upscaleFullHDKey, PlayerSettings.Aether.untaggedVideoColorKey,
+        PlayerSettings.Aether.bitmapSubtitleTextKey, PlayerSettings.tvGuidePreviewSoundKey
     ]
 
     /// Left to the device by our sync. The Live TV rail switches are synced by Lume itself since 2.5, account-wide

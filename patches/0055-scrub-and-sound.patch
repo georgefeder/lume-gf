@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index 3b1d79e..ec8ea10 100644
+index 3387e70..b181a77 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-@@ -380,7 +380,7 @@ import SwiftUI
+@@ -386,7 +386,7 @@ import SwiftUI
          }
  
          private var scrubber: some View {
@@ -11,7 +11,7 @@ index 3b1d79e..ec8ea10 100644
                  value: Binding<TimeInterval>(
                      get: { isSeeking ? seekPosition : (currentTime.isFinite ? currentTime : 0) },
                      set: { seekPosition = $0 }
-@@ -389,7 +389,6 @@ import SwiftUI
+@@ -395,7 +395,6 @@ import SwiftUI
                  onEditingChanged: onSliderEditingChanged
              )
              .tint(.white)
@@ -19,7 +19,7 @@ index 3b1d79e..ec8ea10 100644
          }
  
          private var timeLabels: some View {
-@@ -407,7 +406,6 @@ import SwiftUI
+@@ -413,7 +412,6 @@ import SwiftUI
  
          private func onSliderEditingChanged(editing: Bool) {
              isSeeking = editing
@@ -139,10 +139,10 @@ index 38bbdef..4c1fd66 100644
              HStack {
                  Text(timeString(from: isSeeking ? seekPosition : clock.current))
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index b695360..89b632b 100644
+index 7bd6a73..60f6ea4 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-@@ -385,7 +385,7 @@ import VLCKit
+@@ -391,7 +391,7 @@ import VLCKit
          }
  
          private var scrubber: some View {
@@ -151,7 +151,7 @@ index b695360..89b632b 100644
                  value: Binding<TimeInterval>(
                      get: { isSeeking ? seekPosition : (currentTime.isFinite ? currentTime : 0) },
                      set: { seekPosition = $0 }
-@@ -394,7 +394,6 @@ import VLCKit
+@@ -400,7 +400,6 @@ import VLCKit
                  onEditingChanged: onSliderEditingChanged
              )
              .tint(.white)
@@ -159,7 +159,7 @@ index b695360..89b632b 100644
          }
  
          private var timeLabels: some View {
-@@ -412,7 +411,6 @@ import VLCKit
+@@ -418,7 +417,6 @@ import VLCKit
  
          private func onSliderEditingChanged(editing: Bool) {
              isSeeking = editing
