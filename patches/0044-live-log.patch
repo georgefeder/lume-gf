@@ -59,7 +59,7 @@ index 5d7d4d0..afe76a1 100644
      }
  
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index 707c844..6a8c5ef 100644
+index 22da3a1..e52d456 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
 @@ -127,6 +127,7 @@ final class EPGSyncService {

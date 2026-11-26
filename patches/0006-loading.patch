@@ -17,11 +17,11 @@ index c3da12b..637a066 100644
  
      /// Set by `ICloudBackend` while `NSPersistentCloudKitContainer` is
 diff --git a/Lume/Services/Sync/AutoSyncQueue.swift b/Lume/Services/Sync/AutoSyncQueue.swift
-index e1d9cc7..50014f8 100644
+index 45b8a3a..660096c 100644
 --- a/Lume/Services/Sync/AutoSyncQueue.swift
 +++ b/Lume/Services/Sync/AutoSyncQueue.swift
-@@ -104,4 +104,12 @@ final class AutoSyncQueue {
-             }
+@@ -274,4 +274,12 @@ final class AutoSyncQueue {
+             promoteNextIfIdle()
          }
      }
 +
@@ -29,7 +29,7 @@ index e1d9cc7..50014f8 100644
 +    /// is queued or syncing now stays marked.
 +    func gfForgetFinished() {
 +        attempted = attempted.filter { id in
-+            coverPlaylist?.id == id || backgroundPlaylist?.id == id || pending.contains { $0.id == id }
++            running?.job.id == id || pending.contains { $0.job.id == id }
 +        }
 +    }
  }
@@ -48,7 +48,7 @@ index 1e79a11..e6ee31f 100644
          // on top of the stored guide, so a failed or cut-off download never empties it); a Stalker portal's guide
          // (Lume 3.3) is read after every file as Lume does, deleting only what it no longer lists on its channels.
 diff --git a/Lume/Services/Sync/EPGSyncService.swift b/Lume/Services/Sync/EPGSyncService.swift
-index 97c3f39..9767d13 100644
+index e1cf90f..38e37a1 100644
 --- a/Lume/Services/Sync/EPGSyncService.swift
 +++ b/Lume/Services/Sync/EPGSyncService.swift
 @@ -77,6 +77,9 @@ final class EPGSyncService {
@@ -165,7 +165,7 @@ index df851af..02acd6f 100644
              }
              .alert("Clear Recently Watched", isPresented: $confirmingClear) {
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index c7ca4ee..709a4ac 100644
+index facad42..1783fbe 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
 @@ -184,6 +184,9 @@ struct MainTabView: View {

@@ -1,8 +1,8 @@
 diff --git a/Lume/Services/Player/PlayerSettings.swift b/Lume/Services/Player/PlayerSettings.swift
-index 492a867..20bf711 100644
+index dc8727b..965f3be 100644
 --- a/Lume/Services/Player/PlayerSettings.swift
 +++ b/Lume/Services/Player/PlayerSettings.swift
-@@ -472,7 +472,7 @@ enum PlayerSettings {
+@@ -479,7 +479,7 @@ enum PlayerSettings {
  
          static let hardwareDecodeDefault = true
          static let asyncDecompressionDefault = true
@@ -11,7 +11,7 @@ index 492a867..20bf711 100644
          static let accurateSeekDefault = false
          static let loopPlayDefault = false
          static let systemProxyDefault = true
-@@ -484,7 +484,7 @@ enum PlayerSettings {
+@@ -491,7 +491,7 @@ enum PlayerSettings {
          static let autoPipDefault = true
          static let autoSelectSubtitleDefault = false
          /// Minimum forward buffer for live streams, in seconds.

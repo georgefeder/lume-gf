@@ -33,10 +33,10 @@ index a1fa314..be4bb10 100644
      }
  
 diff --git a/Lume/Views/LiveTV/LiveTVView.swift b/Lume/Views/LiveTV/LiveTVView.swift
-index 8d1c855..0126f5f 100644
+index 4ebb6eb..309f174 100644
 --- a/Lume/Views/LiveTV/LiveTVView.swift
 +++ b/Lume/Views/LiveTV/LiveTVView.swift
-@@ -223,12 +223,7 @@ struct LiveTVView: View {
+@@ -226,12 +226,7 @@ struct LiveTVView: View {
  
      #if os(iOS)
          private func iOSLayout(groups: [LiveTVSectionGroup], displayed: LiveTVSection?) -> some View {
@@ -50,7 +50,7 @@ index 8d1c855..0126f5f 100644
                  if let displayed {
                      detail(for: displayed)
                  } else {
-@@ -239,6 +234,8 @@ struct LiveTVView: View {
+@@ -242,6 +237,8 @@ struct LiveTVView: View {
                      )
                  }
              }

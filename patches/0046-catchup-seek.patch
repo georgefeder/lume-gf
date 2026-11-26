@@ -66,7 +66,7 @@ index 3560802..18329c1 100644
      }
  }
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index b5e3990..eaa9105 100644
+index 64a8eb4..07db955 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -48,6 +48,9 @@ import SwiftUI
@@ -99,7 +99,7 @@ index b5e3990..eaa9105 100644
                          onResetHideTimer()
                      } label: {
                          circleGlyph(PlayerSkipInterval.stored().forwardSymbol, size: 22, diameter: 60)
-@@ -422,7 +427,7 @@ import SwiftUI
+@@ -428,7 +433,7 @@ import SwiftUI
                  hideTask?.cancel()
                  coordinator.playerLayer?.pause()
              } else {
@@ -268,10 +268,10 @@ index 21ffa0b..1fb1e7a 100644
                      neighbours: itemNeighbours, swapper: mediaSwapper, selectMedia: { selectMedia($0) }
                  ))
 diff --git a/Lume/Views/Player/KSTVPlaybackEngine.swift b/Lume/Views/Player/KSTVPlaybackEngine.swift
-index 5ad4a27..07e0723 100644
+index 14416be..de51a6a 100644
 --- a/Lume/Views/Player/KSTVPlaybackEngine.swift
 +++ b/Lume/Views/Player/KSTVPlaybackEngine.swift
-@@ -26,6 +26,9 @@
+@@ -30,6 +30,9 @@
          /// `@StateObject` without an initializer-ordering dance.
          private weak var coordinator: KSVideoPlayer.Coordinator?
  
@@ -281,7 +281,7 @@ index 5ad4a27..07e0723 100644
          init() {}
  
          func attach(coordinator: KSVideoPlayer.Coordinator) {
-@@ -72,10 +75,12 @@
+@@ -80,10 +83,12 @@
          }
  
          func skip(by seconds: Double) {

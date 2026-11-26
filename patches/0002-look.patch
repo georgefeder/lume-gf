@@ -1,5 +1,5 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index 347c0bd..8582000 100644
+index a93f7b5..3740464 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -332,7 +332,8 @@ struct LumeApp: App {
@@ -305,7 +305,7 @@ index 8da010f..b2f6131 100644
                  }
                  .padding(.horizontal)
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index c5a7701..63ee3de 100644
+index 7910e56..ec4ca09 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
 @@ -39,6 +39,9 @@ struct HomeView: View {
@@ -332,7 +332,7 @@ index c5a7701..63ee3de 100644
      }
  
      var body: some View {
-@@ -236,6 +246,16 @@ struct HomeView: View {
+@@ -238,6 +248,16 @@ struct HomeView: View {
                  #endif
              }
              .homeDownloadsDestination()
@@ -349,7 +349,7 @@ index c5a7701..63ee3de 100644
              .homeHeroDestination(heroSelection, animationNamespace: animationNamespace)
              .environment(\.titleGroupStates, groupStates)
              .task(id: groupStateKey) {
-@@ -282,6 +302,14 @@ struct HomeView: View {
+@@ -284,6 +304,14 @@ struct HomeView: View {
                  rail("Recently Watched", recentlyWatched, onRemove: removeFromRecentlyWatched)
              case .favorites:
                  rail("Favorites", favorites)
@@ -364,7 +364,7 @@ index c5a7701..63ee3de 100644
              case .forYou:
                  ForYouRow(
                      items: recommendations,
-@@ -414,11 +442,18 @@ struct HomeView: View {
+@@ -416,11 +444,18 @@ struct HomeView: View {
          )
      }
  
@@ -603,10 +603,10 @@ index c9775cc..96b22a5 100644
                          Text(nowTitle)
                              .font(.system(size: 20))
 diff --git a/Lume/Views/Player/TVPlayerPanels.swift b/Lume/Views/Player/TVPlayerPanels.swift
-index 4d626ea..395b39a 100644
+index d36567a..bccfa42 100644
 --- a/Lume/Views/Player/TVPlayerPanels.swift
 +++ b/Lume/Views/Player/TVPlayerPanels.swift
-@@ -331,10 +331,10 @@
+@@ -336,10 +336,10 @@
              Button(action: action) {
                  VStack(alignment: .leading, spacing: 10) {
                      logo

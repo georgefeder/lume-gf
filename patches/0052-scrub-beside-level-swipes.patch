@@ -1,8 +1,8 @@
 diff --git a/Lume/Views/Player/AVPlayerControlsOverlay.swift b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-index ddbfada..3b1d79e 100644
+index ae014d2..3387e70 100644
 --- a/Lume/Views/Player/AVPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/AVPlayerControlsOverlay.swift
-@@ -389,6 +389,7 @@ import SwiftUI
+@@ -395,6 +395,7 @@ import SwiftUI
                  onEditingChanged: onSliderEditingChanged
              )
              .tint(.white)
@@ -10,7 +10,7 @@ index ddbfada..3b1d79e 100644
          }
  
          private var timeLabels: some View {
-@@ -406,6 +407,7 @@ import SwiftUI
+@@ -412,6 +413,7 @@ import SwiftUI
  
          private func onSliderEditingChanged(editing: Bool) {
              isSeeking = editing
@@ -38,10 +38,10 @@ index 0e4a9a3..38bbdef 100644
              HStack {
                  Text(timeString(from: isSeeking ? seekPosition : clock.current))
 diff --git a/Lume/Views/Player/VLCPlayerControlsOverlay.swift b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-index 5fc6c76..b695360 100644
+index 1f3c762..7bd6a73 100644
 --- a/Lume/Views/Player/VLCPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/VLCPlayerControlsOverlay.swift
-@@ -394,6 +394,7 @@ import VLCKit
+@@ -400,6 +400,7 @@ import VLCKit
                  onEditingChanged: onSliderEditingChanged
              )
              .tint(.white)
@@ -49,7 +49,7 @@ index 5fc6c76..b695360 100644
          }
  
          private var timeLabels: some View {
-@@ -411,6 +412,7 @@ import VLCKit
+@@ -417,6 +418,7 @@ import VLCKit
  
          private func onSliderEditingChanged(editing: Bool) {
              isSeeking = editing

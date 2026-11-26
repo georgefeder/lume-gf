@@ -1,0 +1,24 @@
+diff --git a/Sources/AetherEngine/Diagnostics/PerFrameBenchmark.swift b/Sources/AetherEngine/Diagnostics/PerFrameBenchmark.swift
+index dc16a58e..8248ae78 100644
+--- a/Sources/AetherEngine/Diagnostics/PerFrameBenchmark.swift
++++ b/Sources/AetherEngine/Diagnostics/PerFrameBenchmark.swift
+@@ -380,10 +380,16 @@ struct PerFrameBenchmark {
+         rbsp.removeAll()
+         let nals: [[UInt8]] = [[35 << 1, 1, 0x50], sei]
+             + (0 ..< 4).map { i in [19 << 1, 1] + (0 ..< sliceBytes / 4).map { UInt8(0x11 &+ UInt8(truncatingIfNeeded: $0 &* 7 &+ i)) | 1 } }
+-        return nals.flatMap { nal in
+-            [UInt8(nal.count >> 24 & 0xFF), UInt8(nal.count >> 16 & 0xFF), UInt8(nal.count >> 8 & 0xFF),
+-             UInt8(nal.count & 0xFF)] + nal
++        // Lume GF: typed out step by step (Xcode 26.6's Swift could not type-check the one expression in time)
++        var packet: [UInt8] = []
++        for nal in nals {
++            let count: Int = nal.count
++            let length: [UInt8] = [UInt8(count >> 24 & 0xFF), UInt8(count >> 16 & 0xFF), UInt8(count >> 8 & 0xFF),
++                                   UInt8(count & 0xFF)]
++            packet.append(contentsOf: length)
++            packet.append(contentsOf: nal)
+         }
++        return packet
+     }
+ 
+     private static func deviceName() -> String {

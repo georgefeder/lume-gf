@@ -1,5 +1,5 @@
 diff --git a/Lume/Services/Player/PlayerSettings.swift b/Lume/Services/Player/PlayerSettings.swift
-index 20bf711..e2c3a71 100644
+index 965f3be..9c6cc2b 100644
 --- a/Lume/Services/Player/PlayerSettings.swift
 +++ b/Lume/Services/Player/PlayerSettings.swift
 @@ -111,8 +111,11 @@ nonisolated enum StreamInfoDetailLevel: String, CaseIterable, Identifiable {
@@ -16,10 +16,10 @@ index 20bf711..e2c3a71 100644
  
      /// Decode the stored priority into a complete, de-duplicated engine list.
 diff --git a/LumeTests/Services/PlayerSettingsTests.swift b/LumeTests/Services/PlayerSettingsTests.swift
-index 5011e3e..3c55b74 100644
+index 4763ca7..acef143 100644
 --- a/LumeTests/Services/PlayerSettingsTests.swift
 +++ b/LumeTests/Services/PlayerSettingsTests.swift
-@@ -158,19 +158,18 @@ struct PlayerEnginePriorityTests {
+@@ -163,19 +163,18 @@ struct PlayerEnginePriorityTests {
          #expect(resolved.count == PlayerEngineKind.allCases.count)
      }
  
@@ -43,7 +43,7 @@ index 5011e3e..3c55b74 100644
          #endif
          #expect(resolved == PlayerEnginePriority.defaultOrder)
      }
-@@ -181,9 +180,9 @@ struct PlayerEnginePriorityTests {
+@@ -186,9 +185,9 @@ struct PlayerEnginePriorityTests {
              legacyEngineRaw: PlayerEngineKind.vlcKit.rawValue
          )
          #if os(visionOS)

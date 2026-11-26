@@ -12,29 +12,99 @@ index f455ee8..7be34d6 100644
      static let syncMovies = PerfSignpost("SyncMovies")
      static let syncSeries = PerfSignpost("SyncSeries")
 diff --git a/Lume/Services/Sync/AutoSyncQueue.swift b/Lume/Services/Sync/AutoSyncQueue.swift
-index 50014f8..c743724 100644
+index 660096c..3501fad 100644
 --- a/Lume/Services/Sync/AutoSyncQueue.swift
 +++ b/Lume/Services/Sync/AutoSyncQueue.swift
-@@ -57,7 +57,18 @@ final class AutoSyncQueue {
+@@ -27,18 +27,24 @@ struct SyncJob: Identifiable, Equatable {
+     let isManual: Bool
+     /// The playlist has never finished a sync: this is its first import.
+     let isFirstImport: Bool
++    /// Lume GF: what an Xtream sync fetches (GFCatalogPlan): everything when asked for, the live channels alone for a
++    /// first import, which then fetches films and series out of sight (`gfThen`).
++    let gfScope: GFSyncScope
++    let gfThen: GFSyncScope?
+ 
+-    init(_ playlist: Playlist, full: Bool, isManual: Bool) {
++    init(_ playlist: Playlist, full: Bool, isManual: Bool, gfScope: GFSyncScope = .all, gfThen: GFSyncScope? = nil) {
+         id = playlist.id
+         name = playlist.name
+         sourceType = playlist.sourceType
+         self.full = full
+         self.isManual = isManual
+         isFirstImport = playlist.lastSyncDate == nil
++        self.gfScope = gfScope
++        self.gfThen = gfThen
+     }
+ 
+     var steps: [SyncStep] {
+-        SyncStep.steps(for: sourceType, full: full)
++        SyncStep.steps(for: sourceType, full: full, gfScope: gfScope)
+     }
+ }
+ 
+@@ -73,11 +79,20 @@ final class AutoSyncQueue {
+     /// What runs one sync. `AutoSync.runSync` in the app; tests supply their own.
+     typealias Runner = (_ playlist: Playlist, _ container: ModelContainer, _ progress: SyncProgress, _ full: Bool) async throws -> Void
+ 
+-    @ObservationIgnored private let run: Runner
++    /// Lume GF: the runner with the job's Xtream scope (GFCatalogPlan); a test's own runner ignores it.
++    private typealias GFRunner = (_ playlist: Playlist, _ container: ModelContainer, _ progress: SyncProgress,
++                                  _ full: Bool, _ gfScope: GFSyncScope) async throws -> Void
++
++    @ObservationIgnored private let run: GFRunner
+ 
+     init(run: Runner? = nil) {
+-        self.run = run ?? { playlist, container, progress, full in
+-            try await AutoSync.runSync(playlist, container: container, progress: progress, full: full)
++        if let run {
++            self.run = { playlist, container, progress, full, _ in try await run(playlist, container, progress, full) }
++        } else {
++            self.run = { playlist, container, progress, full, gfScope in
++                try await AutoSync.runSync(playlist, container: container, progress: progress, full: full,
++                                           gfScope: gfScope)
++            }
+         }
+     }
+ 
+@@ -152,7 +167,20 @@ final class AutoSyncQueue {
              alreadyStarted: attempted.contains(playlist.id)
          ) {
              attempted.insert(playlist.id)
--            pending.append(playlist)
-+            // Lume GF: only a playlist's first sync shows the cover (an Xtream one only until its live channels are
-+            // in); a playlist synced before refreshes out of sight, films and series once a day (GFCatalogPlan)
+-            pending.append(Entry(job: SyncJob(playlist, full: false, isManual: false), playlist: playlist))
++            // Lume GF: only a playlist's first sync shows in Lume's sync indicator (an Xtream one only until its live
++            // channels are in); a playlist synced before refreshes out of sight, films and series once a day
++            // (GFCatalogPlan)
 +            let plan = GFCatalogPlan.automatic(
 +                isXtream: playlist.sourceType == .xtream, everSynced: playlist.lastSyncDate != nil,
 +                vodSyncedAt: GFCatalogStamps.vodSyncedAt(playlist.id), now: Date()
 +            )
-+            if plan.cover != nil {
-+                pending.append(playlist)
++            if let cover = plan.cover {
++                pending.append(Entry(job: SyncJob(playlist, full: false, isManual: false, gfScope: cover,
++                                                  gfThen: plan.background), playlist: playlist))
 +            } else if let background = plan.background {
 +                GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: background,
 +                                                       container: context.container)
 +            }
          }
-         promoteNextIfIdle(scope: scope, context: context)
+         promoteNextIfIdle(container: context.container)
      }
+@@ -256,7 +284,15 @@ final class AutoSyncQueue {
+             var errorMessage: String?
+             var wasStopped = false
+             do {
+-                try await run(entry.playlist, container, progress, entry.job.full)
++                // Lume GF: a sync of this playlist out of sight makes way for this one, and has ended before it starts
++                // (never two writing the playlist at once)
++                await GFBackgroundCatalogSync.shared.stop(playlistID: entry.job.id)
++                try await run(entry.playlist, container, progress, entry.job.full, entry.job.gfScope)
++                // Lume GF: a first import's live channels are in; films and series follow out of sight (not after a
++                // Stop that came as it ended)
++                if let then = entry.job.gfThen, !Task.isCancelled {
++                    GFBackgroundCatalogSync.shared.enqueue(playlistID: entry.job.id, scope: then, container: container)
++                }
+             } catch {
+                 // A cancelled network request surfaces as a non-CancellationError.
+                 if Task.isCancelled || error is CancellationError {
 diff --git a/Lume/Services/Sync/ContentSyncManager+Prune.swift b/Lume/Services/Sync/ContentSyncManager+Prune.swift
 index cbafd6d..b0e5742 100644
 --- a/Lume/Services/Sync/ContentSyncManager+Prune.swift
@@ -211,7 +281,7 @@ index 32fc2e7..8c9ca5e 100644
  
      func syncAllCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {
 diff --git a/Lume/Services/Sync/SyncFrequency.swift b/Lume/Services/Sync/SyncFrequency.swift
-index 6e6ecde..147f764 100644
+index c95ea2c..1724178 100644
 --- a/Lume/Services/Sync/SyncFrequency.swift
 +++ b/Lume/Services/Sync/SyncFrequency.swift
 @@ -245,13 +245,14 @@ extension AutoSync {
@@ -232,7 +302,7 @@ index 6e6ecde..147f764 100644
              try await syncManager.syncPlaylist(playlist, progress: progress, full: full)
          }
 diff --git a/Lume/Services/Sync/SyncProgress.swift b/Lume/Services/Sync/SyncProgress.swift
-index 1dc9115..0ec52d0 100644
+index c358ff9..aadbe97 100644
 --- a/Lume/Services/Sync/SyncProgress.swift
 +++ b/Lume/Services/Sync/SyncProgress.swift
 @@ -57,9 +57,18 @@ enum SyncStep: Int, CaseIterable, Identifiable {
@@ -256,56 +326,3 @@ index 1dc9115..0ec52d0 100644
          case .m3u: m3uSteps
          // Stalker maps onto the same catalog kinds as Xtream, but its default
          // sync skips the movie/series content walk (loaded on demand); only a
-diff --git a/Lume/Views/Sync/SyncProgressView.swift b/Lume/Views/Sync/SyncProgressView.swift
-index d3cc3f2..10a35ea 100644
---- a/Lume/Views/Sync/SyncProgressView.swift
-+++ b/Lume/Views/Sync/SyncProgressView.swift
-@@ -40,7 +40,9 @@ struct SyncProgressView: View {
-         self.playlist = playlist
-         self.autoStart = autoStart
-         self.full = full
--        _progress = State(initialValue: SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full)))
-+        _progress = State(initialValue: SyncProgress(steps: SyncStep.steps(
-+            for: playlist.sourceType, full: full, gfScope: Self.gfScope(autoStart: autoStart, playlist: playlist)
-+        )))
-         // Start already in the syncing state for auto-sync so the "Ready" screen
-         // (with its Start button) never flashes before `.task` kicks off.
-         _phase = State(initialValue: autoStart ? .syncing : .ready)
-@@ -91,17 +93,35 @@ struct SyncProgressView: View {
- 
-     // MARK: - Drive sync
- 
-+    /// Lume GF: the automatic cover (a playlist's first sync, GFCatalogPlan) waits only for an Xtream playlist's live
-+    /// channels; its films and series follow in the background. Sync Now fetches everything, live first.
-+    private static func gfScope(autoStart: Bool, playlist: Playlist) -> GFSyncScope {
-+        autoStart && playlist.sourceType == .xtream ? .live : .all
-+    }
-+
-+    private var gfScope: GFSyncScope {
-+        Self.gfScope(autoStart: autoStart, playlist: playlist)
-+    }
-+
-     private func startSync() {
-         // Fresh progress for each attempt so a retry starts clean.
--        progress = SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full))
-+        progress = SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full, gfScope: gfScope))
-+        // Lume GF: a background sync of this playlist makes way for this one
-+        GFBackgroundCatalogSync.shared.cancel(playlistID: playlist.id)
-         syncError = nil
-         phase = .syncing
- 
-         let container = modelContext.container
-         syncTask = Task {
-             do {
--                try await AutoSync.runSync(playlist, container: container, progress: progress, full: full)
-+                try await AutoSync.runSync(playlist, container: container, progress: progress, full: full,
-+                                           gfScope: gfScope)
-                 await MainActor.run {
-+                    // Lume GF: the live channels are in; films and series follow out of sight
-+                    if gfScope == .live {
-+                        GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: .vod,
-+                                                               container: container)
-+                    }
-                     phase = .finished
-                     // Auto-sync gets out of the way as soon as it succeeds so the
-                     // user can start browsing; the manual flow waits for Done.

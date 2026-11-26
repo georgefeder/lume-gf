@@ -1,5 +1,5 @@
 diff --git a/Lume/LumeApp.swift b/Lume/LumeApp.swift
-index f14deab..3933a83 100644
+index a0dc1aa..3071b2b 100644
 --- a/Lume/LumeApp.swift
 +++ b/Lume/LumeApp.swift
 @@ -49,6 +49,8 @@ struct LumeApp: App {
@@ -12,40 +12,55 @@ index f14deab..3933a83 100644
          EPGSyncService.shared.configure(container: catalog)
          GuideScheduler.shared.configure(container: catalog)
 diff --git a/Lume/Services/Sync/AutoSyncQueue.swift b/Lume/Services/Sync/AutoSyncQueue.swift
-index c743724..f748e48 100644
+index 3501fad..4558bf3 100644
 --- a/Lume/Services/Sync/AutoSyncQueue.swift
 +++ b/Lume/Services/Sync/AutoSyncQueue.swift
-@@ -61,7 +61,7 @@ final class AutoSyncQueue {
-             // in); a playlist synced before refreshes out of sight, films and series once a day (GFCatalogPlan)
+@@ -172,7 +172,7 @@ final class AutoSyncQueue {
+             // (GFCatalogPlan)
              let plan = GFCatalogPlan.automatic(
                  isXtream: playlist.sourceType == .xtream, everSynced: playlist.lastSyncDate != nil,
 -                vodSyncedAt: GFCatalogStamps.vodSyncedAt(playlist.id), now: Date()
 +                vodSyncedAt: GFCatalogStamps.vodSyncedAt(playlist.id), now: Date(), wantsVOD: GFTVFilms.wanted
              )
-             if plan.cover != nil {
-                 pending.append(playlist)
-diff --git a/Lume/Services/Sync/SyncFrequency.swift b/Lume/Services/Sync/SyncFrequency.swift
-index 147f764..04ce09d 100644
---- a/Lume/Services/Sync/SyncFrequency.swift
-+++ b/Lume/Services/Sync/SyncFrequency.swift
-@@ -263,7 +263,11 @@ extension AutoSync {
-     /// Runs the sync the blocking cover drives, without the cover. A failure
-     /// is recorded on the playlist's own status; the next due pass retries it.
-     static func syncInBackground(_ playlist: Playlist, container: ModelContainer) async {
--        try? await runSync(playlist, container: container)
-+        // Lume GF: live channels only where films and series are left out (GFTVFilms)
-+        let scope = GFCatalogPlan.covered(
-+            isXtream: playlist.sourceType == .xtream, automatic: false, wantsVOD: GFTVFilms.wanted
-+        )
-+        try? await runSync(playlist, container: container, gfScope: scope)
+             if let cover = plan.cover {
+                 pending.append(Entry(job: SyncJob(playlist, full: false, isManual: false, gfScope: cover,
+@@ -192,7 +192,7 @@ final class AutoSyncQueue {
+             where !isQueued(playlist.id)
+         {
+             attempted.insert(playlist.id)
+-            pending.append(Entry(job: SyncJob(playlist, full: false, isManual: true), playlist: playlist))
++            pending.append(Entry(job: gfManualJob(playlist, full: false), playlist: playlist))
+         }
+         promoteNextIfIdle(container: context.container)
      }
- }
+@@ -215,13 +215,21 @@ final class AutoSyncQueue {
+     func sync(_ playlist: Playlist, full: Bool = false, context: ModelContext) {
+         if !isQueued(playlist.id) {
+             attempted.insert(playlist.id)
+-            let entry = Entry(job: SyncJob(playlist, full: full, isManual: true), playlist: playlist)
++            let entry = Entry(job: gfManualJob(playlist, full: full), playlist: playlist)
+             let firstAutomatic = pending.firstIndex { !$0.job.isManual } ?? pending.endIndex
+             pending.insert(entry, at: firstAutomatic)
+         }
+         promoteNextIfIdle(container: context.container)
+     }
  
++    /// Lume GF: a sync the viewer asked for fetches everything, live first; the live channels alone where films and
++    /// series are left out (GFTVFilms).
++    private func gfManualJob(_ playlist: Playlist, full: Bool) -> SyncJob {
++        SyncJob(playlist, full: full, isManual: true, gfScope: GFCatalogPlan.covered(
++            isXtream: playlist.sourceType == .xtream, automatic: false, wantsVOD: GFTVFilms.wanted
++        ))
++    }
++
+     /// Runs the last failed sync again.
+     func retryRecent(context: ModelContext) {
+         guard recentFailure() != nil, let playlist = recentPlaylist else { return }
 diff --git a/Lume/Views/Home/HomeView.swift b/Lume/Views/Home/HomeView.swift
-index 512be65..a5869b0 100644
+index bd8b158..23ef17c 100644
 --- a/Lume/Views/Home/HomeView.swift
 +++ b/Lume/Views/Home/HomeView.swift
-@@ -307,13 +307,17 @@ struct HomeView: View {
+@@ -309,13 +309,17 @@ struct HomeView: View {
              case .favorites:
                  rail("Favorites", favorites)
              case .recentlyAddedMovies:
@@ -70,7 +85,7 @@ index 512be65..a5869b0 100644
                  ForYouRow(
                      items: recommendations,
 diff --git a/Lume/Views/MainTabView.swift b/Lume/Views/MainTabView.swift
-index 0359240..4d4e17e 100644
+index 34979e7..847738a 100644
 --- a/Lume/Views/MainTabView.swift
 +++ b/Lume/Views/MainTabView.swift
 @@ -66,9 +66,19 @@ struct MainTabView: View {
@@ -107,27 +122,3 @@ index aa9cdb5..27815a1 100644
                  VStack(alignment: .leading, spacing: 8) {
                      TVSettingsSectionLabel("Tabs")
                      if scope.isCombined {
-diff --git a/Lume/Views/Sync/SyncProgressView.swift b/Lume/Views/Sync/SyncProgressView.swift
-index 10a35ea..3699867 100644
---- a/Lume/Views/Sync/SyncProgressView.swift
-+++ b/Lume/Views/Sync/SyncProgressView.swift
-@@ -96,7 +96,9 @@ struct SyncProgressView: View {
-     /// Lume GF: the automatic cover (a playlist's first sync, GFCatalogPlan) waits only for an Xtream playlist's live
-     /// channels; its films and series follow in the background. Sync Now fetches everything, live first.
-     private static func gfScope(autoStart: Bool, playlist: Playlist) -> GFSyncScope {
--        autoStart && playlist.sourceType == .xtream ? .live : .all
-+        GFCatalogPlan.covered(
-+            isXtream: playlist.sourceType == .xtream, automatic: autoStart, wantsVOD: GFTVFilms.wanted
-+        )
-     }
- 
-     private var gfScope: GFSyncScope {
-@@ -118,7 +120,7 @@ struct SyncProgressView: View {
-                                            gfScope: gfScope)
-                 await MainActor.run {
-                     // Lume GF: the live channels are in; films and series follow out of sight
--                    if gfScope == .live {
-+                    if gfScope == .live, GFTVFilms.wanted {
-                         GFBackgroundCatalogSync.shared.enqueue(playlistID: playlist.id, scope: .vod,
-                                                                container: container)
-                     }

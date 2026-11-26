@@ -45,12 +45,22 @@ final class GFBackgroundCatalogSync {
         runNext()
     }
 
-    /// A covered sync of this playlist is starting (Sync Now): a background one for it stops and leaves the queue.
+    /// A background sync of this playlist stops and leaves the queue (films and series switched off, GFTVFilms).
     func cancel(playlistID: UUID) {
         queue.removeAll { $0.playlistID == playlistID }
         if let running, running.job.playlistID == playlistID {
             running.task.cancel()
         }
+    }
+
+    /// A sync of this playlist in Lume's queue is starting (Lume 3.4): as `cancel`, and returns once a background one
+    /// running for it has ended, so the two never write the playlist at once (a cancelled one marks the playlist idle,
+    /// which would land on the queue's sync).
+    func stop(playlistID: UUID) async {
+        queue.removeAll { $0.playlistID == playlistID }
+        guard let running, running.job.playlistID == playlistID else { return }
+        running.task.cancel()
+        await running.task.value
     }
 
     func isSyncing(playlistID: UUID) -> Bool {

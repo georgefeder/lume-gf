@@ -1,5 +1,5 @@
 diff --git a/Lume.xcodeproj/project.pbxproj b/Lume.xcodeproj/project.pbxproj
-index a51cdf2..45c9d24 100644
+index 103dbf2..cddfd99 100644
 --- a/Lume.xcodeproj/project.pbxproj
 +++ b/Lume.xcodeproj/project.pbxproj
 @@ -688,8 +688,8 @@

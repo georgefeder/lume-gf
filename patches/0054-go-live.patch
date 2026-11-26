@@ -1,5 +1,5 @@
 diff --git a/Lume/Views/Player/KSPlayerControlsOverlay.swift b/Lume/Views/Player/KSPlayerControlsOverlay.swift
-index eaa9105..68f2ab3 100644
+index 07db955..7d45ab5 100644
 --- a/Lume/Views/Player/KSPlayerControlsOverlay.swift
 +++ b/Lume/Views/Player/KSPlayerControlsOverlay.swift
 @@ -51,6 +51,8 @@ import SwiftUI
@@ -11,7 +11,7 @@ index eaa9105..68f2ab3 100644
  
          @Environment(\.modelContext) private var modelContext
          /// Mirrors the backing model's favorite flag; refreshed when the media
-@@ -265,16 +267,7 @@ import SwiftUI
+@@ -271,16 +273,7 @@ import SwiftUI
          }
  
          private var liveIndicator: some View {
